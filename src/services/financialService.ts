@@ -1,6 +1,6 @@
 import Decimal from 'decimal.js';
 import { toast } from 'sonner';
-import { analyzeTextWithGroq } from './groqService';
+import { makeGroqAIRequest } from './groqService';
 
 // Configure Decimal.js for precise financial calculations
 Decimal.config({ precision: 28, rounding: Decimal.ROUND_HALF_EVEN });
@@ -1030,10 +1030,16 @@ export const generateCOAFReport = async (params: {
     const { transactions } = await getFinancialTransactions(caseId, { ...filters, pageSize: 1000 });
     
     // Generate insights using Groq
-    const insights = await analyzeTextWithGroq(
-      `Análise financeira RIF/COAF - Créditos: R$ ${metrics.totalCredits}, Débitos: R$ ${metrics.totalDebits}, Saldo: R$ ${metrics.balance}, Transações: ${metrics.transactionCount}, Alertas: ${alerts.length} (${alerts.filter(a => a.severity === 'high').length} críticos)`,
-      'Gere um resumo executivo e recomendações para esta análise financeira COAF.'
-    );
+    const insights = await makeGroqAIRequest([
+      {
+        role: "system",
+        content: "Você é um especialista em análise financeira e compliance COAF. Analise os dados fornecidos e gere um resumo executivo e recomendações."
+      },
+      {
+        role: "user", 
+        content: `Análise financeira RIF/COAF - Créditos: R$ ${metrics.totalCredits}, Débitos: R$ ${metrics.totalDebits}, Saldo: R$ ${metrics.balance}, Transações: ${metrics.transactionCount}, Alertas: ${alerts.length} (${alerts.filter(a => a.severity === 'high').length} críticos). Gere um resumo executivo e recomendações para esta análise financeira COAF.`
+      }
+    ], 2048);
     
     // Create report content (simplified - in real app, use PDF library)
     const reportContent = `
@@ -1066,10 +1072,10 @@ ${alerts.map(alert => `
 `).join('')}
 
 INSIGHTS DA ANÁLISE
-${insights.analysis || 'Análise não disponível'}
+${insights || 'Análise não disponível'}
 
 CONCLUSÕES E RECOMENDAÇÕES
-${insights.recommendations || 'Recomendações não disponíveis'}
+${insights || 'Recomendações não disponíveis'}
 
 ANEXOS
 - Lista detalhada de transações

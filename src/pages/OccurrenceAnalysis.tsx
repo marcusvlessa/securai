@@ -281,22 +281,23 @@ const OccurrenceAnalysis = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
-          <FileEdit className="mr-2 h-6 w-6" /> Análise de Ocorrência
+    <div className="page-container py-6">
+      <div className="page-header">
+        <h1 className="page-title flex items-center gap-3">
+          <FileEdit className="h-8 w-8 text-brand" />
+          Análise de Ocorrência
         </h1>
-        <p className="text-gray-600 dark:text-gray-300 mt-1">
+        <p className="page-description">
           Faça upload de documentos ou digite ocorrências para análise com IA e sugestões
         </p>
       </div>
 
       {!currentCase ? (
-        <Card className="mb-6 border-yellow-300 bg-yellow-50 dark:bg-yellow-900/30">
+        <Card className="border-warning bg-warning-light">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-              <p className="text-yellow-800 dark:text-yellow-200">
+              <AlertCircle className="h-5 w-5 text-warning" />
+              <p className="text-warning-foreground">
                 Selecione um caso antes de prosseguir com a análise de ocorrência.
               </p>
             </div>

@@ -13,10 +13,14 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  Activity
+  Activity,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { useCase } from '../contexts/CaseContext';
-import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import AgentForm from '../components/AgentForm';
+import AgentExecutionDialog from '../components/AgentExecutionDialog';
 
 interface VirtualAgent {
   id: string;
@@ -31,7 +35,6 @@ interface VirtualAgent {
 
 const VirtualAgents = () => {
   const { currentCase } = useCase();
-  const navigate = useNavigate();
   const [agents, setAgents] = useState<VirtualAgent[]>([
     {
       id: 'agent-1',
@@ -64,6 +67,11 @@ const VirtualAgents = () => {
       functions: ['monitor_evidence', 'notify_updates']
     }
   ]);
+  
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isExecutionOpen, setIsExecutionOpen] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<VirtualAgent | null>(null);
+  const [editingAgent, setEditingAgent] = useState<VirtualAgent | null>(null);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -105,6 +113,76 @@ const VirtualAgents = () => {
     return `Há ${Math.floor(diffInHours / 24)} dia(s)`;
   };
 
+  const handleCreateAgent = () => {
+    setEditingAgent(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEditAgent = (agent: VirtualAgent) => {
+    setEditingAgent(agent);
+    setIsFormOpen(true);
+  };
+
+  const handleDeleteAgent = (agentId: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este agente?')) {
+      setAgents(prev => prev.filter(agent => agent.id !== agentId));
+      toast.success('Agente excluído com sucesso');
+    }
+  };
+
+  const handleSaveAgent = (agentData: Omit<VirtualAgent, 'id' | 'lastExecution' | 'executionCount' | 'status'>) => {
+    if (editingAgent) {
+      // Update existing agent
+      setAgents(prev => prev.map(agent => 
+        agent.id === editingAgent.id 
+          ? { ...agent, ...agentData }
+          : agent
+      ));
+    } else {
+      // Create new agent
+      const newAgent: VirtualAgent = {
+        ...agentData,
+        id: `agent-${Date.now()}`,
+        lastExecution: new Date().toISOString(),
+        executionCount: 0,
+        status: 'inactive'
+      };
+      setAgents(prev => [...prev, newAgent]);
+    }
+  };
+
+  const handleExecuteAgent = (agent: VirtualAgent) => {
+    setSelectedAgent(agent);
+    setIsExecutionOpen(true);
+  };
+
+  const handleToggleAgentStatus = (agentId: string) => {
+    setAgents(prev => prev.map(agent => 
+      agent.id === agentId 
+        ? { 
+            ...agent, 
+            status: agent.status === 'active' ? 'inactive' : 'active',
+            lastExecution: new Date().toISOString()
+          }
+        : agent
+    ));
+  };
+
+  const handleExecutionComplete = (result: any) => {
+    if (selectedAgent) {
+      setAgents(prev => prev.map(agent => 
+        agent.id === selectedAgent.id 
+          ? { 
+              ...agent, 
+              executionCount: agent.executionCount + 1,
+              lastExecution: new Date().toISOString(),
+              status: 'active'
+            }
+          : agent
+      ));
+    }
+  };
+
   return (
     <div className="page-container py-6">
       <div className="page-header">
@@ -118,7 +196,7 @@ const VirtualAgents = () => {
               Automatize análises e relatórios com inteligência artificial
             </p>
           </div>
-          <Button className="flex items-center gap-2">
+          <Button onClick={handleCreateAgent} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Criar Agente
           </Button>
@@ -260,8 +338,27 @@ const VirtualAgents = () => {
                       size="sm" 
                       variant={agent.status === 'running' ? 'secondary' : 'default'}
                       className="flex items-center gap-1"
+                      onClick={() => handleExecuteAgent(agent)}
                     >
-                      {agent.status === 'running' ? (
+                      <Play className="h-3 w-3" />
+                      Executar
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="flex items-center gap-1"
+                      onClick={() => handleEditAgent(agent)}
+                    >
+                      <Edit className="h-3 w-3" />
+                      Editar
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="flex items-center gap-1"
+                      onClick={() => handleToggleAgentStatus(agent.id)}
+                    >
+                      {agent.status === 'active' ? (
                         <>
                           <Pause className="h-3 w-3" />
                           Pausar
@@ -269,17 +366,18 @@ const VirtualAgents = () => {
                       ) : (
                         <>
                           <Play className="h-3 w-3" />
-                          Executar
+                          Ativar
                         </>
                       )}
                     </Button>
-                    <Button size="sm" variant="outline" className="flex items-center gap-1">
-                      <Settings className="h-3 w-3" />
-                      Configurar
-                    </Button>
-                    <Button size="sm" variant="outline" className="flex items-center gap-1">
-                      <FileText className="h-3 w-3" />
-                      Logs
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="flex items-center gap-1 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteAgent(agent.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Excluir
                     </Button>
                   </div>
                 </CardContent>
@@ -334,6 +432,21 @@ const VirtualAgents = () => {
           </Card>
         </div>
       )}
+
+      {/* Dialogs */}
+      <AgentForm
+        isOpen={isFormOpen}
+        onClose={() => setIsFormOpen(false)}
+        onSave={handleSaveAgent}
+        agent={editingAgent}
+      />
+
+      <AgentExecutionDialog
+        isOpen={isExecutionOpen}
+        onClose={() => setIsExecutionOpen(false)}
+        agent={selectedAgent}
+        onExecutionComplete={handleExecutionComplete}
+      />
     </div>
   );
 };

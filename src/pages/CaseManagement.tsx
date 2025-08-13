@@ -46,23 +46,31 @@ const CaseManagement = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-          Gerenciamento de Casos
-        </h1>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Novo Caso
-        </Button>
+    <div className="page-container py-6">
+      <div className="page-header">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="page-title flex items-center gap-3">
+              <Folder className="h-8 w-8 text-brand" />
+              Gerenciamento de Casos
+            </h1>
+            <p className="page-description">
+              Organize e gerencie seus casos de investigação
+            </p>
+          </div>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Novo Caso
+          </Button>
+        </div>
       </div>
 
       {cases.length === 0 ? (
-        <div className="text-center p-8 bg-gray-100 dark:bg-gray-900 rounded-lg">
-          <Folder className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+        <div className="empty-state">
+          <Folder className="mx-auto h-16 w-16 text-muted-foreground opacity-20 mb-4" />
+          <h3 className="text-lg font-semibold mb-2">
             Nenhum caso encontrado
           </h3>
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
+          <p className="text-muted-foreground mb-6">
             Crie um novo caso para começar a trabalhar
           </p>
           <Button onClick={() => setIsCreateDialogOpen(true)}>
@@ -74,27 +82,27 @@ const CaseManagement = () => {
           {cases.map((caseItem) => (
             <div 
               key={caseItem.id}
-              className={`bg-white dark:bg-gray-800 rounded-lg border-2 ${
+              className={`feature-card p-6 ${
                 currentCase?.id === caseItem.id 
-                  ? 'border-blue-500 dark:border-blue-400' 
-                  : 'border-transparent'
-              } p-6 shadow-md hover:shadow-lg transition-all`}
+                  ? 'border-brand bg-brand-light' 
+                  : ''
+              }`}
             >
               <div className="flex justify-between items-start mb-4">
-                <Folder className="h-8 w-8 text-blue-500" />
+                <Folder className="h-8 w-8 text-brand" />
                 {currentCase?.id === caseItem.id && (
-                  <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
+                  <span className="status-active">
                     Ativo
                   </span>
                 )}
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">
+              <h3 className="text-xl font-semibold text-card-foreground mb-2">
                 {caseItem.title}
               </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
+              <p className="text-muted-foreground mb-4 line-clamp-2">
                 {caseItem.description || 'Sem descrição'}
               </p>
-              <div className="flex flex-col space-y-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <div className="flex flex-col space-y-2 text-sm text-muted-foreground mb-4">
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 mr-2" />
                   <span>Criado em: {formatDate(caseItem.dateCreated)}</span>

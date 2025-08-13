@@ -195,8 +195,16 @@ const Settings = () => {
   };
   
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold mb-6">Configurações</h1>
+    <div className="page-container py-6">
+      <div className="page-header">
+        <h1 className="page-title flex items-center gap-3">
+          <Key className="h-8 w-8 text-brand" />
+          Configurações
+        </h1>
+        <p className="page-description">
+          Configure as preferências do sistema e conexões de API
+        </p>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* API Settings Card */}

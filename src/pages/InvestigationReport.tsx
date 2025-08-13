@@ -87,6 +87,7 @@ const InvestigationReport = () => {
       console.log('Generating report with evidence count:', evidences.length);
       
       // Send evidence data to report generator
+      console.log('Evidence data being sent to report generator:', evidences);
       const report = await generateInvestigationReportWithGroq(currentCase, evidences);
       
       console.log('Report generated successfully, length:', report.length);

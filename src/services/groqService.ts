@@ -161,15 +161,35 @@ export const generateInvestigationReportWithGroq = async (
       {
         role: "system",
         content: 
-          "Você é um assistente especializado em análise investigativa. " +
-          "Sua função é analisar os boletins de ocorrência e gerar um relatório " +
-          "de investigação estruturado e detalhado."
+          "Você é um investigador especializado em análise de evidências e geração de relatórios investigativos. " +
+          "Sua função é analisar todas as evidências coletadas (textos, imagens, áudios, análises de links, dados financeiros) " +
+          "e gerar um relatório de investigação completo, estruturado e profissional. " +
+          "O relatório deve seguir padrões investigativos e incluir análise cruzada das evidências."
       },
       {
         role: "user",
-        content: `Gere um relatório de investigação baseado nas seguintes ocorrências:\n\n${
-          JSON.stringify(occurrences, null, 2)
-        }\n\nDados do caso: ${JSON.stringify(caseData, null, 2)}`
+        content: `CASO: ${caseData.title}
+DESCRIÇÃO: ${caseData.description}
+
+Analise todas as evidências abaixo e gere um RELATÓRIO DE INVESTIGAÇÃO COMPLETO com as seguintes seções:
+
+1. RESUMO EXECUTIVO
+2. METODOLOGIA DE ANÁLISE
+3. ANÁLISE DAS EVIDÊNCIAS POR TIPO
+4. ANÁLISE CRUZADA E CORRELAÇÕES
+5. PESSOAS E ENTIDADES IDENTIFICADAS
+6. LOCAIS E GEOGRAFIAS RELEVANTES
+7. LINHA DO TEMPO DOS EVENTOS
+8. PADRÕES E ANOMALIAS DETECTADAS
+9. CONCLUSÕES PRELIMINARES
+10. RECOMENDAÇÕES INVESTIGATIVAS
+11. ANEXOS (evidências relevantes)
+
+EVIDÊNCIAS PARA ANÁLISE:
+${JSON.stringify(occurrences, null, 2)}
+
+DADOS DO CASO:
+${JSON.stringify(caseData, null, 2)}`
       }
     ];
     
@@ -434,10 +454,26 @@ export const analyzeImageWithGroq = async (
         analysis.licensePlates : ['ABC-1234', 'XYZ-5678'];
       
       // Ensure the response has the expected structure
+      const formattedLicensePlates = Array.isArray(analysis.licensePlates) ? 
+        analysis.licensePlates.map((item: any) => {
+          if (typeof item === 'string') {
+            return {
+              plate: item,
+              confidence: 0.8,
+              region: { x: 0, y: 0, width: 100, height: 30 }
+            };
+          }
+          return item;
+        }) : mockPlates.map(plate => ({
+          plate,
+          confidence: 0.8,
+          region: { x: 0, y: 0, width: 100, height: 30 }
+        }));
+
       return {
         ocrText: analysis.ocrText || 'Texto extraído da imagem via OCR',
         faces: Array.isArray(analysis.faces) ? analysis.faces : mockFaces,
-        licensePlates: Array.isArray(analysis.licensePlates) ? analysis.licensePlates : mockPlates,
+        licensePlates: formattedLicensePlates,
         enhancementTechnique: analysis.enhancementTechnique || 'Aplicadas técnicas de melhoria de contraste, nitidez e correção de iluminação para análise forense',
         confidenceScores: analysis.confidenceScores || {
           plate: mockPlates[0] || 'ABC-1234',

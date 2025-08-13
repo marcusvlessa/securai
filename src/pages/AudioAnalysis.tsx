@@ -217,9 +217,12 @@ const AudioAnalysis = () => {
         {
           role: "system",
           content: 
-            "Você é um investigador especializado em análise forense de áudios. " +
-            "Sua função é analisar transcrições de áudios e gerar um relatório detalhado em português " +
-            "identificando possíveis indícios criminais. O relatório deve incluir: " +
+            "Você é um investigador especializado em análise forense de áudios e detecção de crimes. " +
+            "Sua tarefa é analisar transcrições de áudios e identificar possíveis evidências criminais, " +
+            "padrões suspeitos, menções a atividades ilegais, nomes, locais, datas importantes, " +
+            "e qualquer informação relevante para investigações. " +
+            "Estruture sua análise de forma profissional e detalhada com seções claras. " +
+            "O relatório deve incluir: " +
             "1) RESUMO EXECUTIVO com principais achados criminais; " +
             "2) ANÁLISE DE ÁUDIOS (arquivo por arquivo); " +
             "3) IDENTIFICAÇÃO DE INTERLOCUTORES; " +
@@ -231,7 +234,24 @@ const AudioAnalysis = () => {
         },
         {
           role: "user",
-          content: `Caso: ${currentCase.title}\n\nAnalise as seguintes transcrições de áudio em busca de indícios criminais e gere um relatório investigativo detalhado:\n\n${allTranscriptions}`
+          content: `Analise as seguintes transcrições de áudio em busca de evidências criminais e informações investigativas relevantes. 
+
+ESTRUTURE O RELATÓRIO COM AS SEGUINTES SEÇÕES:
+
+1. RESUMO EXECUTIVO
+2. EVIDÊNCIAS CRIMINAIS IDENTIFICADAS
+3. PESSOAS MENCIONADAS (nomes, apelidos, funções)
+4. LOCAIS E ENDEREÇOS CITADOS
+5. DATAS E HORÁRIOS IMPORTANTES
+6. ATIVIDADES SUSPEITAS DETECTADAS
+7. PADRÕES DE COMPORTAMENTO
+8. POSSÍVEIS CONEXÕES CRIMINAIS
+9. RECOMENDAÇÕES INVESTIGATIVAS
+10. ANEXOS (trechos relevantes das transcrições)
+
+Transcrições para análise:
+
+${allTranscriptions}`
         }
       ];
       

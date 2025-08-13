@@ -31,7 +31,12 @@ const RIFUpload: React.FC<RIFUploadProps> = ({ onDataUploaded }) => {
   const { currentCase } = useCase();
 
   const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0 || !currentCase) return;
+    if (!files || files.length === 0) return;
+    
+    if (!currentCase) {
+      toast.error('Por favor, selecione um caso primeiro');
+      return;
+    }
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -83,7 +88,7 @@ const RIFUpload: React.FC<RIFUploadProps> = ({ onDataUploaded }) => {
             accept=".csv,.xlsx,.json,.pdf"
             className="hidden"
             onChange={(e) => handleFileUpload(e.target.files)}
-            disabled={isUploading}
+            disabled={isUploading || !currentCase}
           />
         </div>
         

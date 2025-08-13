@@ -15,6 +15,7 @@ import CaseManagement from './pages/CaseManagement';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import VirtualAgents from './pages/VirtualAgents';
+import FinancialAnalysis from './pages/FinancialAnalysis';
 import { CaseProvider } from './contexts/CaseContext';
 import { getGroqSettings, saveGroqSettings } from './services/groqService';
 import './index.css';
@@ -67,6 +68,7 @@ function App() {
                     <Route path="/virtual-agents" element={<VirtualAgents />} />
                     <Route path="/audio-analysis" element={<AudioAnalysis />} />
                     <Route path="/image-analysis" element={<ImageAnalysis />} />
+                    <Route path="/financial-analysis" element={<FinancialAnalysis />} />
                     <Route path="/case-management" element={<CaseManagement />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<NotFound />} />

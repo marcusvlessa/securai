@@ -9,7 +9,8 @@ import {
   Settings, 
   Shield,
   Bot,
-  BarChartHorizontal
+  BarChartHorizontal,
+  DollarSign
 } from 'lucide-react';
 import {
   Sidebar,
@@ -68,6 +69,12 @@ const navItems = [
     path: '/image-analysis', 
     icon: Image, 
     description: 'OCR e detecção'
+  },
+  { 
+    name: 'Análise Financeira', 
+    path: '/financial-analysis', 
+    icon: DollarSign, 
+    description: 'RIF/COAF red flags'
   },
   { 
     name: 'Gerenciamento de Casos', 

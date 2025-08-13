@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Database, Link as LinkIcon, AlertCircle } from 'lucide-react';
+import { Upload, FileText, Database, Link as LinkIcon, AlertCircle, Play, Download, Settings } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
-import { processLinkAnalysisDataWithGroq } from '../services/groqService';
+import { processLinkAnalysisDataWithGroq, makeGroqAIRequest } from '../services/groqService';
+import LinkAnalysisUploader from '../components/LinkAnalysisUploader';
 
 interface NetworkNode {
   id: string;
@@ -29,11 +30,14 @@ interface NetworkData {
 
 const LinkAnalysis = () => {
   const { currentCase, saveToCurrentCase } = useCase();
-  const [file, setFile] = useState<File | null>(null);
-  const [fileContent, setFileContent] = useState<string>('');
+  const [uploadedData, setUploadedData] = useState<any[]>([]);
+  const [columnMapping, setColumnMapping] = useState<any>({});
+  const [fileType, setFileType] = useState<string>('');
   const [graphImage, setGraphImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [networkData, setNetworkData] = useState<NetworkData | null>(null);
+  const [insights, setInsights] = useState<string>('');
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState<boolean>(false);
   
   // Effect to draw the network graph when data changes
   useEffect(() => {
@@ -49,41 +53,16 @@ const LinkAnalysis = () => {
     }
   }, [networkData]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    
-    const file = files[0];
-    const fileName = file.name.toLowerCase();
-    
-    if (!(fileName.endsWith('.csv') || fileName.endsWith('.xls') || fileName.endsWith('.xlsx') || fileName.endsWith('.txt'))) {
-      toast.error('Formato de arquivo não suportado. Por favor, selecione CSV, TXT, XLS ou XLSX.');
-      return;
-    }
-    
-    setFile(file);
-    
-    // Read the file content
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setFileContent(event.target.result as string);
-      }
-    };
-    
-    if (fileName.endsWith('.txt') || fileName.endsWith('.csv')) {
-      reader.readAsText(file);
-    } else {
-      // For Excel files, just show the filename
-      setFileContent(`Arquivo Excel: ${file.name}`);
-    }
-    
-    toast.success(`Arquivo "${file.name}" carregado com sucesso`);
+  const handleDataUploaded = (data: any[], mapping: any, dataType: string) => {
+    setUploadedData(data);
+    setColumnMapping(mapping);
+    setFileType(dataType);
+    toast.success(`${data.length} registros carregados para análise de vínculos`);
   };
 
   const processData = async () => {
-    if (!file) {
-      toast.error('Por favor, selecione um arquivo primeiro');
+    if (!uploadedData.length) {
+      toast.error('Por favor, carregue dados primeiro');
       return;
     }
     
@@ -95,13 +74,21 @@ const LinkAnalysis = () => {
     setIsProcessing(true);
     
     try {
-      // Process the file content with GROQ
-      const data = await processLinkAnalysisDataWithGroq(currentCase, fileContent);
+      // Transform uploaded data into network format using AI
+      const dataForAnalysis = {
+        fileType,
+        columnMapping,
+        sampleData: uploadedData.slice(0, 10), // Send first 10 records as sample
+        totalRecords: uploadedData.length
+      };
       
-      // Add default values if API returns incomplete data
+      // Process the data with GROQ to create network graph
+      const networkResult = await processLinkAnalysisDataWithGroq(currentCase, JSON.stringify(dataForAnalysis));
+      
+      // Add default values if API returns incomplete data  
       const processedData: NetworkData = {
-        nodes: data.nodes || [],
-        links: data.edges || data.links || []
+        nodes: networkResult.nodes || [],
+        links: networkResult.edges || networkResult.links || []
       };
       
       // Update the network data state
@@ -110,17 +97,74 @@ const LinkAnalysis = () => {
       // Save to case
       saveToCurrentCase({
         timestamp: new Date().toISOString(),
-        filename: file.name,
+        dataType: fileType,
+        recordsProcessed: uploadedData.length,
         networkData: processedData
       }, 'linkAnalysis');
       
-      toast.success('Análise de vínculos processada com sucesso');
+      toast.success(`Análise de vínculos processada: ${processedData.nodes.length} entidades, ${processedData.links.length} conexões`);
     } catch (error) {
       console.error('Error processing link analysis data:', error);
       toast.error('Erro ao processar dados para análise de vínculos: ' + 
                  (error instanceof Error ? error.message : 'Erro desconhecido'));
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const generateInsights = async () => {
+    if (!networkData || !currentCase) {
+      toast.error('Processe os dados primeiro para gerar insights');
+      return;
+    }
+
+    setIsGeneratingInsights(true);
+
+    try {
+      // Prepare network features for AI analysis
+      const features = {
+        totalNodes: networkData.nodes.length,
+        totalLinks: networkData.links.length,
+        density: networkData.links.length > 0 ? 
+          (2 * networkData.links.length) / (networkData.nodes.length * (networkData.nodes.length - 1)) : 0,
+        nodeGroups: [...new Set(networkData.nodes.map(n => n.group))],
+        linkTypes: [...new Set(networkData.links.map(l => l.type))],
+        topConnectedNodes: networkData.nodes
+          .map(node => ({
+            ...node,
+            connections: networkData.links.filter(l => l.source === node.id || l.target === node.id).length
+          }))
+          .sort((a, b) => b.connections - a.connections)
+          .slice(0, 5)
+      };
+
+      const messages = [
+        {
+          role: "system",
+          content: 
+            "Você é um especialista em análise de vínculos e investigações. " +
+            "Analise as características da rede fornecida e gere insights investigativos " +
+            "sobre padrões suspeitos, entidades-chave, e recomendações para a investigação. " +
+            "Forneça um relatório estruturado em português."
+        },
+        {
+          role: "user", 
+          content: `Analise esta rede de vínculos e forneça insights investigativos:\n\n` +
+                  `Caso: ${currentCase.title}\n` +
+                  `Tipo de dados: ${fileType}\n` +
+                  `Características da rede:\n${JSON.stringify(features, null, 2)}`
+        }
+      ];
+
+      const insightsResult = await makeGroqAIRequest(messages, 2048);
+      setInsights(insightsResult);
+      
+      toast.success('Insights de investigação gerados com sucesso');
+    } catch (error) {
+      console.error('Error generating insights:', error);
+      toast.error('Erro ao gerar insights: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+    } finally {
+      setIsGeneratingInsights(false);
     }
   };
 
@@ -394,62 +438,39 @@ const LinkAnalysis = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="h-5 w-5" /> Upload de Dados
-                </CardTitle>
-                <CardDescription>
-                  Faça upload de arquivos CSV, TXT, XLS ou XLSX contendo os dados para análise
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 text-center">
-                    <Input
-                      type="file"
-                      id="data-upload"
-                      className="hidden"
-                      accept=".csv,.xls,.xlsx,.txt"
-                      onChange={handleFileUpload}
-                    />
-                    <label 
-                      htmlFor="data-upload" 
-                      className="cursor-pointer flex flex-col items-center justify-center"
-                    >
-                      <Database className="h-10 w-10 text-gray-400 mb-2" />
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Arraste um arquivo CSV, TXT, XLS ou XLSX aqui ou clique para fazer upload
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                        O arquivo deve conter dados relacionais para análise de vínculos
-                      </p>
-                    </label>
-                  </div>
+            <LinkAnalysisUploader onDataUploaded={handleDataUploaded} />
 
-                  {file && (
-                    <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md">
-                      <p className="text-green-800 dark:text-green-300 text-sm">
-                        {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                      </p>
-                      {fileContent && fileContent.length < 500 && (
-                        <div className="mt-2 bg-white dark:bg-gray-800 p-2 rounded max-h-32 overflow-auto text-xs">
-                          <pre>{fileContent}</pre>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
+            {uploadedData.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    Processamento
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <Button
                     onClick={processData}
-                    disabled={!file || isProcessing}
+                    disabled={isProcessing}
                     className="w-full"
                   >
-                    {isProcessing ? 'Processando...' : 'Processar Dados'}
+                    <Play className="mr-2 h-4 w-4" />
+                    {isProcessing ? 'Processando...' : 'Executar Análise de Vínculos'}
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  
+                  {networkData && (
+                    <Button
+                      onClick={generateInsights}
+                      disabled={isGeneratingInsights}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      {isGeneratingInsights ? 'Gerando...' : 'Gerar Insights de Investigação'}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
@@ -492,73 +513,93 @@ const LinkAnalysis = () => {
           </div>
 
           <div>
-            <Card className="h-full flex flex-col">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <LinkIcon className="h-5 w-5" /> Visualização de Vínculos
-                </CardTitle>
-                <CardDescription>
-                  Gráfico de relacionamentos entre entidades encontradas nos dados
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1">
-                {isProcessing ? (
-                  <div className="flex flex-col items-center justify-center h-full p-8">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 dark:border-gray-100" />
-                    <p className="mt-4 text-gray-600 dark:text-gray-400">
-                      Processando dados e gerando visualização de vínculos...
-                    </p>
-                  </div>
-                ) : graphImage ? (
-                  <div className="h-full flex flex-col">
-                    <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md flex-1 overflow-auto">
-                      <img 
-                        src={graphImage} 
-                        alt="Gráfico de vínculos" 
-                        className="max-w-full h-auto mx-auto"
-                      />
+            <div className="space-y-6">
+              <Card className="h-96 flex flex-col">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <LinkIcon className="h-5 w-5" /> Visualização de Vínculos
+                  </CardTitle>
+                  <CardDescription>
+                    Gráfico de relacionamentos entre entidades encontradas nos dados
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1">
+                  {isProcessing ? (
+                    <div className="flex flex-col items-center justify-center h-full p-8">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 dark:border-gray-100" />
+                      <p className="mt-4 text-gray-600 dark:text-gray-400">
+                        Processando dados e gerando visualização de vínculos...
+                      </p>
                     </div>
-                    <div className="mt-4 flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-medium">Estatísticas dos Vínculos</h4>
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-2">
-                          <p className="text-xs">Entidades: <span className="font-semibold">{networkData?.nodes.length || 0}</span></p>
-                          <p className="text-xs">Conexões: <span className="font-semibold">{networkData?.links.length || 0}</span></p>
-                          {networkData && (
-                            <>
-                              <p className="text-xs">Grau Médio: <span className="font-semibold">
-                                {(networkData.links.length * 2 / networkData.nodes.length).toFixed(1)}
-                              </span></p>
-                              <p className="text-xs">Densidade: <span className="font-semibold">
-                                {((2 * networkData.links.length) / (networkData.nodes.length * (networkData.nodes.length - 1))).toFixed(3)}
-                              </span></p>
-                            </>
-                          )}
-                        </div>
+                  ) : graphImage ? (
+                    <div className="h-full flex flex-col">
+                      <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md flex-1 overflow-auto">
+                        <img 
+                          src={graphImage} 
+                          alt="Gráfico de vínculos" 
+                          className="max-w-full h-auto mx-auto"
+                        />
                       </div>
-                      <Button 
-                        size="sm"
-                        onClick={() => {
-                          if (graphImage) {
-                            const link = document.createElement('a');
-                            link.download = 'analise-vinculos.png';
-                            link.href = graphImage;
-                            link.click();
-                          }
-                        }}
-                      >
-                        Salvar Imagem
-                      </Button>
+                      <div className="mt-4 flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-medium">Estatísticas dos Vínculos</h4>
+                          <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-2">
+                            <p className="text-xs">Entidades: <span className="font-semibold">{networkData?.nodes.length || 0}</span></p>
+                            <p className="text-xs">Conexões: <span className="font-semibold">{networkData?.links.length || 0}</span></p>
+                            {networkData && (
+                              <>
+                                <p className="text-xs">Grau Médio: <span className="font-semibold">
+                                  {(networkData.links.length * 2 / networkData.nodes.length).toFixed(1)}
+                                </span></p>
+                                <p className="text-xs">Densidade: <span className="font-semibold">
+                                  {((2 * networkData.links.length) / (networkData.nodes.length * (networkData.nodes.length - 1))).toFixed(3)}
+                                </span></p>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if (graphImage) {
+                              const link = document.createElement('a');
+                              link.download = 'analise-vinculos.png';
+                              link.href = graphImage;
+                              link.click();
+                            }
+                          }}
+                        >
+                          <Download className="mr-2 h-4 w-4" />
+                          Salvar
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                    <LinkIcon className="h-16 w-16 opacity-20 mb-4" />
-                    <p>Faça upload e processe um arquivo para visualizar os vínculos</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                      <LinkIcon className="h-16 w-16 opacity-20 mb-4" />
+                      <p>Carregue dados e execute a análise para visualizar os vínculos</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {insights && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Insights de Investigação
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose dark:prose-invert max-w-none">
+                      <div className="whitespace-pre-wrap text-sm">{insights}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         </div>
       )}

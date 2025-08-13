@@ -62,24 +62,37 @@ const AudioAnalysis = () => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
-    const file = files[0];
-    if (!file.type.startsWith('audio/')) {
-      toast.error('Por favor, selecione um arquivo de áudio');
-      return;
+    const validFiles: AudioFile[] = [];
+    const invalidFiles: string[] = [];
+    
+    // Process multiple files
+    Array.from(files).forEach((file, index) => {
+      if (!file.type.startsWith('audio/')) {
+        invalidFiles.push(file.name);
+        return;
+      }
+      
+      // Create object URL for the audio file
+      const audioUrl = URL.createObjectURL(file);
+      
+      const newAudio: AudioFile = {
+        id: `audio-${Date.now()}-${index}`,
+        name: file.name,
+        url: audioUrl,
+        file: file
+      };
+      
+      validFiles.push(newAudio);
+    });
+    
+    if (invalidFiles.length > 0) {
+      toast.error(`Arquivos inválidos ignorados: ${invalidFiles.join(', ')}`);
     }
     
-    // Create object URL for the audio file
-    const audioUrl = URL.createObjectURL(file);
-    
-    const newAudio: AudioFile = {
-      id: `audio-${Date.now()}`,
-      name: file.name,
-      url: audioUrl,
-      file: file
-    };
-    
-    setAudioFiles([...audioFiles, newAudio]);
-    toast.success(`Áudio "${file.name}" adicionado com sucesso`);
+    if (validFiles.length > 0) {
+      setAudioFiles([...audioFiles, ...validFiles]);
+      toast.success(`${validFiles.length} arquivo(s) de áudio adicionado(s) com sucesso`);
+    }
   };
 
   const handleTranscribe = async (audio: AudioFile) => {
@@ -199,22 +212,26 @@ const AudioAnalysis = () => {
         return formattedTranscript;
       }).join('\n\n---\n\n');
       
-      // Use GROQ API to generate report with improved prompt
+      // Use GROQ API to generate report with improved prompt for crime detection
       const messages = [
         {
           role: "system",
           content: 
-            "Você é um assistente especializado em análise de gravações de áudio. " +
-            "Sua função é analisar transcrições de áudios e gerar um relatório detalhado em português. " +
-            "O relatório deve incluir: 1) Informações gerais; 2) Arquivos analisados; " +
-            "3) Identificação dos interlocutores; 4) Transcrição consolidada; " +
-            "5) Pontos de interesse; 6) Conclusões e recomendações. " +
-            "Utilize formato Markdown para estruturar sua resposta. " +
-            "Analise cuidadosamente o conteúdo buscando pontos-chave relevantes para o contexto investigativo."
+            "Você é um investigador especializado em análise forense de áudios. " +
+            "Sua função é analisar transcrições de áudios e gerar um relatório detalhado em português " +
+            "identificando possíveis indícios criminais. O relatório deve incluir: " +
+            "1) RESUMO EXECUTIVO com principais achados criminais; " +
+            "2) ANÁLISE DE ÁUDIOS (arquivo por arquivo); " +
+            "3) IDENTIFICAÇÃO DE INTERLOCUTORES; " +
+            "4) INDÍCIOS CRIMINAIS DETECTADOS (ameaças, conspiração, lavagem de dinheiro, tráfico, corrupção, etc.); " +
+            "5) ANÁLISE DE COMPORTAMENTO E LINGUAGEM; " +
+            "6) CRONOLOGIA DE EVENTOS SUSPEITOS; " +
+            "7) RECOMENDAÇÕES INVESTIGATIVAS. " +
+            "Utilize formato Markdown. Seja específico sobre crimes detectados e cite trechos relevantes."
         },
         {
           role: "user",
-          content: `Caso: ${currentCase.title}\n\nAnalise as seguintes transcrições de áudio e gere um relatório detalhado em português:\n\n${allTranscriptions}`
+          content: `Caso: ${currentCase.title}\n\nAnalise as seguintes transcrições de áudio em busca de indícios criminais e gere um relatório investigativo detalhado:\n\n${allTranscriptions}`
         }
       ];
       
@@ -330,6 +347,7 @@ const AudioAnalysis = () => {
                       id="audio-upload"
                       className="hidden"
                       accept="audio/*"
+                      multiple
                       onChange={handleAudioUpload}
                     />
                     <label 

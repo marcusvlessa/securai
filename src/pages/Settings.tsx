@@ -417,9 +417,30 @@ const Settings = () => {
               <p className="text-xl font-bold">{localStorageSize}</p>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <Button variant="outline" onClick={handleExportData}>Exportar Dados</Button>
-              <Button variant="destructive" onClick={handleClearLocalStorage}>Limpar Dados</Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => {
+                    const { clearAllData } = require('../services/seedDataService');
+                    if (window.confirm('Isso irá apagar todos os dados. Tem certeza?')) {
+                      clearAllData();
+                      window.location.reload();
+                    }
+                  }}
+                  variant="destructive"
+                  className="flex-1"
+                >
+                  Limpar Todos os Dados
+                </Button>
+                <Button 
+                  onClick={handleClearLocalStorage}
+                  variant="outline" 
+                  className="flex-1"
+                >
+                  Limpar Apenas Cache
+                </Button>
+              </div>
             </div>
           </CardContent>
           <CardFooter>

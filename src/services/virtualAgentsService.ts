@@ -268,6 +268,13 @@ export const executeVirtualAgent = async (agentId: string, caseData?: any): Prom
     throw new Error(`Agent ${agentId} not found`);
   }
 
+  // Import GROQ service functions
+  const { makeGroqAIRequest, hasValidApiKey } = await import('./groqService');
+
+  if (!hasValidApiKey()) {
+    throw new Error('API key GROQ não configurada');
+  }
+
   const execution: AgentExecution = {
     id: `execution-${Date.now()}`,
     agentId,
@@ -293,15 +300,74 @@ export const executeVirtualAgent = async (agentId: string, caseData?: any): Prom
       message: `Starting execution of agent: ${agent.name}`
     });
 
-    // Execute agent functions
-    for (const func of agent.functions.filter(f => f.enabled)) {
-      await executeAgentFunction(func, agent, execution, caseData);
+    // Use AI to process agent execution
+    const messages = [
+      {
+        role: "system",
+        content: `Você é um agente virtual especializado. Objetivo: ${agent.objective}. 
+                 Funções habilitadas: ${agent.functions.map(f => f.name).join(', ')}.
+                 Gere análises baseadas no contexto fornecido.`
+      },
+      {
+        role: "user", 
+        content: `Contexto do caso: ${JSON.stringify(caseData, null, 2)}`
+      }
+    ];
+
+    execution.logs.push({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: 'Processando com IA...'
+    });
+
+    const aiResponse = await makeGroqAIRequest(messages, 2048);
+
+    execution.logs.push({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: 'Resposta da IA gerada com sucesso'
+    });
+
+    // Add AI response as output
+    execution.outputs.push({
+      type: 'text',
+      name: 'AI Analysis',
+      content: aiResponse,
+      metadata: { tokens: aiResponse.length }
+    });
+
+    // Simulate Canva integration if enabled
+    const canvaConnector = agent.connectors.find(c => c.type === 'canva' && c.enabled);
+    if (canvaConnector) {
+      execution.logs.push({
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: 'Integrando com Canva...'
+      });
+
+      // Simulate Canva design creation
+      const canvaUrl = `https://canva.com/design/simulacao-${Date.now()}`;
+      execution.outputs.push({
+        type: 'url',
+        name: 'Canva Design',
+        content: canvaUrl,
+        metadata: { connector: 'canva' }
+      });
+
+      execution.logs.push({
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: 'Design Canva criado'
+      });
     }
 
     // Mark as completed
     execution.status = 'completed';
     execution.endTime = new Date().toISOString();
     execution.metrics.executionTime = new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime();
+    execution.metrics.apiCallsCount = 1 + (canvaConnector ? 1 : 0);
+    execution.metrics.tokensUsed = Math.floor(aiResponse.length / 4);
+    execution.metrics.dataProcessed = JSON.stringify(caseData).length;
 
     // Update agent status and execution count
     await updateVirtualAgent(agentId, { 

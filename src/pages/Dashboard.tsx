@@ -217,6 +217,20 @@ const Dashboard = () => {
             </div>
           </div>
 
+          <div className="mb-4">
+            <Button 
+              onClick={() => {
+                const { loadSeedData } = require('../services/seedDataService');
+                loadSeedData();
+                window.location.reload();
+              }}
+              variant="outline"
+              className="w-full"
+            >
+              🌱 Carregar Dados de Exemplo para Demonstração
+            </Button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <Card className="stat-card">
               <CardContent className="p-6">

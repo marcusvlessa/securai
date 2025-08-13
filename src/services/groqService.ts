@@ -452,7 +452,7 @@ export const analyzeImageWithGroq = async (
           ]
         }
       ],
-      model: settings.model || "llama-3.2-90b-vision-preview",
+      model: "gemma2-9b-it",
       temperature: 0.1,
       max_tokens: 4096
     });
@@ -543,7 +543,7 @@ export const enhanceImageWithGroq = async (
           ]
         }
       ],
-      model: settings.model || "llama-3.2-90b-vision-preview",
+      model: "gemma2-9b-it",
       temperature: 0.3,
       max_tokens: 1024
     });

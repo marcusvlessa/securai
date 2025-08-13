@@ -63,15 +63,37 @@ export default {
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))'
         },
+        // Brand colors for Secur:AI
+        brand: {
+          DEFAULT: 'hsl(var(--primary-brand))',
+          light: 'hsl(var(--primary-brand-light))'
+        },
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          light: 'hsl(var(--success-light))'
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          light: 'hsl(var(--warning-light))'
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          light: 'hsl(var(--info-light))'
+        },
+        // Legacy colors (will be phased out)
         promo: 'hsl(var(--promo))',
-        'promo-foreground': 'hsl(var(--promo-foreground))',
-        'blue-card': '#1D8FFF',
-        'yellow-card': '#FFD426',
-        'icon-blue': '#0080FF',
-        'icon-purple': '#B22CFF',
-        'icon-green': '#00A67E',
-        'icon-yellow': '#FFB800',
-        'icon-pink': '#FF3EA5',
+        'promo-foreground': 'hsl(var(--promo-foreground))'
+      },
+      backgroundImage: {
+        'gradient-primary': 'var(--gradient-primary)',
+        'gradient-success': 'var(--gradient-success)',
+        'gradient-warning': 'var(--gradient-warning)'
+      },
+      boxShadow: {
+        'sm': 'var(--shadow-sm)',
+        'md': 'var(--shadow-md)',
+        'lg': 'var(--shadow-lg)',
+        'xl': 'var(--shadow-xl)'
       },
       borderRadius: {
         lg: 'var(--radius)',

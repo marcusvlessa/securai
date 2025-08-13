@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { useCase } from '../contexts/CaseContext';
-import { AlertCircle, FileText, Layers, PieChart, ChevronRight, BookOpen, BarChartHorizontal, Folder, ImageIcon, AudioLines, Camera, FolderArchive, List } from 'lucide-react';
+import { AlertCircle, FileText, Layers, PieChart, ChevronRight, BookOpen, BarChartHorizontal, Folder, ImageIcon, AudioLines, Camera, FolderArchive, List, Shield } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '../components/ui/badge';
@@ -70,21 +70,24 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Dashboard</h1>
-        <p className="text-gray-600 dark:text-gray-300">
-          Visão geral dos casos e análises
+    <div className="page-container py-6">
+      <div className="page-header">
+        <h1 className="page-title flex items-center gap-3">
+          <Shield className="h-8 w-8 text-brand" />
+          Dashboard
+        </h1>
+        <p className="page-description">
+          Visão geral dos casos e análises investigativas
         </p>
       </div>
 
       {!currentCase ? (
         <div>
-          <Card className="mb-6 border-yellow-300 bg-yellow-50 dark:bg-yellow-900/30">
+          <Card className="border-warning bg-warning-light">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-                <p className="text-yellow-800 dark:text-yellow-200">
+                <AlertCircle className="h-5 w-5 text-warning" />
+                <p className="text-warning-foreground">
                   Selecione um caso para visualizar seu dashboard ou crie um novo caso.
                 </p>
               </div>
@@ -92,10 +95,10 @@ const Dashboard = () => {
           </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
+            <Card className="feature-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Folder className="h-5 w-5" /> Casos Recentes
+                  <Folder className="h-5 w-5 text-brand" /> Casos Recentes
                 </CardTitle>
                 <CardDescription>
                   Lista dos casos mais recentes
@@ -107,26 +110,27 @@ const Dashboard = () => {
                     {cases.slice(0, 5).map((caseItem) => (
                       <div 
                         key={caseItem.id} 
-                        className="flex justify-between items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md cursor-pointer"
+                        className="flex justify-between items-center p-3 hover:bg-accent rounded-md cursor-pointer transition-colors"
                         onClick={() => navigate(`/case-management`)}
                       >
                         <div className="flex items-center gap-3">
-                          <FolderArchive className="h-5 w-5 text-blue-500" />
+                          <FolderArchive className="h-5 w-5 text-brand" />
                           <div>
                             <h4 className="font-medium">{caseItem.title}</h4>
-                            <p className="text-sm text-gray-500">
-                              {new Date(caseItem.dateCreated).toLocaleDateString()}
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(caseItem.dateCreated).toLocaleDateString('pt-BR')}
                             </p>
                           </div>
                         </div>
-                        <ChevronRight className="h-5 w-5 text-gray-400" />
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-4">Nenhum caso criado ainda</p>
-                    <Button onClick={() => navigate('/case-management')}>
+                  <div className="empty-state">
+                    <FolderArchive className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground mb-4">Nenhum caso criado ainda</p>
+                    <Button onClick={() => navigate('/case-management')} className="gradient-text">
                       Criar Novo Caso
                     </Button>
                   </div>
@@ -197,64 +201,83 @@ const Dashboard = () => {
       ) : (
         <div>
           <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-              <Folder className="h-5 w-5" />
-              <span>{currentCase.title}</span>
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              {currentCase.description || 'Sem descrição'}
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                  <Folder className="h-5 w-5 text-brand" />
+                  <span>{currentCase.title}</span>
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  {currentCase.description || 'Sem descrição'}
+                </p>
+              </div>
+              <Badge className="status-active">
+                {currentCase.status || 'Ativo'}
+              </Badge>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-gray-500">Ocorrências</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Card className="stat-card">
+              <CardContent className="p-6">
                 <div className="flex justify-between items-center">
-                  <div className="text-2xl font-bold">
-                    {isLoadingStats ? '...' : caseStats?.occurrencesCount || 0}
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Ocorrências</p>
+                    <div className="text-2xl font-bold">
+                      {isLoadingStats ? (
+                        <div className="loading-spinner h-6 w-6"></div>
+                      ) : (
+                        caseStats?.occurrencesCount || 0
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Documentos analisados
+                    </p>
                   </div>
-                  <FileText className="h-8 w-8 text-emerald-600 opacity-80" />
+                  <FileText className="h-8 w-8 text-success opacity-80" />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Documentos analisados
-                </p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-gray-500">Imagens</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Card className="stat-card">
+              <CardContent className="p-6">
                 <div className="flex justify-between items-center">
-                  <div className="text-2xl font-bold">
-                    {isLoadingStats ? '...' : caseStats?.imagesCount || 0}
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Imagens</p>
+                    <div className="text-2xl font-bold">
+                      {isLoadingStats ? (
+                        <div className="loading-spinner h-6 w-6"></div>
+                      ) : (
+                        caseStats?.imagesCount || 0
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Imagens processadas
+                    </p>
                   </div>
-                  <Camera className="h-8 w-8 text-blue-600 opacity-80" />
+                  <Camera className="h-8 w-8 text-brand opacity-80" />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Imagens processadas
-                </p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-gray-500">Áudios</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Card className="stat-card">
+              <CardContent className="p-6">
                 <div className="flex justify-between items-center">
-                  <div className="text-2xl font-bold">
-                    {isLoadingStats ? '...' : caseStats?.audiosCount || 0}
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Áudios</p>
+                    <div className="text-2xl font-bold">
+                      {isLoadingStats ? (
+                        <div className="loading-spinner h-6 w-6"></div>
+                      ) : (
+                        caseStats?.audiosCount || 0
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Áudios transcritos
+                    </p>
                   </div>
-                  <AudioLines className="h-8 w-8 text-purple-600 opacity-80" />
+                  <AudioLines className="h-8 w-8 text-info opacity-80" />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Áudios transcritos
-                </p>
               </CardContent>
             </Card>
           </div>
@@ -293,13 +316,13 @@ const Dashboard = () => {
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-64">
-                      <PieChart className="h-10 w-10 text-gray-300 mb-3" />
-                      <p className="text-gray-500">
-                        Nenhum tipo de crime identificado ainda. 
-                        Analise documentos para gerar estatísticas.
-                      </p>
-                    </div>
+                     <div className="empty-state h-64">
+                       <PieChart className="h-10 w-10 text-muted-foreground mb-3" />
+                       <p className="text-muted-foreground">
+                         Nenhum tipo de crime identificado ainda. 
+                         Analise documentos para gerar estatísticas.
+                       </p>
+                     </div>
                   )}
                 </CardContent>
               </Card>
@@ -327,11 +350,11 @@ const Dashboard = () => {
                       </Badge>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-gray-500 py-6 text-center">
-                    Nenhuma tag detectada ainda
-                  </p>
-                )}
+                 ) : (
+                   <p className="text-muted-foreground py-6 text-center">
+                     Nenhuma tag detectada ainda
+                   </p>
+                 )}
               </CardContent>
             </Card>
           </div>

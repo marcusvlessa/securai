@@ -2,7 +2,9 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
-import SideNavigation from './components/SideNavigation';
+import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar';
+import { AppSidebar } from './components/AppSidebar';
+import { ThemeProvider } from './components/ThemeProvider';
 import Dashboard from './pages/Dashboard';
 import OccurrenceAnalysis from './pages/OccurrenceAnalysis';
 import InvestigationReport from './pages/InvestigationReport';
@@ -12,6 +14,7 @@ import ImageAnalysis from './pages/ImageAnalysis';
 import CaseManagement from './pages/CaseManagement';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import VirtualAgents from './pages/VirtualAgents';
 import { CaseProvider } from './contexts/CaseContext';
 import { getGroqSettings, saveGroqSettings } from './services/groqService';
 import './index.css';
@@ -40,27 +43,42 @@ function App() {
   }, []);
 
   return (
-    <BrowserRouter>
-      <CaseProvider>
-        <div className="flex h-screen bg-gray-100 dark:bg-gray-950">
-          <SideNavigation />
-          <div className="flex-1 overflow-auto">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/occurrence-analysis" element={<OccurrenceAnalysis />} />
-              <Route path="/investigation-report" element={<InvestigationReport />} />
-              <Route path="/link-analysis" element={<LinkAnalysis />} />
-              <Route path="/audio-analysis" element={<AudioAnalysis />} />
-              <Route path="/image-analysis" element={<ImageAnalysis />} />
-              <Route path="/case-management" element={<CaseManagement />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </div>
-        </div>
-        <Toaster />
-      </CaseProvider>
-    </BrowserRouter>
+    <ThemeProvider defaultTheme="light" storageKey="securai-theme">
+      <BrowserRouter>
+        <CaseProvider>
+          <SidebarProvider>
+            <div className="min-h-screen flex w-full">
+              <AppSidebar />
+              
+              <div className="flex-1 flex flex-col">
+                <header className="h-14 flex items-center justify-between border-b px-4 lg:px-6">
+                  <div className="flex items-center gap-2">
+                    <SidebarTrigger />
+                    <h1 className="font-semibold text-lg">Secur:AI</h1>
+                  </div>
+                </header>
+                
+                <main className="flex-1 overflow-auto">
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/occurrence-analysis" element={<OccurrenceAnalysis />} />
+                    <Route path="/investigation-report" element={<InvestigationReport />} />
+                    <Route path="/link-analysis" element={<LinkAnalysis />} />
+                    <Route path="/virtual-agents" element={<VirtualAgents />} />
+                    <Route path="/audio-analysis" element={<AudioAnalysis />} />
+                    <Route path="/image-analysis" element={<ImageAnalysis />} />
+                    <Route path="/case-management" element={<CaseManagement />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </main>
+              </div>
+            </div>
+            <Toaster />
+          </SidebarProvider>
+        </CaseProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

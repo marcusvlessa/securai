@@ -14,6 +14,7 @@ const Settings = () => {
     groqApiKey: '',
     groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
     groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    model: 'llama-3.2-90b-vision-preview',
     whisperModel: 'whisper-large-v3',
     whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
     language: 'pt'

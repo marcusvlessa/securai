@@ -1,12 +1,14 @@
 
 // GROQ API Service
 // This service handles communication with the GROQ API for AI-powered functionalities
+import Groq from 'groq-sdk';
 
 // Types for GROQ API settings
 export type GroqSettings = {
   groqApiKey: string;
   groqApiEndpoint: string;
   groqModel: string;
+  model: string;
   whisperModel: string;
   whisperApiEndpoint: string;
   language: string;
@@ -17,9 +19,27 @@ const DEFAULT_GROQ_SETTINGS: GroqSettings = {
   groqApiKey: '',
   groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
   groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
+  model: 'llama-3.2-90b-vision-preview',
   whisperModel: 'whisper-large-v3',
   whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
   language: 'pt'
+};
+
+// Create GROQ client instance
+let groqClient: Groq | null = null;
+
+// Get GROQ client instance
+export const getGroqClient = (): Groq => {
+  const settings = getGroqSettings();
+  
+  if (!groqClient || groqClient.apiKey !== settings.groqApiKey) {
+    groqClient = new Groq({
+      apiKey: settings.groqApiKey,
+      dangerouslyAllowBrowser: true
+    });
+  }
+  
+  return groqClient;
 };
 
 // Storage key for API settings
@@ -402,33 +422,46 @@ export const analyzeImageWithGroq = async (
       throw new Error('API key not configured');
     }
 
-    // Create a specialized prompt for forensic image analysis
-    const messages = [
-      {
-        role: "system",
-        content: 
-          "Você é um especialista em análise forense de imagens. Sua função é extrair informações " +
-          "críticas para investigações policiais. Analise a imagem e retorne APENAS um JSON válido " +
-          "com os seguintes campos obrigatórios: ocrText (texto extraído via OCR), faces (array de " +
-          "rostos detectados com id, confidence e region com x,y,width,height em pixels), " +
-          "licensePlates (array de placas veiculares brasileiras detectadas), enhancementTechnique " +
-          "(técnicas de melhoria aplicadas), confidenceScores (opcional, scores de confiança por " +
-          "caractere das placas). FOQUE especialmente na detecção de placas veiculares brasileiras " +
-          "(formatos ABC-1234 ou ABC1D23) e rostos humanos com coordenadas precisas."
-      },
-      {
-        role: "user",
-        content: `Analise esta imagem forense focando na detecção de placas veiculares brasileiras e rostos humanos. ` +
-                 `Retorne APENAS JSON: ${imageUrl.length > 100 ? '[IMAGEM BASE64 FORNECIDA]' : imageUrl}`
-      }
-    ];
-
-    console.log('Analyzing image for license plates and faces with GROQ API...');
+    console.log('Analyzing image with GROQ Vision API...');
     
-    const result = await makeGroqAIRequest(messages, 3048);
+    const groq = getGroqClient();
+    
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "Você é um especialista em análise forense de imagens. Analise a imagem fornecida e extraia:\n" +
+                   "1. TODO o texto visível (OCR completo)\n" +
+                   "2. Detecte placas veiculares brasileiras (formatos ABC-1234 ou ABC1D23)\n" +
+                   "3. Identifique rostos humanos com coordenadas aproximadas\n" +
+                   "4. Retorne APENAS um JSON válido com os campos: ocrText, faces, licensePlates, enhancementTechnique, confidenceScores"
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Analise esta imagem e extraia TODOS os textos visíveis (OCR), detecte placas veiculares brasileiras e rostos. Retorne apenas JSON válido:"
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: imageUrl
+              }
+            }
+          ]
+        }
+      ],
+      model: settings.model || "llama-3.2-90b-vision-preview",
+      temperature: 0.1,
+      max_tokens: 4096
+    });
+
+    const result = completion.choices[0]?.message?.content || '';
+    console.log('GROQ Vision API response:', result);
     
     try {
-      // Try to parse the JSON response, handling potential Markdown code blocks
+      // Extract JSON from response
       const jsonMatch = result.match(/```json\n([\s\S]*?)\n```/) || 
                         result.match(/```\n([\s\S]*?)\n```/) ||
                         result.match(/(\{[\s\S]*\})/);
@@ -436,56 +469,32 @@ export const analyzeImageWithGroq = async (
       const jsonString = jsonMatch ? jsonMatch[1] : result;
       const analysis = JSON.parse(jsonString);
       
-      // Simulate realistic forensic results if API doesn't return them
-      const mockFaces = analysis.faces && analysis.faces.length > 0 ? analysis.faces : [
-        {
-          id: 1,
-          confidence: 0.92,
-          region: { x: 120, y: 80, width: 85, height: 110 }
-        },
-        {
-          id: 2,
-          confidence: 0.78,
-          region: { x: 300, y: 150, width: 75, height: 95 }
-        }
-      ];
-      
-      const mockPlates = analysis.licensePlates && analysis.licensePlates.length > 0 ? 
-        analysis.licensePlates : ['ABC-1234', 'XYZ-5678'];
-      
-      // Ensure the response has the expected structure
-      const formattedLicensePlates = Array.isArray(analysis.licensePlates) ? 
-        analysis.licensePlates.map((item: any) => {
-          if (typeof item === 'string') {
-            return {
-              plate: item,
-              confidence: 0.8,
-              region: { x: 0, y: 0, width: 100, height: 30 }
-            };
-          }
-          return item;
-        }) : mockPlates.map(plate => ({
-          plate,
-          confidence: 0.8,
-          region: { x: 0, y: 0, width: 100, height: 30 }
-        }));
-
+      // Ensure proper structure
       return {
-        ocrText: analysis.ocrText || 'Texto extraído da imagem via OCR',
-        faces: Array.isArray(analysis.faces) ? analysis.faces : mockFaces,
-        licensePlates: formattedLicensePlates,
-        enhancementTechnique: analysis.enhancementTechnique || 'Aplicadas técnicas de melhoria de contraste, nitidez e correção de iluminação para análise forense',
-        confidenceScores: analysis.confidenceScores || {
-          plate: mockPlates[0] || 'ABC-1234',
-          scores: [95, 88, 92, 94, 87, 91, 89, 93] // confidence por caractere
-        }
+        ocrText: analysis.ocrText || '',
+        faces: Array.isArray(analysis.faces) ? analysis.faces : [],
+        licensePlates: Array.isArray(analysis.licensePlates) ? analysis.licensePlates : [],
+        enhancementTechnique: analysis.enhancementTechnique || 'Análise realizada com modelo de visão computacional',
+        confidenceScores: analysis.confidenceScores
       };
-    } catch (e) {
-      console.error('Error parsing image analysis result:', e);
-      throw new Error('Falha ao analisar resposta da API de análise de imagem');
+    } catch (parseError) {
+      console.error('Error parsing JSON response:', parseError);
+      console.log('Raw response:', result);
+      
+      // Fallback: extract text manually if JSON parsing fails
+      const textLines = result.split('\n').filter(line => line.trim().length > 0);
+      const extractedText = textLines.join(' ');
+      
+      return {
+        ocrText: extractedText,
+        faces: [],
+        licensePlates: [],
+        enhancementTechnique: 'Análise de texto extraída manualmente devido a erro no formato de resposta',
+        confidenceScores: undefined
+      };
     }
   } catch (error) {
-    console.error('Error analyzing image with GROQ:', error);
+    console.error('Error analyzing image with GROQ Vision:', error);
     throw error;
   }
 };
@@ -508,25 +517,47 @@ export const enhanceImageWithGroq = async (
       throw new Error('API key not configured');
     }
 
-    // Create a description of enhancement techniques that would be applied
-    const messages = [
-      {
-        role: "system",
-        content: "You are an expert in forensic image enhancement. Describe the techniques that would be applied to enhance the provided image for forensic analysis."
-      },
-      {
-        role: "user",
-        content: `Describe the techniques that would be used to enhance this image for forensic purposes: ${imageUrl.substring(0, 50)}... (image data truncated)`
-      }
-    ];
+    console.log('Enhancing image with GROQ Vision API...');
     
-    const enhancementDescription = await makeGroqAIRequest(messages, 1024);
+    const groq = getGroqClient();
     
-    // Since we can't actually enhance the image with GROQ API currently,
-    // we'll return the original image with the description of techniques
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "Você é um especialista em melhoria de imagens forenses. Analise a qualidade da imagem e descreva as técnicas de melhoria que seriam aplicadas para análise forense."
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Analise esta imagem e descreva as técnicas de melhoria que aplicaria para análise forense (contraste, nitidez, correção de cor, etc.):"
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: imageUrl
+              }
+            }
+          ]
+        }
+      ],
+      model: settings.model || "llama-3.2-90b-vision-preview",
+      temperature: 0.3,
+      max_tokens: 1024
+    });
+
+    const enhancementDescription = completion.choices[0]?.message?.content || 
+      'Técnicas de melhoria aplicadas: ajuste de contraste, nitidez e correção de iluminação para otimizar a análise forense.';
+    
+    console.log('Image enhancement analysis completed');
+    
+    // Since GROQ doesn't actually enhance images, we return the original with description
+    // In a real implementation, this would integrate with image processing libraries
     return {
       enhancedImageUrl: imageUrl,
-      enhancementTechnique: enhancementDescription.replace(/^(#|##|\*\*) .*\n/, '')  // Remove any markdown headers
+      enhancementTechnique: enhancementDescription.replace(/^(#|##|\*\*) .*\n/, '')
     };
   } catch (error) {
     console.error('Error enhancing image:', error);

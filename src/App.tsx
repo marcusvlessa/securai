@@ -30,6 +30,7 @@ function App() {
         groqApiKey: '',  // Configurado pelo usuário na página de Configurações
         groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
         groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct', // Updated to requested default model
+        model: 'llama-3.2-90b-vision-preview', // Modelo para análise de imagens
         whisperModel: 'whisper-large-v3',  // Versão mais recente do modelo
         whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
         language: 'pt'  // Configuração padrão para português

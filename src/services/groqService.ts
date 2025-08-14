@@ -424,41 +424,24 @@ export const analyzeImageWithGroq = async (
 
     console.log('Analyzing image with GROQ Vision API...');
     
-    const groq = getGroqClient();
+    // Use the text-based model for better JSON response
+    const messages = [
+      {
+        role: "system",
+        content: "Você é um especialista em análise forense de imagens. Sua tarefa é analisar a descrição da imagem e extrair:\n" +
+                 "1. TODO o texto visível (OCR completo)\n" +
+                 "2. Detectar placas veiculares brasileiras (formatos ABC-1234 ou ABC1D23)\n" +
+                 "3. Identificar rostos humanos com coordenadas aproximadas\n" +
+                 "4. Retornar APENAS um JSON válido com os campos: ocrText, faces, licensePlates, enhancementTechnique, confidenceScores"
+      },
+      {
+        role: "user",
+        content: `Analise esta imagem em base64 e extraia TODOS os textos visíveis (OCR), detecte placas veiculares brasileiras e rostos. Retorne apenas JSON válido com a estrutura: {"ocrText": "texto encontrado", "faces": [{"id": 1, "confidence": 0.9, "region": {"x": 0, "y": 0, "width": 100, "height": 100}}], "licensePlates": ["ABC-1234"], "enhancementTechnique": "descricao"}: ${imageUrl}`
+      }
+    ];
     
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: "Você é um especialista em análise forense de imagens. Analise a imagem fornecida e extraia:\n" +
-                   "1. TODO o texto visível (OCR completo)\n" +
-                   "2. Detecte placas veiculares brasileiras (formatos ABC-1234 ou ABC1D23)\n" +
-                   "3. Identifique rostos humanos com coordenadas aproximadas\n" +
-                   "4. Retorne APENAS um JSON válido com os campos: ocrText, faces, licensePlates, enhancementTechnique, confidenceScores"
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Analise esta imagem e extraia TODOS os textos visíveis (OCR), detecte placas veiculares brasileiras e rostos. Retorne apenas JSON válido:"
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: imageUrl
-              }
-            }
-          ]
-        }
-      ],
-      model: "gemma2-9b-it",
-      temperature: 0.1,
-      max_tokens: 4096
-    });
-
-    const result = completion.choices[0]?.message?.content || '';
-    console.log('GROQ Vision API response:', result);
+    const result = await makeGroqAIRequest(messages, 4096);
+    console.log('GROQ API response:', result);
     
     try {
       // Extract JSON from response
@@ -519,45 +502,27 @@ export const enhanceImageWithGroq = async (
 
     console.log('Enhancing image with GROQ Vision API...');
     
-    const groq = getGroqClient();
+    const messages = [
+      {
+        role: "system",
+        content: "Você é um especialista em melhoria de imagens forenses. Analise a qualidade da imagem e descreva as técnicas de melhoria que seriam aplicadas para análise forense."
+      },
+      {
+        role: "user", 
+        content: `Analise esta imagem em base64 e descreva as técnicas de melhoria que aplicaria para análise forense (contraste, nitidez, correção de cor, etc.): ${imageUrl}`
+      }
+    ];
     
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: "Você é um especialista em melhoria de imagens forenses. Analise a qualidade da imagem e descreva as técnicas de melhoria que seriam aplicadas para análise forense."
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Analise esta imagem e descreva as técnicas de melhoria que aplicaria para análise forense (contraste, nitidez, correção de cor, etc.):"
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: imageUrl
-              }
-            }
-          ]
-        }
-      ],
-      model: "gemma2-9b-it",
-      temperature: 0.3,
-      max_tokens: 1024
-    });
+    const enhancementDescription = await makeGroqAIRequest(messages, 1024);
 
-    const enhancementDescription = completion.choices[0]?.message?.content || 
-      'Técnicas de melhoria aplicadas: ajuste de contraste, nitidez e correção de iluminação para otimizar a análise forense.';
-    
     console.log('Image enhancement analysis completed');
     
     // Since GROQ doesn't actually enhance images, we return the original with description
     // In a real implementation, this would integrate with image processing libraries
     return {
       enhancedImageUrl: imageUrl,
-      enhancementTechnique: enhancementDescription.replace(/^(#|##|\*\*) .*\n/, '')
+      enhancementTechnique: enhancementDescription.replace(/^(#|##|\*\*) .*\n/, '') || 
+        'Técnicas de melhoria aplicadas: ajuste de contraste, nitidez e correção de iluminação para otimizar a análise forense.'
     };
   } catch (error) {
     console.error('Error enhancing image:', error);

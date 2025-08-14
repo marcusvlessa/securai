@@ -5,6 +5,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 interface ColumnMapping {
   [key: string]: string;
@@ -54,8 +55,8 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
     const uploadedFile = files[0];
     const fileName = uploadedFile.name.toLowerCase();
     
-    if (!(fileName.endsWith('.csv') || fileName.endsWith('.xlsx') || fileName.endsWith('.json'))) {
-      toast.error('Formato não suportado. Use CSV, XLSX ou JSON.');
+    if (!(fileName.endsWith('.csv') || fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.json'))) {
+      toast.error('Formato não suportado. Use CSV, XLS, XLSX ou JSON.');
       return;
     }
     
@@ -65,9 +66,8 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
 
   const parseFile = async (file: File) => {
     try {
-      const text = await file.text();
-      
       if (file.name.toLowerCase().endsWith('.csv')) {
+        const text = await file.text();
         // Simple CSV parser
         const lines = text.split('\n').filter(line => line.trim());
         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
@@ -84,7 +84,31 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
         setRawData(data);
         setStep('mapping');
         
+      } else if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+        // Handle Excel files
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        if (jsonData.length > 0) {
+          const headers = jsonData[0] as string[];
+          const data = jsonData.slice(1).map((row: any) => {
+            const rowData: any = {};
+            headers.forEach((header, index) => {
+              rowData[header] = row[index] || '';
+            });
+            return rowData;
+          });
+          
+          setHeaders(headers);
+          setRawData(data);
+          setStep('mapping');
+        }
+        
       } else if (file.name.toLowerCase().endsWith('.json')) {
+        const text = await file.text();
         const jsonData = JSON.parse(text);
         if (Array.isArray(jsonData) && jsonData.length > 0) {
           const firstItem = jsonData[0];
@@ -98,7 +122,7 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
       toast.success('Arquivo carregado com sucesso');
     } catch (error) {
       console.error('Error parsing file:', error);
-      toast.error('Erro ao processar arquivo');
+      toast.error('Erro ao processar arquivo: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
     }
   };
 
@@ -163,7 +187,7 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
               type="file"
               id="link-data-upload"
               className="hidden"
-              accept=".csv,.xlsx,.json"
+              accept=".csv,.xlsx,.xls,.json"
               onChange={handleFileUpload}
             />
             <label 
@@ -172,7 +196,7 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
             >
               <FileText className="h-10 w-10 text-gray-400 mb-2" />
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Clique para carregar CSV, XLSX ou JSON
+                Clique para carregar CSV, XLS, XLSX ou JSON
               </p>
             </label>
           </div>
@@ -231,22 +255,22 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
                    field === 'location' ? 'Local' :
                    field === 'content' ? 'Conteúdo' : field}:
                 </div>
-                <Select 
-                  value={mapping[field] || ''} 
-                  onValueChange={(value) => updateMapping(field, value)}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Selecione uma coluna" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Não mapear</SelectItem>
-                    {headers.map(header => (
-                      <SelectItem key={header} value={header}>
-                        {header}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Select 
+                    value={mapping[field] || 'none'} 
+                    onValueChange={(value) => updateMapping(field, value === 'none' ? '' : value)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecione uma coluna" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não mapear</SelectItem>
+                      {headers.map(header => (
+                        <SelectItem key={header} value={header}>
+                          {header}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
               </div>
             ))}
           </div>

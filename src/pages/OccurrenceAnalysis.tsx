@@ -59,7 +59,12 @@ const OccurrenceAnalysis = () => {
       console.log('File type:', selectedFile.type);
       console.log('File size:', selectedFile.size);
       
-      if (!['application/pdf', 'text/html', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(selectedFile.type)) {
+      // Allow more file types and check by extension as well
+      const allowedExtensions = ['.pdf', '.html', '.txt', '.docx'];
+      const allowedTypes = ['application/pdf', 'text/html', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const fileExtension = selectedFile.name.toLowerCase().substring(selectedFile.name.lastIndexOf('.'));
+      
+      if (!allowedTypes.includes(selectedFile.type) && !allowedExtensions.includes(fileExtension)) {
         toast.error('Por favor, selecione um arquivo PDF, HTML, TXT ou DOCX');
         return;
       }

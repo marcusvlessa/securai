@@ -296,11 +296,11 @@ const LinkAnalysis = () => {
           ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)'; // Purple
           break;
         default:
-          ctx.strokeStyle = 'rgba(75, 85, 99, 0.6)'; // Gray
+          ctx.strokeStyle = 'rgba(30, 41, 59, 0.9)'; // Darker gray for visibility
       }
       
       // Draw line with width based on value
-      ctx.lineWidth = Math.max(1, Math.min(5, link.value / 3));
+      ctx.lineWidth = Math.max(2, Math.min(6, 1 + Math.log10(((link.value || 1) + 1)) * 2));
       ctx.beginPath();
       ctx.moveTo(sourcePos.x, sourcePos.y);
       ctx.lineTo(targetPos.x, targetPos.y);

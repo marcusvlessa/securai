@@ -308,12 +308,25 @@ Retorne APENAS o objeto JSON sem explicações.`
       }
       
       // Ensure all nodes have required fields
-      parsed.nodes = parsed.nodes.map((node: any, index: number) => ({
-        id: node.id || `node-${index}`,
-        label: node.label || node.id || `Node ${index}`,
-        group: node.group || 'default',
-        size: node.size || 1
-      }));
+      parsed.nodes = parsed.nodes.map((node: any, index: number) => {
+        const id = node.id || `node-${index}`;
+        let label = node.label || id || `Node ${index}`;
+        const group = node.group || 'default';
+
+        // If the model returned a generic label (e.g., "Pessoa", "Empresa", "PF", "PJ"),
+        // prefer showing the unique identifier instead to avoid dozens of identical labels
+        const genericLabels = ['pessoa','empresa','pf','pj','conta','titular','beneficiário','beneficiario','remetente','destinatário','destinatario','origem','destino','entity','entidade'];
+        if (genericLabels.includes(String(label).toLowerCase()) || String(label).toLowerCase() === String(group).toLowerCase()) {
+          label = id;
+        }
+
+        return {
+          id,
+          label,
+          group,
+          size: Math.max(1, Math.min(15, Number(node.size) || 3))
+        };
+      });
       
       // Ensure all links have required fields and valid source/target
       const nodeIds = new Set(parsed.nodes.map((n: any) => n.id));
@@ -332,8 +345,8 @@ Retorne APENAS o objeto JSON sem explicações.`
       console.error("Failed to parse link analysis result as JSON:", e);
       console.error("Raw result:", result);
       
-      // Fallback: create a simple graph from the data
-      return createFallbackGraph(sampleData, columnMapping);
+      // Fallback: create a simple graph from the data with basic entity auto-identification
+      return createFallbackGraph(sampleData, columnMapping, fileType);
     }
   } catch (error) {
     console.error('Error processing link analysis data:', error);
@@ -341,53 +354,61 @@ Retorne APENAS o objeto JSON sem explicações.`
   }
 };
 
-// Fallback function to create a basic graph when AI fails
-const createFallbackGraph = (sampleData: any[], columnMapping: any) => {
-  const nodes = new Map();
-  const links = [];
-  
-  sampleData.slice(0, 10).forEach((row, index) => {
-    const sourceField = columnMapping.source;
-    const targetField = columnMapping.target;
-    const valueField = columnMapping.value;
-    
-    if (sourceField && row[sourceField]) {
-      const sourceId = row[sourceField];
-      if (!nodes.has(sourceId)) {
-        nodes.set(sourceId, {
-          id: sourceId,
-          label: sourceId,
-          group: 'entity',
-          size: 1
-        });
-      }
+// Fallback function to create a basic graph when AI fails with auto-entity identification
+const createFallbackGraph = (sampleData: any[], columnMapping: any, fileType: string) => {
+  type NodeT = { id: string; label: string; group: string; size: number };
+  const nodes = new Map<string, NodeT>();
+  const links: Array<{ source: string; target: string; value: number; type: string }> = [];
+
+  const isCPF = (v: string) => String(v).replace(/\D/g, '').length === 11;
+  const isCNPJ = (v: string) => String(v).replace(/\D/g, '').length === 14;
+
+  const getGroup = (id: string, role: 'source' | 'target'): string => {
+    const t = String(fileType || '').toLowerCase();
+    if (t.includes('cdr') || t.includes('telefon') || t.includes('mobile')) {
+      return role === 'source' ? 'Originador' : 'Destinatário';
     }
-    
-    if (targetField && row[targetField]) {
-      const targetId = row[targetField];
-      if (!nodes.has(targetId)) {
-        nodes.set(targetId, {
-          id: targetId,
-          label: targetId,
-          group: 'entity', 
-          size: 1
-        });
-      }
+    if (t.includes('rif') || t.includes('finance') || t.includes('extrato') || t.includes('moviment')) {
+      if (isCPF(id)) return 'PF';
+      if (isCNPJ(id)) return 'PJ';
+      return role === 'source' ? 'Conta Origem' : 'Conta Destino';
     }
-    
-    if (sourceField && targetField && row[sourceField] && row[targetField]) {
-      links.push({
-        source: row[sourceField],
-        target: row[targetField],
-        value: row[valueField] || 1,
-        type: 'connection'
-      });
+    return 'Entidade';
+  };
+
+  const degrees: Record<string, number> = {};
+  const sourceField = columnMapping.source;
+  const targetField = columnMapping.target;
+  const valueField = columnMapping.value;
+
+  sampleData.slice(0, 200).forEach((row: any) => {
+    const sId = row?.[sourceField];
+    const tId = row?.[targetField];
+    if (!sId || !tId) return;
+
+    if (!nodes.has(sId)) {
+      nodes.set(String(sId), { id: String(sId), label: String(sId), group: getGroup(String(sId), 'source'), size: 1 });
     }
+    if (!nodes.has(tId)) {
+      nodes.set(String(tId), { id: String(tId), label: String(tId), group: getGroup(String(tId), 'target'), size: 1 });
+    }
+
+    const valNum = Number(row?.[valueField]) || 1;
+    links.push({ source: String(sId), target: String(tId), value: valNum, type: row?.[columnMapping.type] || 'connection' });
+
+    degrees[String(sId)] = (degrees[String(sId)] || 0) + 1;
+    degrees[String(tId)] = (degrees[String(tId)] || 0) + 1;
   });
-  
+
+  // Scale node size by degree for better readability
+  nodes.forEach((n, id) => {
+    const deg = degrees[id] || 1;
+    n.size = Math.max(3, Math.min(15, Math.round(Math.sqrt(deg) + 2)));
+  });
+
   return {
     nodes: Array.from(nodes.values()),
-    links: links
+    links
   };
 };
 

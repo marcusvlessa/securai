@@ -30,7 +30,7 @@ import { Badge } from './ui/badge';
 const navItems = [
   { 
     name: 'Dashboard', 
-    path: '/', 
+    path: '/app', 
     icon: Shield, 
     description: 'Visão geral dos casos'
   },
@@ -91,6 +91,12 @@ const settingsItems = [
     icon: Settings, 
     description: 'Preferências do sistema'
   },
+  { 
+    name: 'Admin', 
+    path: '/admin', 
+    icon: Shield, 
+    description: 'Painel de administração'
+  },
 ];
 
 export function AppSidebar() {
@@ -101,8 +107,8 @@ export function AppSidebar() {
   const collapsed = state === 'collapsed';
 
   const isActive = (path: string) => {
-    if (path === '/') {
-      return currentPath === '/';
+    if (path === '/app') {
+      return currentPath === '/app';
     }
     return currentPath.startsWith(path);
   };

@@ -5,6 +5,8 @@ import { Toaster } from './components/ui/sonner';
 import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar';
 import { AppSidebar } from './components/AppSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
+import Landing from './pages/Landing';
+import AdminPanel from './pages/AdminPanel';
 import Dashboard from './pages/Dashboard';
 import OccurrenceAnalysis from './pages/OccurrenceAnalysis';
 import InvestigationReport from './pages/InvestigationReport';
@@ -62,7 +64,9 @@ function App() {
                 
                 <main className="flex-1 overflow-auto">
                   <Routes>
-                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/" element={<Landing />} />
+                    <Route path="/app" element={<Dashboard />} />
+                    <Route path="/admin" element={<AdminPanel />} />
                     <Route path="/occurrence-analysis" element={<OccurrenceAnalysis />} />
                     <Route path="/investigation-report" element={<InvestigationReport />} />
                     <Route path="/link-analysis" element={<LinkAnalysis />} />

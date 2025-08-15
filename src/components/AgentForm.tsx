@@ -206,11 +206,18 @@ const AgentForm: React.FC<AgentFormProps> = ({ isOpen, onClose, onSave, agent })
                     <Palette className="h-4 w-4" />
                     Template do Canva
                   </Label>
-                  <Select value={formData.canvaTemplateId} onValueChange={(value) => setFormData(prev => ({ ...prev, canvaTemplateId: value }))}>
+                  <Select 
+                    value={formData.canvaTemplateId || "none"} 
+                    onValueChange={(value) => setFormData(prev => ({ 
+                      ...prev, 
+                      canvaTemplateId: value === "none" ? "" : value 
+                    }))}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um template do Canva" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Nenhum template selecionado</SelectItem>
                       {mockCanvaTemplates.map((template) => (
                         <SelectItem key={template.id} value={template.id}>
                           {template.name} ({template.type})

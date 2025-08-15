@@ -1,4 +1,4 @@
-import { getGroqSettings } from './groqService';
+// Avoid importing groqService here to prevent circular dependencies
 
 export interface AIRequestParams {
   content: string;
@@ -20,7 +20,7 @@ export interface AIModelSelection {
  */
 export class AIModelSelector {
   private static instance: AIModelSelector;
-  private groqSettings = getGroqSettings();
+  private getDefaultGroqModel = () => { try { const raw = localStorage.getItem('securai-api-settings'); if (raw) { const parsed = JSON.parse(raw); if (parsed.groqModel) return parsed.groqModel; } } catch (e) { /* noop */ } return 'llama3-8b-8192'; };
   private performanceMetrics: Map<string, any> = new Map();
 
   static getInstance(): AIModelSelector {
@@ -85,7 +85,7 @@ export class AIModelSelector {
       
       default:
         return {
-          model: this.groqSettings.groqModel,
+          model: this.getDefaultGroqModel(),
           reason: 'Tipo de conteúdo não identificado, usando modelo padrão'
         };
     }
@@ -193,7 +193,7 @@ export class AIModelSelector {
   private selectFileModel(complexity: string, priority: string, fileExtension?: string): AIModelSelection {
     if (!fileExtension) {
       return {
-        model: this.groqSettings.groqModel,
+        model: this.getDefaultGroqModel(),
         reason: 'Extensão de arquivo não identificada'
       };
     }
@@ -225,7 +225,7 @@ export class AIModelSelector {
     }
 
     return {
-      model: this.groqSettings.groqModel,
+      model: this.getDefaultGroqModel(),
       reason: 'Tipo de arquivo não reconhecido, usando modelo padrão'
     };
   }

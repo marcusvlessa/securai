@@ -218,10 +218,11 @@ const LinkAnalysis = () => {
     const height = canvas.height;
     const area = width * height;
     const k = Math.sqrt(area / nodes.length) * 0.6; // distância ideal
-    const tInitial = Math.max(width, height) / 10;
+    const tInitial = Math.max(width, height) / 8;
     let t = tInitial;
-    const iterations = 200;
+    const iterations = 300;
     const padding = 60;
+    const gravity = 0.02;
 
     // Posições iniciais em círculo com leve variação
     const pos: Record<string, { x: number; y: number }> = {};
@@ -272,6 +273,14 @@ const LinkAnalysis = () => {
         disp[tId].x += fx; disp[tId].y += fy;
       });
 
+      // Gravidade para centro
+      nodes.forEach(n => {
+        const dxC = pos[n.id].x - width / 2;
+        const dyC = pos[n.id].y - height / 2;
+        disp[n.id].x -= dxC * gravity;
+        disp[n.id].y -= dyC * gravity;
+      });
+
       // Atualiza posições com resfriamento
       nodes.forEach(n => {
         const d = Math.hypot(disp[n.id].x, disp[n.id].y) || 0.01;
@@ -284,6 +293,30 @@ const LinkAnalysis = () => {
 
       t *= 0.95; // resfriamento
       if (t < 0.1) break;
+    }
+
+    // Normalização: centralizar e ajustar escala para caber no canvas
+    {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      nodes.forEach(n => {
+        const p = pos[n.id];
+        if (!p) return;
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+      });
+      const bbW = Math.max(1, maxX - minX);
+      const bbH = Math.max(1, maxY - minY);
+      const sx = (width - padding * 2) / bbW;
+      const sy = (height - padding * 2) / bbH;
+      const s = Math.min(sx, sy, 1.5);
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      nodes.forEach(n => {
+        pos[n.id].x = (pos[n.id].x - cx) * s + width / 2;
+        pos[n.id].y = (pos[n.id].y - cy) * s + height / 2;
+      });
     }
 
     // Desenha arestas primeiro

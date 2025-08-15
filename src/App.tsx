@@ -75,13 +75,16 @@ function App() {
           <CaseProvider>
             <Routes>
               {/* Public routes */}
+              <Route path="/" element={<Index />} />
               <Route path="/auth/login" element={<Login />} />
               <Route path="/auth/register" element={<Register />} />
               
               {/* Protected routes */}
-              <Route path="/" element={
+              <Route path="/dashboard" element={
                 <ProtectedRoute>
-                  <Index />
+                  <ProtectedLayout>
+                    <Dashboard />
+                  </ProtectedLayout>
                 </ProtectedRoute>
               } />
               

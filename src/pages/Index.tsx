@@ -1,10 +1,19 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import Landing from "./Landing";
 
 const Index = () => {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
   
   if (!user) {
     return <Landing />;
@@ -21,7 +30,7 @@ const Index = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link to="/app" className="group">
+          <Link to="/dashboard" className="group">
             <div className="p-6 bg-card rounded-lg border hover:border-primary/50 transition-colors">
               <h2 className="text-xl font-semibold mb-2 group-hover:text-primary">Dashboard</h2>
               <p className="text-muted-foreground">Visão geral do sistema e estatísticas</p>

@@ -191,224 +191,225 @@ const LinkAnalysis = () => {
       return;
     }
     
-    // Set up graph parameters
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    const radius = Math.min(canvas.width, canvas.height) / 3;
-    
-    // Force-directed layout simulation (very simplified)
-    const nodePositions: {[key: string]: {x: number, y: number}} = {};
-    
-    // Initial positions in a circle
-    data.nodes.forEach((node, i) => {
-      const angle = (i / data.nodes.length) * 2 * Math.PI;
-      const x = centerX + radius * Math.cos(angle);
-      const y = centerY + radius * Math.sin(angle);
-      nodePositions[node.id] = { x, y };
+    // Clean and prepare data: remove self-loops and isolated nodes
+    const nodeMap = new Map<string, NetworkNode>();
+    data.nodes.forEach(n => nodeMap.set(n.id, n));
+
+    const validLinks = (data.links || [])
+      .filter(l => l.source !== l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
+
+    const degrees: Record<string, number> = {};
+    validLinks.forEach(l => {
+      degrees[l.source] = (degrees[l.source] || 0) + 1;
+      degrees[l.target] = (degrees[l.target] || 0) + 1;
     });
-    
-    // Apply some force direction iterations to improve layout
-    const iterations = 50;
+
+    const nodes = data.nodes.filter(n => (degrees[n.id] || 0) > 0);
+
+    if (nodes.length === 0 || validLinks.length === 0) {
+      ctx.font = '16px Arial';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Não há vínculos válidos para exibir (verifique o mapeamento de colunas).', canvas.width/2, canvas.height/2);
+      return;
+    }
+
+    // Fruchterman-Reingold force-directed layout for melhor organização
+    const width = canvas.width;
+    const height = canvas.height;
+    const area = width * height;
+    const k = Math.sqrt(area / nodes.length) * 0.6; // distância ideal
+    const tInitial = Math.max(width, height) / 10;
+    let t = tInitial;
+    const iterations = 200;
+    const padding = 60;
+
+    // Posições iniciais em círculo com leve variação
+    const pos: Record<string, { x: number; y: number }> = {};
+    nodes.forEach((n, i) => {
+      const angle = (i / nodes.length) * 2 * Math.PI;
+      const r = Math.min(width, height) / 3;
+      pos[n.id] = {
+        x: width / 2 + r * Math.cos(angle) + (Math.random() - 0.5) * 20,
+        y: height / 2 + r * Math.sin(angle) + (Math.random() - 0.5) * 20,
+      };
+    });
+
+    // Funções de força
+    const frRepel = (dist: number) => (k * k) / Math.max(dist, 0.01);
+    const frAttract = (dist: number) => (dist * dist) / k;
+
     for (let iter = 0; iter < iterations; iter++) {
-      // Repulsive forces between all nodes
-      for (let i = 0; i < data.nodes.length; i++) {
-        for (let j = i + 1; j < data.nodes.length; j++) {
-          const node1 = data.nodes[i];
-          const node2 = data.nodes[j];
-          const pos1 = nodePositions[node1.id];
-          const pos2 = nodePositions[node2.id];
-          
-          const dx = pos2.x - pos1.x;
-          const dy = pos2.y - pos1.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance > 0) {
-            const repulsiveForce = 2000 / (distance * distance);
-            const moveX = dx / distance * repulsiveForce;
-            const moveY = dy / distance * repulsiveForce;
-            
-            pos1.x -= moveX;
-            pos1.y -= moveY;
-            pos2.x += moveX;
-            pos2.y += moveY;
-          }
+      const disp: Record<string, { x: number; y: number }> = {};
+      nodes.forEach(n => (disp[n.id] = { x: 0, y: 0 }));
+
+      // Forças repulsivas entre todos os nós
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const n1 = nodes[i].id;
+          const n2 = nodes[j].id;
+          const dx = pos[n1].x - pos[n2].x;
+          const dy = pos[n1].y - pos[n2].y;
+          const dist = Math.hypot(dx, dy) || 0.01;
+          const force = frRepel(dist);
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          disp[n1].x += fx; disp[n1].y += fy;
+          disp[n2].x -= fx; disp[n2].y -= fy;
         }
       }
-      
-      // Attractive forces along links
-      data.links.forEach(link => {
-        const sourcePos = nodePositions[link.source];
-        const targetPos = nodePositions[link.target];
-        
-        if (sourcePos && targetPos) {
-          const dx = targetPos.x - sourcePos.x;
-          const dy = targetPos.y - sourcePos.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance > 0) {
-            const attractiveForce = distance / 10;
-            const moveX = dx / distance * attractiveForce;
-            const moveY = dy / distance * attractiveForce;
-            
-            sourcePos.x += moveX;
-            sourcePos.y += moveY;
-            targetPos.x -= moveX;
-            targetPos.y -= moveY;
-          }
-        }
+
+      // Forças atrativas nas arestas
+      validLinks.forEach(l => {
+        const s = l.source; const tId = l.target;
+        const dx = pos[s].x - pos[tId].x;
+        const dy = pos[s].y - pos[tId].y;
+        const dist = Math.hypot(dx, dy) || 0.01;
+        const weight = Math.max(1, Math.log10((l.value || 1) + 1));
+        const force = frAttract(dist) * weight * 0.5; // suaviza
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        disp[s].x -= fx; disp[s].y -= fy;
+        disp[tId].x += fx; disp[tId].y += fy;
       });
-      
-      // Keep nodes within canvas bounds
-      Object.values(nodePositions).forEach(pos => {
-        const padding = 50;
-        pos.x = Math.max(padding, Math.min(canvas.width - padding, pos.x));
-        pos.y = Math.max(padding, Math.min(canvas.height - padding, pos.y));
+
+      // Atualiza posições com resfriamento
+      nodes.forEach(n => {
+        const d = Math.hypot(disp[n.id].x, disp[n.id].y) || 0.01;
+        const limit = Math.min(t, d);
+        pos[n.id].x += (disp[n.id].x / d) * limit;
+        pos[n.id].y += (disp[n.id].y / d) * limit;
+        pos[n.id].x = Math.max(padding, Math.min(width - padding, pos[n.id].x));
+        pos[n.id].y = Math.max(padding, Math.min(height - padding, pos[n.id].y));
       });
+
+      t *= 0.95; // resfriamento
+      if (t < 0.1) break;
     }
-    
-    // Draw links
-    ctx.lineWidth = 1;
-    data.links.forEach(link => {
-      const sourcePos = nodePositions[link.source];
-      const targetPos = nodePositions[link.target];
-      
+
+    // Desenha arestas primeiro
+    validLinks.forEach(link => {
+      const sourcePos = pos[link.source];
+      const targetPos = pos[link.target];
       if (!sourcePos || !targetPos) return;
-      
-      // Determine link color based on type
+
       switch (link.type) {
         case 'associate':
         case 'knows':
-          ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)'; // Red
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
           break;
         case 'owns':
-          ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)'; // Blue
+          ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)';
           break;
         case 'works_at':
         case 'lives_at':
         case 'visits':
-          ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)'; // Green
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)';
           break;
         case 'client':
         case 'transaction':
-          ctx.strokeStyle = 'rgba(217, 119, 6, 0.6)'; // Yellow
+          ctx.strokeStyle = 'rgba(217, 119, 6, 0.6)';
           break;
         case 'related_to':
-          ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)'; // Purple
+          ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)';
           break;
         default:
-          ctx.strokeStyle = 'rgba(30, 41, 59, 0.9)'; // Darker gray for visibility
+          ctx.strokeStyle = 'rgba(30, 41, 59, 0.9)';
       }
-      
-      // Draw line with width based on value
+
       ctx.lineWidth = Math.max(2, Math.min(6, 1 + Math.log10(((link.value || 1) + 1)) * 2));
       ctx.beginPath();
       ctx.moveTo(sourcePos.x, sourcePos.y);
       ctx.lineTo(targetPos.x, targetPos.y);
       ctx.stroke();
-      
-      // Draw link label
+
       ctx.font = '9px Arial';
       ctx.fillStyle = '#64748b';
       const midX = (sourcePos.x + targetPos.x) / 2;
       const midY = (sourcePos.y + targetPos.y) / 2;
       ctx.fillText(link.type, midX, midY);
     });
-    
-    // Draw nodes
-    data.nodes.forEach(node => {
-      const pos = nodePositions[node.id];
-      if (!pos) return;
-      
-      // Determine node color based on group
+
+    // Desenha nós por cima
+    nodes.forEach(node => {
+      const p = pos[node.id];
+      if (!p) return;
+
       switch (node.group) {
         case 'suspect':
-          ctx.fillStyle = '#ef4444'; // Red
+          ctx.fillStyle = '#ef4444';
           break;
         case 'victim':
-          ctx.fillStyle = '#3b82f6'; // Blue
+          ctx.fillStyle = '#3b82f6';
           break;
         case 'witness':
-          ctx.fillStyle = '#10b981'; // Green
+          ctx.fillStyle = '#10b981';
           break;
         case 'location':
-          ctx.fillStyle = '#f59e0b'; // Yellow
+          ctx.fillStyle = '#f59e0b';
           break;
         case 'evidence':
-          ctx.fillStyle = '#8b5cf6'; // Purple
+          ctx.fillStyle = '#8b5cf6';
           break;
         case 'organization':
-          ctx.fillStyle = '#ec4899'; // Pink
+          ctx.fillStyle = '#ec4899';
           break;
         default:
-          ctx.fillStyle = '#64748b'; // Gray
+          ctx.fillStyle = '#64748b';
       }
-      
-      // Draw node
+
+      const size = Math.max(5, Math.min(15, node.size || Math.sqrt(degrees[node.id] || 1) + 4));
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, Math.max(5, Math.min(15, node.size)), 0, 2 * Math.PI);
+      ctx.arc(p.x, p.y, size, 0, 2 * Math.PI);
       ctx.fill();
-      
-      // Draw node border
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1;
       ctx.stroke();
-      
-      // Draw node label
+
       ctx.font = 'bold 10px Arial';
       ctx.fillStyle = '#1e293b';
       ctx.textAlign = 'center';
-      ctx.fillText(node.label, pos.x, pos.y + node.size + 10);
+      ctx.fillText(String(node.label), p.x, p.y + size + 10);
     });
-    
-    // Draw legend
+
+    // Legenda
     const legendX = 20;
     let legendY = 60;
     const types = ['suspect', 'victim', 'witness', 'location', 'evidence', 'organization'];
     const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
     const legends = ['Suspeito', 'Vítima', 'Testemunha', 'Local', 'Evidência', 'Organização'];
-    
+
     ctx.font = 'bold 12px Arial';
     ctx.fillStyle = '#1e293b';
     ctx.textAlign = 'left';
     ctx.fillText('Legenda:', legendX, legendY - 20);
-    
+
     types.forEach((type, i) => {
       ctx.fillStyle = colors[i];
       ctx.beginPath();
       ctx.arc(legendX + 7, legendY, 7, 0, 2 * Math.PI);
       ctx.fill();
-      
+
       ctx.fillStyle = '#1e293b';
       ctx.font = '11px Arial';
       ctx.fillText(legends[i], legendX + 20, legendY + 4);
-      
+
       legendY += 20;
     });
-    
-    // Draw stats
+
+    // Estatísticas filtradas
     ctx.font = 'bold 12px Arial';
     ctx.fillStyle = '#1e293b';
     ctx.textAlign = 'left';
     ctx.fillText('Estatísticas:', canvas.width - 150, 60);
-    
+
     ctx.font = '11px Arial';
-    ctx.fillText(`Nós: ${data.nodes.length}`, canvas.width - 150, 80);
-    ctx.fillText(`Arestas: ${data.links.length}`, canvas.width - 150, 100);
-    
-    const density = (2 * data.links.length) / (data.nodes.length * (data.nodes.length - 1));
-    ctx.fillText(`Densidade: ${density.toFixed(3)}`, canvas.width - 150, 120);
-    
-    // Calculate average degree
-    const degrees: {[key: string]: number} = {};
-    data.nodes.forEach(node => {
-      degrees[node.id] = 0;
-    });
-    data.links.forEach(link => {
-      degrees[link.source] = (degrees[link.source] || 0) + 1;
-      degrees[link.target] = (degrees[link.target] || 0) + 1;
-    });
-    const avgDegree = Object.values(degrees).reduce((a, b) => a + b, 0) / data.nodes.length;
-    
+    ctx.fillText(`Nós: ${nodes.length}`, canvas.width - 150, 80);
+    ctx.fillText(`Arestas: ${validLinks.length}`, canvas.width - 150, 100);
+
+    const density = (2 * validLinks.length) / (nodes.length * (nodes.length - 1));
+    ctx.fillText(`Densidade: ${isFinite(density) ? density.toFixed(3) : '0.000'}`, canvas.width - 150, 120);
+
+    const avgDegree = nodes.length ? (validLinks.length * 2) / nodes.length : 0;
     ctx.fillText(`Grau médio: ${avgDegree.toFixed(2)}`, canvas.width - 150, 140);
   };
 

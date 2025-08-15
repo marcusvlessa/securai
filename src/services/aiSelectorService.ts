@@ -21,12 +21,43 @@ export interface AIModelSelection {
 export class AIModelSelector {
   private static instance: AIModelSelector;
   private groqSettings = getGroqSettings();
+  private performanceMetrics: Map<string, any> = new Map();
 
   static getInstance(): AIModelSelector {
     if (!AIModelSelector.instance) {
       AIModelSelector.instance = new AIModelSelector();
     }
     return AIModelSelector.instance;
+  }
+
+  /**
+   * Registra métricas de performance para otimização futura
+   */
+  recordPerformanceMetrics(model: string, metrics: {
+    responseTime: number;
+    accuracy: number;
+    tokenCount: number;
+  }): void {
+    const existing = this.performanceMetrics.get(model) || {
+      totalRequests: 0,
+      avgResponseTime: 0,
+      avgAccuracy: 0,
+      totalTokens: 0
+    };
+
+    existing.totalRequests += 1;
+    existing.avgResponseTime = (existing.avgResponseTime * (existing.totalRequests - 1) + metrics.responseTime) / existing.totalRequests;
+    existing.avgAccuracy = (existing.avgAccuracy * (existing.totalRequests - 1) + metrics.accuracy) / existing.totalRequests;
+    existing.totalTokens += metrics.tokenCount;
+
+    this.performanceMetrics.set(model, existing);
+  }
+
+  /**
+   * Obtém histórico de performance de um modelo
+   */
+  getModelPerformance(model: string): any {
+    return this.performanceMetrics.get(model) || null;
   }
 
   /**

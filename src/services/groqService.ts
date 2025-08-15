@@ -2,6 +2,7 @@
 // GROQ API Service
 // This service handles communication with the GROQ API for AI-powered functionalities
 import Groq from 'groq-sdk';
+import { getOptimalGroqModel } from './aiSelectorService';
 
 // Types for GROQ API settings
 export type GroqSettings = {
@@ -103,8 +104,8 @@ export const hasValidApiKey = (): boolean => {
   return !!settings.groqApiKey && settings.groqApiKey.trim() !== '';
 };
 
-// Make a request to the GROQ API for text generation
-export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 1024): Promise<string> => {
+// Make a request to the GROQ API for text generation with automatic model selection
+export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 1024, context?: string): Promise<string> => {
   try {
     const settings = getGroqSettings();
     
@@ -113,7 +114,11 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
       throw new Error('API key not configured');
     }
 
-    console.log(`Making GROQ API request with model: ${settings.groqModel}`);
+    // Use automatic model selection based on content
+    const content = messages.map(m => m.content).join(' ');
+    const optimalModel = getOptimalGroqModel(content, context);
+    
+    console.log(`🤖 Seleção automática de modelo: ${optimalModel}`);
     console.log('Request with messages:', JSON.stringify(messages.map(m => ({
       role: m.role, 
       content: typeof m.content === 'string' ? m.content.substring(0, 50) + '...' : 'Content not string'
@@ -129,7 +134,7 @@ export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 102
         'Authorization': `Bearer ${settings.groqApiKey}`
       },
       body: JSON.stringify({
-        model: settings.groqModel,
+        model: optimalModel,
         messages: messages,
         max_tokens: maxTokens,
         temperature: 0.7
@@ -213,7 +218,7 @@ ${JSON.stringify(caseData, null, 2)}`
       }
     ];
     
-    return await makeGroqAIRequest(messages, 4096);
+    return await makeGroqAIRequest(messages, 4096, 'investigation');
   } catch (error) {
     console.error('Error generating investigation report:', error);
     throw error;
@@ -250,7 +255,7 @@ export const processLinkAnalysisDataWithGroq = async (
       }
     ];
     
-    const result = await makeGroqAIRequest(messages, 4096);
+    const result = await makeGroqAIRequest(messages, 4096, 'linkanalysis');
     
     console.log("Link analysis raw result:", result.substring(0, 200) + "...");
     
@@ -356,7 +361,7 @@ export const transcribeAudioWithGroq = async (
         }
       ];
       
-      const speakerAnalysis = await makeGroqAIRequest(speakerDetectionPrompt, 2048);
+      const speakerAnalysis = await makeGroqAIRequest(speakerDetectionPrompt, 2048, 'audio');
       
       try {
         // Try to parse the JSON response, handling potential Markdown code blocks
@@ -440,7 +445,7 @@ export const analyzeImageWithGroq = async (
       }
     ];
     
-    const result = await makeGroqAIRequest(messages, 4096);
+    const result = await makeGroqAIRequest(messages, 4096, 'image');
     console.log('GROQ API response:', result);
     
     try {
@@ -513,7 +518,7 @@ export const enhanceImageWithGroq = async (
       }
     ];
     
-    const enhancementDescription = await makeGroqAIRequest(messages, 1024);
+    const enhancementDescription = await makeGroqAIRequest(messages, 1024, 'image');
 
     console.log('Image enhancement analysis completed');
     

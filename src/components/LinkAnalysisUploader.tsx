@@ -23,7 +23,7 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
   const [mapping, setMapping] = useState<ColumnMapping>({});
   const [step, setStep] = useState<'upload' | 'mapping' | 'complete'>('upload');
 
-  // Presets for different data types
+  // Presets for different data types - Enhanced for Brazilian investigation formats
   const presets = {
     financial: {
       source: 'Conta Origem',
@@ -32,6 +32,13 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
       date: 'Data',
       type: 'Tipo Transação'
     },
+    rif: {
+      source: 'TITULAR CPF/CNPJ',
+      target: 'REMETENTE/BENEFICIARIO NOME',
+      value: 'VALOR', 
+      date: 'DATA/PERÍODO',
+      type: 'REMETENTE OU BENEFICIARIO?'
+    },
     cdr: {
       source: 'Número Origem',
       target: 'Número Destino',
@@ -39,12 +46,26 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
       duration: 'Duração',
       location: 'ERB/Cell-ID'
     },
+    extrato: {
+      source: 'Agência/Conta',
+      target: 'Favorecido',
+      value: 'Valor',
+      date: 'Data Movimento',
+      type: 'Tipo Operação'
+    },
     mobile: {
       source: 'Contato',
       target: 'Destinatário',
       date: 'Timestamp',
       type: 'Tipo Comunicação',
       content: 'Conteúdo'
+    },
+    movimentacao: {
+      source: 'Agência/Conta Origem',
+      target: 'Agência/Conta Destino',
+      value: 'Valor',
+      date: 'Data Movimento',
+      type: 'Natureza'
     }
   };
 
@@ -218,7 +239,28 @@ const LinkAnalysisUploader: React.FC<FileUploadProps> = ({ onDataUploaded }) => 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => applyPreset('rif')}
+            >
+              Preset RIF
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => applyPreset('extrato')}
+            >
+              Preset Extrato
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => applyPreset('movimentacao')}
+            >
+              Preset Movimentação
+            </Button>
             <Button 
               variant="outline" 
               size="sm" 

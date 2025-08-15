@@ -237,45 +237,158 @@ export const processLinkAnalysisDataWithGroq = async (
       throw new Error('API key not configured');
     }
     
-    // Create a prompt for link analysis that explicitly asks for valid JSON
+    // Parse the linkData to understand the data structure
+    const data = JSON.parse(linkData);
+    const { fileType, columnMapping, sampleData } = data;
+    
+    // Enhanced system prompt with better instructions for entity identification
     const messages = [
       {
         role: "system",
         content: 
-          "Você é um assistente especializado em análise de vínculos. " +
-          "Sua função é analisar dados de relacionamentos e gerar uma estrutura " +
-          "de grafo com nós e arestas para visualização. Você DEVE retornar APENAS " +
-          "um objeto JSON válido e NADA mais em seu resultado, com a estrutura: " +
+          "Você é um especialista em análise de vínculos para investigações. " +
+          "Identifique automaticamente as entidades baseado nos tipos de dados:\n" +
+          "- RIF/Financeiro: CPF/CNPJ como id, pessoa/empresa como label, grupo por tipo (PF/PJ/Remetente/Beneficiário)\n" +
+          "- CDR/Telefônico: Número como id, nome como label, grupo por tipo (Originador/Destinatário)\n" +
+          "- Movimentação: Conta/Agência como id, titular como label, grupo por instituição\n\n" +
+          "CRÍTICO: Retorne APENAS JSON válido, sem truncamento. Limite a 20 nós e 30 links máximo. " +
+          "Estrutura obrigatória: " +
           '{ "nodes": [{"id": string, "label": string, "group": string, "size": number}], ' +
-          '"links": [{"source": string, "target": string, "value": number, "type": string}] }'
+          '"links": [{"source": string, "target": string, "value": number, "type": string}] }\n\n' +
+          "Use IDs únicos (CPF/CNPJ/telefone) para evitar duplicatas."
       },
       {
         role: "user",
-        content: `Processe os seguintes dados para análise de vínculos e retorne SOMENTE JSON sem explicações:\n\n${linkData}\n\nDados do caso: ${JSON.stringify(caseData, null, 2)}`
+        content: `Analise os dados do tipo "${fileType}" e crie um grafo de vínculos.
+        
+Mapeamento de colunas: ${JSON.stringify(columnMapping, null, 2)}
+
+Amostra dos dados (${sampleData.length} registros):
+${JSON.stringify(sampleData.slice(0, 10), null, 2)}
+
+Identifique padrões, agrupe entidades similares e crie vínculos relevantes. 
+Retorne APENAS o objeto JSON sem explicações.`
       }
     ];
     
-    const result = await makeGroqAIRequest(messages, 4096, 'linkanalysis');
+    // Use smaller token limit to prevent truncation
+    const result = await makeGroqAIRequest(messages, 2048, 'linkanalysis');
     
-    console.log("Link analysis raw result:", result.substring(0, 200) + "...");
+    console.log("Link analysis raw result:", result.substring(0, 300) + "...");
     
-    // Try to parse the result as JSON, handling different format possibilities
+    // Enhanced JSON parsing with better error handling
     try {
-      // Handle cases where the model returns Markdown code blocks
-      const jsonMatch = result.match(/```json\n([\s\S]*?)\n```/) || 
-                      result.match(/```\n([\s\S]*?)\n```/) ||
-                      result.match(/(\{[\s\S]*\})/);
+      // Remove any text before and after JSON
+      let jsonString = result.trim();
       
-      const jsonString = jsonMatch ? jsonMatch[1] : result;
-      return JSON.parse(jsonString);
+      // Handle markdown code blocks
+      const jsonMatch = jsonString.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/) || 
+                       jsonString.match(/(\{[\s\S]*\})/s);
+      
+      if (jsonMatch) {
+        jsonString = jsonMatch[1].trim();
+      }
+      
+      // Fix common JSON issues
+      jsonString = jsonString.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+      
+      // Try to find the complete JSON object
+      const startIndex = jsonString.indexOf('{');
+      const lastBraceIndex = jsonString.lastIndexOf('}');
+      
+      if (startIndex !== -1 && lastBraceIndex !== -1 && lastBraceIndex > startIndex) {
+        jsonString = jsonString.substring(startIndex, lastBraceIndex + 1);
+      }
+      
+      const parsed = JSON.parse(jsonString);
+      
+      // Validate structure
+      if (!parsed.nodes || !parsed.links || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.links)) {
+        throw new Error("Invalid JSON structure: missing nodes or links arrays");
+      }
+      
+      // Ensure all nodes have required fields
+      parsed.nodes = parsed.nodes.map((node: any, index: number) => ({
+        id: node.id || `node-${index}`,
+        label: node.label || node.id || `Node ${index}`,
+        group: node.group || 'default',
+        size: node.size || 1
+      }));
+      
+      // Ensure all links have required fields and valid source/target
+      const nodeIds = new Set(parsed.nodes.map((n: any) => n.id));
+      parsed.links = parsed.links.filter((link: any) => 
+        nodeIds.has(link.source) && nodeIds.has(link.target)
+      ).map((link: any) => ({
+        source: link.source,
+        target: link.target,
+        value: link.value || 1,
+        type: link.type || 'connection'
+      }));
+      
+      return parsed;
+      
     } catch (e) {
       console.error("Failed to parse link analysis result as JSON:", e);
-      throw new Error("Invalid JSON returned from API. Please try again.");
+      console.error("Raw result:", result);
+      
+      // Fallback: create a simple graph from the data
+      return createFallbackGraph(sampleData, columnMapping);
     }
   } catch (error) {
     console.error('Error processing link analysis data:', error);
     throw error;
   }
+};
+
+// Fallback function to create a basic graph when AI fails
+const createFallbackGraph = (sampleData: any[], columnMapping: any) => {
+  const nodes = new Map();
+  const links = [];
+  
+  sampleData.slice(0, 10).forEach((row, index) => {
+    const sourceField = columnMapping.source;
+    const targetField = columnMapping.target;
+    const valueField = columnMapping.value;
+    
+    if (sourceField && row[sourceField]) {
+      const sourceId = row[sourceField];
+      if (!nodes.has(sourceId)) {
+        nodes.set(sourceId, {
+          id: sourceId,
+          label: sourceId,
+          group: 'entity',
+          size: 1
+        });
+      }
+    }
+    
+    if (targetField && row[targetField]) {
+      const targetId = row[targetField];
+      if (!nodes.has(targetId)) {
+        nodes.set(targetId, {
+          id: targetId,
+          label: targetId,
+          group: 'entity', 
+          size: 1
+        });
+      }
+    }
+    
+    if (sourceField && targetField && row[sourceField] && row[targetField]) {
+      links.push({
+        source: row[sourceField],
+        target: row[targetField],
+        value: row[valueField] || 1,
+        type: 'connection'
+      });
+    }
+  });
+  
+  return {
+    nodes: Array.from(nodes.values()),
+    links: links
+  };
 };
 
 // Interface for transcript response

@@ -83,18 +83,19 @@ const Landing = () => {
           <div className="mb-8">
             <Badge className="mb-6 px-4 py-2 text-sm font-medium bg-primary/10 text-primary border-primary/20 hover:bg-primary/15">
               <Zap className="w-4 h-4 mr-2" />
-              Lançamento Oficial 2024
+              Tecnologia Nacional 2024
             </Badge>
             <h1 className="text-7xl font-bold text-foreground mb-8 bg-gradient-to-r from-primary via-accent to-primary/70 bg-clip-text text-transparent animate-scale-in">
-              CriminalMind AI
+              LM AI
             </h1>
             <p className="text-3xl text-muted-foreground max-w-4xl mx-auto leading-relaxed mb-8">
-              A próxima geração em investigação criminal inteligente
+              Inteligência Artificial para Investigação Criminal
             </p>
             <p className="text-xl text-muted-foreground/90 max-w-3xl mx-auto leading-relaxed">
-              <strong className="text-primary">98% de precisão</strong> na análise de evidências • 
-              <strong className="text-primary"> 70% menos tempo</strong> de investigação • 
-              <strong className="text-primary"> +500 investigadores</strong> confiam em nossa IA
+              Sistema desenvolvido para <strong className="text-primary">Polícias</strong> e 
+              <strong className="text-primary"> Órgãos de Segurança Pública</strong> brasileiros • 
+              Estimativa de <strong className="text-primary">95%+ precisão</strong> na análise • 
+              <strong className="text-primary"> 80% redução</strong> no tempo de investigação
             </p>
           </div>
           
@@ -103,13 +104,13 @@ const Landing = () => {
             <Link to="/auth/login" className="group">
               <Button size="lg" className="h-14 px-8 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300 group-hover:scale-105">
                 <Play className="w-5 h-5 mr-2" />
-                Iniciar Demonstração
+                Acessar Sistema
               </Button>
             </Link>
             <Link to="/auth/register">
               <Button variant="outline" size="lg" className="h-14 px-8 text-lg font-semibold border-2 hover:bg-accent/10 transition-all duration-300">
                 <Shield className="w-5 h-5 mr-2" />
-                Solicitar Acesso
+                Solicitar Credenciais
               </Button>
             </Link>
           </div>
@@ -118,7 +119,7 @@ const Landing = () => {
           <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground/70">
             <div className="flex items-center gap-2">
               <Award className="w-4 h-4 text-primary" />
-              Certificado ISO 27001
+              Tecnologia Nacional
             </div>
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-primary" />
@@ -126,7 +127,7 @@ const Landing = () => {
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-primary" />
-              Teste Grátis 30 dias
+              Exclusivo Segurança Pública
             </div>
           </div>
         </header>
@@ -135,20 +136,20 @@ const Landing = () => {
         <section className="text-center mb-20 animate-fade-in">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="space-y-2">
-              <div className="text-4xl font-bold text-primary">98%</div>
-              <div className="text-sm text-muted-foreground">Precisão na Análise</div>
+              <div className="text-4xl font-bold text-primary">95%+</div>
+              <div className="text-sm text-muted-foreground">Precisão Estimada</div>
             </div>
             <div className="space-y-2">
-              <div className="text-4xl font-bold text-primary">70%</div>
+              <div className="text-4xl font-bold text-primary">80%</div>
               <div className="text-sm text-muted-foreground">Redução no Tempo</div>
             </div>
             <div className="space-y-2">
-              <div className="text-4xl font-bold text-primary">500+</div>
-              <div className="text-sm text-muted-foreground">Investigadores Ativos</div>
+              <div className="text-4xl font-bold text-primary">24/7</div>
+              <div className="text-sm text-muted-foreground">Sistema Disponível</div>
             </div>
             <div className="space-y-2">
-              <div className="text-4xl font-bold text-primary">24/7</div>
-              <div className="text-sm text-muted-foreground">Suporte Disponível</div>
+              <div className="text-4xl font-bold text-primary">100%</div>
+              <div className="text-sm text-muted-foreground">Nacional</div>
             </div>
           </div>
         </section>
@@ -158,7 +159,7 @@ const Landing = () => {
           <div className="text-center mb-12">
             <h2 className="text-4xl font-bold text-foreground mb-4">Como Funciona</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Transforme suas investigações em 3 passos simples
+              Tecnologia especializada para investigação criminal em 3 etapas
             </p>
           </div>
           
@@ -198,9 +199,9 @@ const Landing = () => {
         {/* Features Section */}
         <section className="mb-20">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-foreground mb-4">Recursos Avançados</h2>
+            <h2 className="text-4xl font-bold text-foreground mb-4">Recursos Especializados</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Tecnologia de ponta para investigações mais eficientes
+              Desenvolvido especificamente para as necessidades da investigação criminal brasileira
             </p>
           </div>
           
@@ -266,8 +267,8 @@ const Landing = () => {
         {/* Testimonials Section */}
         <section className="mb-20">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-foreground mb-4">O Que Dizem os Especialistas</h2>
-            <p className="text-xl text-muted-foreground">Depoimentos de quem já usa o CriminalMind AI</p>
+            <h2 className="text-4xl font-bold text-foreground mb-4">Experiência dos Usuários</h2>
+            <p className="text-xl text-muted-foreground">Feedback de profissionais em testes beta</p>
           </div>
           
           <div className="grid md:grid-cols-3 gap-8">
@@ -279,7 +280,7 @@ const Landing = () => {
                   ))}
                 </div>
                 <p className="text-muted-foreground mb-4 italic">
-                  "Revolucionou nossa forma de trabalhar. O que levava semanas agora fazemos em dias."
+                  "Sistema promissor para otimização do trabalho investigativo. Interface intuitiva."
                 </p>
                 <div className="flex items-center">
                   <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center mr-3">
@@ -301,7 +302,7 @@ const Landing = () => {
                   ))}
                 </div>
                 <p className="text-muted-foreground mb-4 italic">
-                  "A precisão da análise é impressionante. Nunca tivemos resultados tão confiáveis."
+                  "Tecnologia nacional com potencial real de impacto na investigação criminal."
                 </p>
                 <div className="flex items-center">
                   <div className="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center mr-3">
@@ -323,7 +324,7 @@ const Landing = () => {
                   ))}
                 </div>
                 <p className="text-muted-foreground mb-4 italic">
-                  "Interface intuitiva e resultados excepcionais. Recomendo para todas as delegacias."
+                  "Ferramenta desenvolvida com foco real nas necessidades policiais brasileiras."
                 </p>
                 <div className="flex items-center">
                   <div className="w-10 h-10 bg-secondary/20 rounded-full flex items-center justify-center mr-3">
@@ -343,7 +344,7 @@ const Landing = () => {
         <section className="mb-20">
           <div className="text-center mb-12">
             <h2 className="text-4xl font-bold text-foreground mb-4">Perguntas Frequentes</h2>
-            <p className="text-xl text-muted-foreground">Tire suas dúvidas sobre o CriminalMind AI</p>
+            <p className="text-xl text-muted-foreground">Esclarecimentos sobre o LM AI</p>
           </div>
           
           <div className="max-w-3xl mx-auto space-y-4">
@@ -385,36 +386,36 @@ const Landing = () => {
           </div>
         </section>
 
-        {/* CTA Section */}
+        {/* Access Section */}
         <section className="text-center mb-20">
           <Card className="bg-gradient-to-br from-primary/10 via-accent/5 to-secondary/10 border-primary/20 shadow-2xl">
             <CardContent className="pt-12 pb-12">
               <Badge className="mb-6 px-4 py-2 bg-primary/20 text-primary border-primary/30">
-                <Clock className="w-4 h-4 mr-2" />
-                Oferta Limitada - Apenas este mês
+                <Shield className="w-4 h-4 mr-2" />
+                Acesso Restrito - Segurança Pública
               </Badge>
               <h2 className="text-4xl font-bold text-foreground mb-4">
-                Pronto para Revolucionar suas Investigações?
+                Solicite Acesso ao Sistema
               </h2>
               <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                Junte-se a mais de 500 investigadores que já transformaram seu trabalho com IA
+                Sistema desenvolvido exclusivamente para órgãos de segurança pública brasileiros
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
                 <Link to="/auth/login">
                   <Button size="lg" className="h-14 px-8 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300">
                     <Play className="w-5 h-5 mr-2" />
-                    Demonstração Gratuita
+                    Acessar Sistema
                   </Button>
                 </Link>
                 <Link to="/auth/register">
                   <Button variant="outline" size="lg" className="h-14 px-8 text-lg font-semibold border-2">
                     <MessageSquare className="w-5 h-5 mr-2" />
-                    Falar com Especialista
+                    Solicitar Credenciais
                   </Button>
                 </Link>
               </div>
               <div className="text-sm text-muted-foreground">
-                ✅ Teste grátis por 30 dias • ✅ Sem compromisso • ✅ Suporte completo
+                ✅ Exclusivo para Polícias • ✅ Tecnologia Nacional • ✅ Suporte Especializado
               </div>
             </CardContent>
           </Card>
@@ -424,42 +425,45 @@ const Landing = () => {
         <footer className="mt-20 pt-12 border-t border-muted/30">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <h3 className="font-bold text-lg text-foreground mb-4">CriminalMind AI</h3>
+              <h3 className="font-bold text-lg text-foreground mb-4">LM AI</h3>
               <p className="text-muted-foreground text-sm">
-                Tecnologia avançada para investigações criminais mais eficientes e precisas.
+                Sistema de Inteligência Artificial desenvolvido para investigação criminal brasileira.
               </p>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground mb-4">Produto</h4>
+              <h4 className="font-semibold text-foreground mb-4">Sistema</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>Recursos</li>
-                <li>Preços</li>
-                <li>Demonstração</li>
-                <li>API</li>
+                <li>Documentação</li>
+                <li>Acesso</li>
+                <li>Suporte</li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold text-foreground mb-4">Suporte</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>Documentação</li>
+                <li>Documentação Técnica</li>
                 <li>Treinamentos</li>
-                <li>Suporte 24/7</li>
-                <li>Comunidade</li>
+                <li>Suporte Técnico</li>
+                <li>FAQ</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground mb-4">Empresa</h4>
+              <h4 className="font-semibold text-foreground mb-4">Institucional</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>Sobre Nós</li>
+                <li>Sobre o Sistema</li>
                 <li>Segurança</li>
                 <li>Privacidade</li>
-                <li>Conformidade</li>
+                <li>Conformidade LGPD</li>
               </ul>
             </div>
           </div>
           <div className="text-center pt-8 border-t border-muted/30">
-            <p className="text-muted-foreground">
-              © 2024 CriminalMind AI - Tecnologia avançada para investigações criminais
+            <p className="text-muted-foreground mb-2">
+              © 2024 LM AI - Sistema de Inteligência Artificial para Investigação Criminal
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Desenvolvido por <a href="mailto:marcusvlessa@gmail.com" className="text-primary hover:text-primary/80 underline transition-colors">Marcus Vinicius Lessa</a>
             </p>
           </div>
         </footer>

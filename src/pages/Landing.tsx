@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -138,73 +139,20 @@ const Landing = () => {
             <CardHeader>
               <CardTitle className="text-center">Acesso ao Sistema</CardTitle>
               <CardDescription className="text-center">
-                Entre com sua conta ou crie uma nova para começar
+                Entre com sua conta ou solicite acesso
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="login" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="login">Entrar</TabsTrigger>
-                  <TabsTrigger value="register">Cadastrar</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="login">
-                  <form onSubmit={handleLogin} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="login-email">Email</Label>
-                      <Input
-                        id="login-email"
-                        name="email"
-                        type="email"
-                        placeholder="seu@email.com"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="login-password">Senha</Label>
-                      <Input
-                        id="login-password"
-                        name="password"
-                        type="password"
-                        placeholder="••••••••"
-                        required
-                      />
-                    </div>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? "Entrando..." : "Entrar"}
-                    </Button>
-                  </form>
-                </TabsContent>
-                
-                <TabsContent value="register">
-                  <form onSubmit={handleRegister} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="register-email">Email</Label>
-                      <Input
-                        id="register-email"
-                        name="email"
-                        type="email"
-                        placeholder="seu@email.com"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="register-password">Senha</Label>
-                      <Input
-                        id="register-password"
-                        name="password"
-                        type="password"
-                        placeholder="••••••••"
-                        required
-                        minLength={6}
-                      />
-                    </div>
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading ? "Criando conta..." : "Criar conta"}
-                    </Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
+            <CardContent className="space-y-4">
+              <Link to="/auth/login" className="w-full">
+                <Button className="w-full" size="lg">
+                  Acessar Sistema
+                </Button>
+              </Link>
+              <Link to="/auth/register" className="w-full">
+                <Button variant="outline" className="w-full" size="lg">
+                  Solicitar Acesso
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </section>

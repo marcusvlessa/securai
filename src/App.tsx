@@ -1,11 +1,14 @@
-
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
 import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar';
 import { AppSidebar } from './components/AppSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
-import Landing from './pages/Landing';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { Login } from './pages/auth/Login';
+import { Register } from './pages/auth/Register';
+import Index from './pages/Index';
 import AdminPanel from './pages/AdminPanel';
 import Dashboard from './pages/Dashboard';
 import OccurrenceAnalysis from './pages/OccurrenceAnalysis';
@@ -46,44 +49,135 @@ function App() {
     }
   }, []);
 
+  const ProtectedLayout = ({ children }: { children: React.ReactNode }) => (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <AppSidebar />
+        <div className="flex-1 flex flex-col">
+          <header className="h-14 flex items-center justify-between border-b px-4 lg:px-6">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger />
+              <h1 className="font-semibold text-lg">Secur:AI</h1>
+            </div>
+          </header>
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+
   return (
     <ThemeProvider defaultTheme="light" storageKey="securai-theme">
       <BrowserRouter>
-        <CaseProvider>
-          <SidebarProvider>
-            <div className="min-h-screen flex w-full">
-              <AppSidebar />
+        <AuthProvider>
+          <CaseProvider>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/auth/login" element={<Login />} />
+              <Route path="/auth/register" element={<Register />} />
               
-              <div className="flex-1 flex flex-col">
-                <header className="h-14 flex items-center justify-between border-b px-4 lg:px-6">
-                  <div className="flex items-center gap-2">
-                    <SidebarTrigger />
-                    <h1 className="font-semibold text-lg">Secur:AI</h1>
-                  </div>
-                </header>
-                
-                <main className="flex-1 overflow-auto">
-                  <Routes>
-                    <Route path="/" element={<Landing />} />
-                    <Route path="/app" element={<Dashboard />} />
-                    <Route path="/admin" element={<AdminPanel />} />
-                    <Route path="/occurrence-analysis" element={<OccurrenceAnalysis />} />
-                    <Route path="/investigation-report" element={<InvestigationReport />} />
-                    <Route path="/link-analysis" element={<LinkAnalysis />} />
-                    <Route path="/virtual-agents" element={<VirtualAgents />} />
-                    <Route path="/audio-analysis" element={<AudioAnalysis />} />
-                    <Route path="/image-analysis" element={<ImageAnalysis />} />
-                    <Route path="/financial-analysis" element={<FinancialAnalysis />} />
-                    <Route path="/case-management" element={<CaseManagement />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </main>
-              </div>
-            </div>
+              {/* Protected routes */}
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Index />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/app" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <Dashboard />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/admin" element={
+                <ProtectedRoute requiredRole="admin">
+                  <ProtectedLayout>
+                    <AdminPanel />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/settings" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <Settings />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/case-management" element={
+                <ProtectedRoute requiredRole="investigator">
+                  <ProtectedLayout>
+                    <CaseManagement />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/investigation-report" element={
+                <ProtectedRoute requiredRole="investigator">
+                  <ProtectedLayout>
+                    <InvestigationReport />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/image-analysis" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <ImageAnalysis />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/audio-analysis" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <AudioAnalysis />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/financial-analysis" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <FinancialAnalysis />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/link-analysis" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <LinkAnalysis />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/occurrence-analysis" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <OccurrenceAnalysis />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/virtual-agents" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <VirtualAgents />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="*" element={<NotFound />} />
+            </Routes>
             <Toaster />
-          </SidebarProvider>
-        </CaseProvider>
+          </CaseProvider>
+        </AuthProvider>
       </BrowserRouter>
     </ThemeProvider>
   );

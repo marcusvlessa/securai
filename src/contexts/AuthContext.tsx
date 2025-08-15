@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session, AuthError } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../integrations/supabase/client'
 import { toast } from 'sonner'
 
 interface UserProfile {
   id: string
   user_id: string
+  email: string
+  name?: string
   organization_id: string
-  role: 'admin' | 'investigator' | 'analyst' | 'viewer'
+  role: 'admin' | 'investigator' | 'analyst' | 'delegado'
   badge_number: string
   department: string
   permissions: string[]
@@ -49,11 +51,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch user profile data
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // First get the profile
+      const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
         .select(`
           *,
-          organizations:organization_id (
+          organizations (
             name,
             type
           )
@@ -61,11 +64,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('user_id', userId)
         .single()
 
-      if (error) throw error
+      if (profileError) throw profileError
+
+      // Then get the user roles
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+
+      if (rolesError) throw rolesError
+
+      // Get the primary role (assuming one primary role per user)
+      const primaryRole = rolesData?.[0]?.role || 'analyst'
       
       setProfile({
-        ...data,
-        organization: data.organizations
+        ...profileData,
+        role: primaryRole,
+        permissions: [], // Add permissions logic as needed
+        organization: profileData.organizations
       })
     } catch (error) {
       console.error('Error fetching profile:', error)
@@ -73,22 +89,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  // Track analytics event
+  // Track analytics event (disabled for now since table doesn't exist)
   const trackEvent = async (eventType: string, eventData: any = {}) => {
-    if (!user || !profile) return
-
-    try {
-      await supabase.from('analytics_events').insert({
-        organization_id: profile.organization_id,
-        user_id: user.id,
-        event_type: eventType,
-        event_data: eventData,
-        ip_address: null, // Will be handled by RLS/Edge Function
-        user_agent: navigator.userAgent
-      })
-    } catch (error) {
-      console.error('Error tracking event:', error)
-    }
+    // TODO: Implement analytics tracking when analytics_events table is added
+    console.log('Analytics event:', eventType, eventData)
   }
 
   // Authentication functions
@@ -121,29 +125,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true)
       const { data, error } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            name: profileData.name || '',
+            badge_number: profileData.badge_number || '',
+            department: profileData.department || '',
+            organization_id: profileData.organization_id || ''
+          }
+        }
       })
 
       if (error) throw error
 
-      if (data.user) {
-        // Create user profile
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .insert({
-            user_id: data.user.id,
-            organization_id: profileData.organization_id!,
-            role: profileData.role || 'viewer',
-            badge_number: profileData.badge_number!,
-            department: profileData.department!,
-            permissions: profileData.permissions || []
-          })
-
-        if (profileError) throw profileError
-
-        await trackEvent('user_registration', { email })
-        toast.success('Conta criada com sucesso! Verifique seu email.')
-      }
+      toast.success('Conta criada com sucesso! Verifique seu email.')
     } catch (error: any) {
       console.error('Sign up error:', error)
       toast.error(error.message || 'Erro ao criar conta')
@@ -188,7 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Permission helpers
   const hasPermission = (permission: string): boolean => {
     if (!profile) return false
-    if (profile.role === 'admin') return true
+    if (profile.role === 'admin' || profile.role === 'delegado') return true
     return profile.permissions.includes(permission)
   }
 

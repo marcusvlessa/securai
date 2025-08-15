@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import { Shield, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../../integrations/supabase/client'
 
 interface Organization {
   id: string
@@ -25,7 +25,8 @@ export const Register: React.FC = () => {
     password: '',
     confirmPassword: '',
     organization_id: '',
-    role: 'viewer' as 'admin' | 'investigator' | 'analyst' | 'viewer',
+    role: 'analyst' as 'admin' | 'investigator' | 'analyst' | 'delegado',
+    name: '',
     badge_number: '',
     department: ''
   })
@@ -47,7 +48,6 @@ export const Register: React.FC = () => {
         const { data, error } = await supabase
           .from('organizations')
           .select('id, name, type')
-          .eq('status', 'active')
           .order('name')
 
         if (error) throw error
@@ -84,6 +84,7 @@ export const Register: React.FC = () => {
 
     try {
       await signUp(formData.email, formData.password, {
+        name: formData.name,
         organization_id: formData.organization_id,
         role: formData.role,
         badge_number: formData.badge_number,
@@ -171,6 +172,20 @@ export const Register: React.FC = () => {
             )}
 
             <div className="space-y-2">
+              <Label htmlFor="name">Nome Completo</Label>
+              <Input
+                id="name"
+                name="name"
+                type="text"
+                placeholder="Seu nome completo"
+                value={formData.name}
+                onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="email">Email Corporativo</Label>
               <Input
                 id="email"
@@ -229,9 +244,9 @@ export const Register: React.FC = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="viewer">Visualizador</SelectItem>
                     <SelectItem value="analyst">Analista</SelectItem>
                     <SelectItem value="investigator">Investigador</SelectItem>
+                    <SelectItem value="delegado">Delegado</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                   </SelectContent>
                 </Select>

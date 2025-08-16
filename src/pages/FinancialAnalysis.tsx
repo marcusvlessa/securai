@@ -73,24 +73,33 @@ const RIFUpload: React.FC<RIFUploadProps> = ({ onDataUploaded }) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
-          <Upload className="h-8 w-8 mx-auto mb-4 text-muted-foreground" />
-          <Label htmlFor="rif-upload" className="cursor-pointer">
-            <span className="text-sm font-medium">Clique para selecionar arquivos RIF</span>
-            <p className="text-xs text-muted-foreground mt-1">
-              Suporte: CSV, XLSX, JSON, PDF
-            </p>
-          </Label>
-          <Input
-            id="rif-upload"
-            type="file"
-            multiple
-            accept=".csv,.xlsx,.json,.pdf"
-            className="hidden"
-            onChange={(e) => handleFileUpload(e.target.files)}
-            disabled={isUploading || !currentCase}
-          />
-        </div>
+          <div 
+            className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+            onDrop={(e) => {
+              e.preventDefault();
+              handleFileUpload(e.dataTransfer.files);
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDragEnter={(e) => e.preventDefault()}
+            onClick={() => document.getElementById('rif-upload')?.click()}
+          >
+            <Upload className="h-8 w-8 mx-auto mb-4 text-muted-foreground" />
+            <div className="cursor-pointer">
+              <span className="text-sm font-medium">Arraste arquivos RIF aqui ou clique para selecionar</span>
+              <p className="text-xs text-muted-foreground mt-1">
+                Suporte: CSV, XLSX, JSON, PDF
+              </p>
+            </div>
+            <Input
+              id="rif-upload"
+              type="file"
+              multiple
+              accept=".csv,.xlsx,.json,.pdf"
+              className="hidden"
+              onChange={(e) => handleFileUpload(e.target.files)}
+              disabled={isUploading || !currentCase}
+            />
+          </div>
         
         {isUploading && (
           <div className="space-y-2">

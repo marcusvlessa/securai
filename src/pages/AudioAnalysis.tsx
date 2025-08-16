@@ -67,7 +67,11 @@ const AudioAnalysis = () => {
     
     // Process multiple files
     Array.from(files).forEach((file, index) => {
-      if (!file.type.startsWith('audio/')) {
+      const fileName = file.name.toLowerCase();
+      const validExtensions = ['.wav', '.mp3', '.mp4', '.opus', '.m4a', '.flac', '.aac', '.ogg'];
+      const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+      
+      if (!file.type.startsWith('audio/') && !hasValidExtension) {
         invalidFiles.push(file.name);
         return;
       }
@@ -366,7 +370,7 @@ ${allTranscriptions}`
                       type="file"
                       id="audio-upload"
                       className="hidden"
-                      accept="audio/*"
+                      accept="audio/*,.wav,.mp3,.mp4,.opus,.m4a,.flac,.aac,.ogg"
                       multiple
                       onChange={handleAudioUpload}
                     />
@@ -379,7 +383,7 @@ ${allTranscriptions}`
                         Arraste arquivos de áudio aqui ou clique para fazer upload
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                        Formatos suportados: MP3, WAV, OGG, etc.
+                        Formatos suportados: MP3, WAV, MP4, OPUS, M4A, FLAC, AAC, OGG
                       </p>
                     </label>
                   </div>

@@ -27,6 +27,8 @@ export const Register: React.FC = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [organizationsByType, setOrganizationsByType] = useState<OrganizationsByType>({ Federal: [], Estadual: [] })
   const [searchTerm, setSearchTerm] = useState('')
+  const [organizationsLoading, setOrganizationsLoading] = useState(true)
+  const [organizationsError, setOrganizationsError] = useState('')
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -51,13 +53,22 @@ export const Register: React.FC = () => {
   // Fetch organizations
   useEffect(() => {
     const fetchOrganizations = async () => {
+      setOrganizationsLoading(true)
+      setOrganizationsError('')
+      
       try {
+        console.log('Fetching organizations...')
         const { data, error } = await supabase
           .from('organizations')
           .select('id, name, type')
           .order('name')
 
-        if (error) throw error
+        if (error) {
+          console.error('Supabase error:', error)
+          throw error
+        }
+        
+        console.log('Organizations fetched:', data?.length || 0)
         setOrganizations(data || [])
         
         // Group organizations by type
@@ -71,8 +82,16 @@ export const Register: React.FC = () => {
         }, { Federal: [], Estadual: [] })
         
         setOrganizationsByType(grouped)
-      } catch (error) {
+        console.log('Organizations grouped:', { 
+          Federal: grouped.Federal.length, 
+          Estadual: grouped.Estadual.length 
+        })
+        
+      } catch (error: any) {
         console.error('Error fetching organizations:', error)
+        setOrganizationsError(error.message || 'Erro ao carregar organizações')
+      } finally {
+        setOrganizationsLoading(false)
       }
     }
 
@@ -227,67 +246,105 @@ export const Register: React.FC = () => {
 
             <div className="space-y-2">
               <Label htmlFor="organization_id">Organização</Label>
+              {organizationsError && (
+                <Alert variant="destructive" className="mb-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{organizationsError}</AlertDescription>
+                </Alert>
+              )}
               <Select 
                 value={formData.organization_id} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, organization_id: value }))}
-                disabled={loading}
+                disabled={loading || organizationsLoading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione sua organização" />
+                  <SelectValue 
+                    placeholder={
+                      organizationsLoading 
+                        ? "Carregando organizações..." 
+                        : organizationsError 
+                        ? "Erro ao carregar" 
+                        : "Selecione sua organização"
+                    } 
+                  />
                 </SelectTrigger>
-                <SelectContent className="max-h-[300px]">
-                  <div className="px-2 py-1">
-                    <Input
-                      placeholder="Buscar organização..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="h-8"
-                    />
-                  </div>
-                  
-                  {/* Órgãos Federais */}
-                  {organizationsByType.Federal.filter(org => 
-                    org.name.toLowerCase().includes(searchTerm.toLowerCase())
-                  ).length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-sm font-semibold text-muted-foreground border-t">
-                        Órgãos Federais
-                      </div>
-                      {organizationsByType.Federal
-                        .filter(org => org.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                        .map((org) => (
-                          <SelectItem key={org.id} value={org.id}>
-                            {org.name}
-                          </SelectItem>
-                        ))}
-                    </>
-                  )}
-                  
-                  {/* Órgãos Estaduais */}
-                  {organizationsByType.Estadual.filter(org => 
-                    org.name.toLowerCase().includes(searchTerm.toLowerCase())
-                  ).length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-sm font-semibold text-muted-foreground border-t">
-                        Órgãos Estaduais
-                      </div>
-                      {organizationsByType.Estadual
-                        .filter(org => org.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                        .map((org) => (
-                          <SelectItem key={org.id} value={org.id}>
-                            {org.name}
-                          </SelectItem>
-                        ))}
-                    </>
-                  )}
-                  
-                  {/* No results */}
-                  {organizations.filter(org => 
-                    org.name.toLowerCase().includes(searchTerm.toLowerCase())
-                  ).length === 0 && searchTerm && (
-                    <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                      Nenhuma organização encontrada
+                <SelectContent className="max-h-[300px] z-50 bg-popover border border-border shadow-lg">
+                  {organizationsLoading ? (
+                    <div className="px-2 py-4 text-center">
+                      <LoadingSpinner size="sm" className="mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Carregando organizações...</p>
                     </div>
+                  ) : organizationsError ? (
+                    <div className="px-2 py-4 text-center text-sm text-destructive">
+                      Erro ao carregar organizações
+                    </div>
+                  ) : (
+                    <>
+                      <div className="px-2 py-1 sticky top-0 bg-popover border-b">
+                        <Input
+                          placeholder="Buscar organização..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="h-8"
+                        />
+                      </div>
+                      
+                      {/* Órgãos Federais */}
+                      {organizationsByType.Federal.filter(org => 
+                        org.name.toLowerCase().includes(searchTerm.toLowerCase())
+                      ).length > 0 && (
+                        <>
+                          <div className="px-2 py-1 text-sm font-semibold text-muted-foreground border-t bg-muted/50">
+                            Órgãos Federais ({organizationsByType.Federal.filter(org => 
+                              org.name.toLowerCase().includes(searchTerm.toLowerCase())
+                            ).length})
+                          </div>
+                          {organizationsByType.Federal
+                            .filter(org => org.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .map((org) => (
+                              <SelectItem key={org.id} value={org.id}>
+                                {org.name}
+                              </SelectItem>
+                            ))}
+                        </>
+                      )}
+                      
+                      {/* Órgãos Estaduais */}
+                      {organizationsByType.Estadual.filter(org => 
+                        org.name.toLowerCase().includes(searchTerm.toLowerCase())
+                      ).length > 0 && (
+                        <>
+                          <div className="px-2 py-1 text-sm font-semibold text-muted-foreground border-t bg-muted/50">
+                            Órgãos Estaduais ({organizationsByType.Estadual.filter(org => 
+                              org.name.toLowerCase().includes(searchTerm.toLowerCase())
+                            ).length})
+                          </div>
+                          {organizationsByType.Estadual
+                            .filter(org => org.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .map((org) => (
+                              <SelectItem key={org.id} value={org.id}>
+                                {org.name}
+                              </SelectItem>
+                            ))}
+                        </>
+                      )}
+                      
+                      {/* No results */}
+                      {organizations.filter(org => 
+                        org.name.toLowerCase().includes(searchTerm.toLowerCase())
+                      ).length === 0 && searchTerm && !organizationsLoading && (
+                        <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                          Nenhuma organização encontrada para "{searchTerm}"
+                        </div>
+                      )}
+                      
+                      {/* Show total when no search */}
+                      {!searchTerm && organizations.length > 0 && (
+                        <div className="px-2 py-1 text-xs text-muted-foreground border-t bg-muted/30 text-center">
+                          {organizations.length} organizações disponíveis
+                        </div>
+                      )}
+                    </>
                   )}
                 </SelectContent>
               </Select>

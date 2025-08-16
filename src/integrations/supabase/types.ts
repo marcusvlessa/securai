@@ -14,6 +14,207 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_model_preferences: {
+        Row: {
+          auto_select: boolean
+          content_type: string
+          created_at: string
+          id: string
+          preferred_model: string
+          priority_setting: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_select?: boolean
+          content_type: string
+          created_at?: string
+          id?: string
+          preferred_model: string
+          priority_setting?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_select?: boolean
+          content_type?: string
+          created_at?: string
+          id?: string
+          preferred_model?: string
+          priority_setting?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      analysis_results: {
+        Row: {
+          analysis_type: string
+          case_id: string
+          confidence_score: number | null
+          created_at: string
+          error_message: string | null
+          file_id: string | null
+          id: string
+          input_data: Json | null
+          model_used: string
+          processing_time: number | null
+          result_data: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_type: string
+          case_id: string
+          confidence_score?: number | null
+          created_at?: string
+          error_message?: string | null
+          file_id?: string | null
+          id?: string
+          input_data?: Json | null
+          model_used: string
+          processing_time?: number | null
+          result_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_type?: string
+          case_id?: string
+          confidence_score?: number | null
+          created_at?: string
+          error_message?: string | null
+          file_id?: string | null
+          id?: string
+          input_data?: Json | null
+          model_used?: string
+          processing_time?: number | null
+          result_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_results_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analysis_results_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cases: {
+        Row: {
+          case_type: string
+          created_at: string
+          description: string | null
+          id: string
+          priority: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          case_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          priority?: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          case_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          priority?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      link_analysis_sessions: {
+        Row: {
+          analysis_summary: string | null
+          case_id: string
+          column_mapping: Json
+          created_at: string
+          file_id: string | null
+          file_type: string
+          graph_data: Json | null
+          id: string
+          links_count: number | null
+          nodes_count: number | null
+          session_name: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_summary?: string | null
+          case_id: string
+          column_mapping?: Json
+          created_at?: string
+          file_id?: string | null
+          file_type: string
+          graph_data?: Json | null
+          id?: string
+          links_count?: number | null
+          nodes_count?: number | null
+          session_name: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_summary?: string | null
+          case_id?: string
+          column_mapping?: Json
+          created_at?: string
+          file_id?: string | null
+          file_type?: string
+          graph_data?: Json | null
+          id?: string
+          links_count?: number | null
+          nodes_count?: number | null
+          session_name?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_analysis_sessions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "link_analysis_sessions_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "uploaded_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           address: string | null
@@ -46,6 +247,59 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      uploaded_files: {
+        Row: {
+          analysis_status: string
+          case_id: string
+          created_at: string
+          file_path: string
+          file_size: number
+          file_type: string
+          filename: string
+          id: string
+          metadata: Json | null
+          mime_type: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_status?: string
+          case_id: string
+          created_at?: string
+          file_path: string
+          file_size: number
+          file_type: string
+          filename: string
+          id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_status?: string
+          case_id?: string
+          created_at?: string
+          file_path?: string
+          file_size?: number
+          file_type?: string
+          filename?: string
+          id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uploaded_files_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_profiles: {
         Row: {

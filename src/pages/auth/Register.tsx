@@ -17,9 +17,16 @@ interface Organization {
   type: string
 }
 
+interface OrganizationsByType {
+  Federal: Organization[]
+  Estadual: Organization[]
+}
+
 export const Register: React.FC = () => {
   const { signUp, user, loading: authLoading } = useAuth()
   const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [organizationsByType, setOrganizationsByType] = useState<OrganizationsByType>({ Federal: [], Estadual: [] })
+  const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -52,6 +59,18 @@ export const Register: React.FC = () => {
 
         if (error) throw error
         setOrganizations(data || [])
+        
+        // Group organizations by type
+        const grouped = (data || []).reduce((acc: OrganizationsByType, org) => {
+          if (org.type === 'Federal') {
+            acc.Federal.push(org)
+          } else {
+            acc.Estadual.push(org)
+          }
+          return acc
+        }, { Federal: [], Estadual: [] })
+        
+        setOrganizationsByType(grouped)
       } catch (error) {
         console.error('Error fetching organizations:', error)
       }
@@ -159,6 +178,13 @@ export const Register: React.FC = () => {
             <CardDescription className="text-base">
               Solicitar acesso ao sistema de análise forense
             </CardDescription>
+            <Alert className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Importante:</strong> Sua solicitação de registro será analisada por um administrador antes da aprovação. 
+                Certifique-se de usar seu email corporativo oficial.
+              </AlertDescription>
+            </Alert>
           </div>
         </CardHeader>
 
@@ -209,12 +235,60 @@ export const Register: React.FC = () => {
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione sua organização" />
                 </SelectTrigger>
-                <SelectContent>
-                  {organizations.map((org) => (
-                    <SelectItem key={org.id} value={org.id}>
-                      {org.name} ({org.type})
-                    </SelectItem>
-                  ))}
+                <SelectContent className="max-h-[300px]">
+                  <div className="px-2 py-1">
+                    <Input
+                      placeholder="Buscar organização..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="h-8"
+                    />
+                  </div>
+                  
+                  {/* Órgãos Federais */}
+                  {organizationsByType.Federal.filter(org => 
+                    org.name.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-sm font-semibold text-muted-foreground border-t">
+                        Órgãos Federais
+                      </div>
+                      {organizationsByType.Federal
+                        .filter(org => org.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                        .map((org) => (
+                          <SelectItem key={org.id} value={org.id}>
+                            {org.name}
+                          </SelectItem>
+                        ))}
+                    </>
+                  )}
+                  
+                  {/* Órgãos Estaduais */}
+                  {organizationsByType.Estadual.filter(org => 
+                    org.name.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-sm font-semibold text-muted-foreground border-t">
+                        Órgãos Estaduais
+                      </div>
+                      {organizationsByType.Estadual
+                        .filter(org => org.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                        .map((org) => (
+                          <SelectItem key={org.id} value={org.id}>
+                            {org.name}
+                          </SelectItem>
+                        ))}
+                    </>
+                  )}
+                  
+                  {/* No results */}
+                  {organizations.filter(org => 
+                    org.name.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).length === 0 && searchTerm && (
+                    <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                      Nenhuma organização encontrada
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>

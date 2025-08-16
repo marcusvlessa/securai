@@ -9,7 +9,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import Index from './pages/Index';
-import AdminPanel from './pages/AdminPanel';
+import { AdminPanel } from './pages/AdminPanel';
 import Dashboard from './pages/Dashboard';
 import OccurrenceAnalysis from './pages/OccurrenceAnalysis';
 import InvestigationReport from './pages/InvestigationReport';

@@ -49,6 +49,8 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           avatar_url: string | null
           badge_number: string | null
           created_at: string
@@ -58,10 +60,15 @@ export type Database = {
           last_login: string | null
           name: string | null
           organization_id: string | null
+          rejection_reason: string | null
+          status: string
           updated_at: string
           user_id: string
+          verification_documents: string[] | null
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           avatar_url?: string | null
           badge_number?: string | null
           created_at?: string
@@ -71,10 +78,15 @@ export type Database = {
           last_login?: string | null
           name?: string | null
           organization_id?: string | null
+          rejection_reason?: string | null
+          status?: string
           updated_at?: string
           user_id: string
+          verification_documents?: string[] | null
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           avatar_url?: string | null
           badge_number?: string | null
           created_at?: string
@@ -84,8 +96,11 @@ export type Database = {
           last_login?: string | null
           name?: string | null
           organization_id?: string | null
+          rejection_reason?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
+          verification_documents?: string[] | null
         }
         Relationships: [
           {

@@ -106,7 +106,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) throw error
 
+      // Check if user is approved
       if (data.user) {
+        const { data: profileData, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('status')
+          .eq('user_id', data.user.id)
+          .single()
+
+        if (profileError) throw profileError
+
+        if (profileData?.status === 'pending') {
+          await supabase.auth.signOut()
+          throw new Error('Sua conta ainda está aguardando aprovação do administrador.')
+        }
+
+        if (profileData?.status === 'rejected') {
+          await supabase.auth.signOut()
+          throw new Error('Sua solicitação de acesso foi rejeitada. Entre em contato com o administrador.')
+        }
+
         await fetchProfile(data.user.id)
         await trackEvent('user_login', { email })
         toast.success('Login realizado com sucesso!')

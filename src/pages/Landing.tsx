@@ -86,7 +86,7 @@ const Landing = () => {
               Tecnologia Nacional 2024
             </Badge>
             <h1 className="text-7xl font-bold text-foreground mb-8 bg-gradient-to-r from-primary via-accent to-primary/70 bg-clip-text text-transparent animate-scale-in">
-              LM AI
+              Secur:AI
             </h1>
             <p className="text-3xl text-muted-foreground max-w-4xl mx-auto leading-relaxed mb-8">
               Inteligência Artificial para Investigação Criminal
@@ -344,7 +344,7 @@ const Landing = () => {
         <section className="mb-20">
           <div className="text-center mb-12">
             <h2 className="text-4xl font-bold text-foreground mb-4">Perguntas Frequentes</h2>
-            <p className="text-xl text-muted-foreground">Esclarecimentos sobre o LM AI</p>
+            <p className="text-xl text-muted-foreground">Esclarecimentos sobre o Secur:AI</p>
           </div>
           
           <div className="max-w-3xl mx-auto space-y-4">
@@ -425,7 +425,7 @@ const Landing = () => {
         <footer className="mt-20 pt-12 border-t border-muted/30">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <h3 className="font-bold text-lg text-foreground mb-4">LM AI</h3>
+              <h3 className="font-bold text-lg text-foreground mb-4">Secur:AI</h3>
               <p className="text-muted-foreground text-sm">
                 Sistema de Inteligência Artificial desenvolvido para investigação criminal brasileira.
               </p>
@@ -460,7 +460,7 @@ const Landing = () => {
           </div>
           <div className="text-center pt-8 border-t border-muted/30">
             <p className="text-muted-foreground mb-2">
-              © 2024 LM AI - Sistema de Inteligência Artificial para Investigação Criminal
+              © 2024 Secur:AI - Sistema de Inteligência Artificial para Investigação Criminal
             </p>
             <p className="text-sm text-muted-foreground">
               Desenvolvido por <a href="mailto:marcusvlessa@gmail.com" className="text-primary hover:text-primary/80 underline transition-colors">Marcus Vinicius Lessa</a>

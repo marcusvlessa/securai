@@ -123,7 +123,17 @@ export class FileUploadService {
       throw new Error(`Failed to fetch files: ${error.message}`);
     }
 
-    return data || [];
+    return (data || []).map(file => ({
+      id: file.id,
+      filename: file.filename,
+      filePath: file.file_path,
+      fileType: file.file_type,
+      fileSize: file.file_size,
+      mimeType: file.mime_type,
+      analysisStatus: file.analysis_status as 'pending' | 'processing' | 'completed' | 'failed',
+      metadata: file.metadata,
+      createdAt: file.created_at
+    }));
   }
 
   /**

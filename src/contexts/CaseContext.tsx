@@ -6,7 +6,9 @@ export interface Case {
   description: string;
   dateCreated: string;
   lastModified: string;
-  status?: string;
+  status?: 'active' | 'completed' | 'archived';
+  case_type?: 'investigation' | 'financial' | 'criminal' | 'civil';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
 }
 
 interface CaseContextType {
@@ -63,7 +65,7 @@ export const CaseProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `case-${Date.now()}`,
       dateCreated: new Date().toISOString(),
       lastModified: new Date().toISOString(),
-      status: 'Ativo', // Default status
+      status: 'active', // Default status
     };
     
     setCases(prevCases => [...prevCases, newCase]);

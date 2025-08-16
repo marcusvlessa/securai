@@ -39,11 +39,16 @@ const CaseManager: React.FC<CaseManagerProps> = ({ onCaseSelect, selectedCaseId 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   
   // Form state for new case
-  const [newCase, setNewCase] = useState({
+  const [newCase, setNewCase] = useState<{
+    title: string;
+    description: string;
+    case_type: 'investigation' | 'financial' | 'criminal' | 'civil';
+    priority: 'low' | 'medium' | 'high' | 'urgent';
+  }>({
     title: '',
     description: '',
-    case_type: 'investigation' as const,
-    priority: 'medium' as const
+    case_type: 'investigation',
+    priority: 'medium'
   });
 
   useEffect(() => {
@@ -109,7 +114,7 @@ const CaseManager: React.FC<CaseManagerProps> = ({ onCaseSelect, selectedCaseId 
       });
 
       // Auto-select the new case
-      onCaseSelect?.(data);
+      onCaseSelect?.(data as Case);
     } catch (error) {
       console.error('Error creating case:', error);
       toast.error('Erro ao criar caso');

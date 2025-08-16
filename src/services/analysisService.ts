@@ -362,7 +362,7 @@ export class AnalysisService {
     // Convert blob to File for GROQ
     const file = new File([blob], fileInfo.filename, { type: fileInfo.mime_type });
     
-    const analysis = await analyzeImageWithGroq(file);
+    const analysis = await analyzeImageWithGroq(fileInfo.filename);
     
     return {
       type: 'image_analysis',
@@ -370,8 +370,7 @@ export class AnalysisService {
       analysis,
       detectedText: analysis.ocrText || '',
       faces: analysis.faces || [],
-      licensePlates: analysis.licensePlates || [],
-      objects: analysis.objects || []
+      licensePlates: analysis.licensePlates || []
     };
   }
 
@@ -505,7 +504,17 @@ export class AnalysisService {
       throw new Error(`Failed to save analysis result: ${error.message}`);
     }
 
-    return result;
+    return {
+      id: result.id,
+      analysisType: result.analysis_type,
+      modelUsed: result.model_used,
+      resultData: result.result_data,
+      confidenceScore: result.confidence_score,
+      processingTime: result.processing_time,
+      status: result.status as 'processing' | 'completed' | 'failed',
+      errorMessage: result.error_message,
+      createdAt: result.created_at
+    };
   }
 
   private getDefaultTextAnalysisPrompt(): string {

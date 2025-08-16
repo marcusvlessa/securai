@@ -12,6 +12,8 @@ interface FileUploaderProps {
   caseId: string;
   onFileUploaded?: (result: FileUploadResult) => void;
   onAnalysisComplete?: (analysisId: string) => void;
+  onUploadComplete?: () => void;
+  onClose?: () => void;
   acceptedTypes?: string[];
   maxFileSize?: number; // in MB
   autoAnalyze?: boolean;
@@ -28,6 +30,8 @@ interface UploadProgress {
 const FileUploader: React.FC<FileUploaderProps> = ({
   caseId,
   onFileUploaded,
+  onUploadComplete,
+  onClose,
   onAnalysisComplete,
   acceptedTypes = ['.pdf', '.txt', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.mp3', '.wav', '.xlsx', '.csv'],
   maxFileSize = 50, // 50MB default

@@ -1,381 +1,451 @@
-
-import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { useCase } from '../contexts/CaseContext';
-import { AlertCircle, FileText, Layers, PieChart, ChevronRight, BookOpen, BarChartHorizontal, Folder, ImageIcon, AudioLines, Camera, FolderArchive, List, Shield } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { useNavigate } from 'react-router-dom';
-import { Badge } from '../components/ui/badge';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { getCaseStatistics, getImageAnalysesByCaseId, getOccurrencesByCaseId, getAudioTranscriptionsByCaseId } from '../services/databaseService';
+import { useState, useEffect } from 'react';
+import { useCase } from '@/contexts/CaseContext';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { FileText, Image, AudioLines, Link, AlertCircle, Upload, Plus } from 'lucide-react';
+import CaseManager from '@/components/CaseManager';
+import FileUploader from '@/components/FileUploader';
+import { analysisService } from '@/services/analysisService';
+import { fileUploadService } from '@/services/fileUploadService';
 
 interface CaseStats {
-  occurrencesCount: number;
-  imagesCount: number;
-  audiosCount: number;
-  crimeTypes: { name: string; count: number }[];
+  occurrences: number;
+  images: number;
+  audios: number;
+  documents: number;
+  analyses: number;
   lastUpdated: string;
 }
 
-const Dashboard = () => {
-  const { cases, currentCase } = useCase();
-  const navigate = useNavigate();
-  const [caseStats, setCaseStats] = useState<CaseStats | null>(null);
-  const [isLoadingStats, setIsLoadingStats] = useState<boolean>(false);
+export default function Dashboard() {
+  const { currentCase, setCurrentCase } = useCase();
+  const [caseStats, setCaseStats] = useState<CaseStats>({
+    occurrences: 0,
+    images: 0,
+    audios: 0,
+    documents: 0,
+    analyses: 0,
+    lastUpdated: new Date().toISOString()
+  });
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [showCaseManager, setShowCaseManager] = useState(false);
+  const [showFileUploader, setShowFileUploader] = useState(false);
+  const [recentFiles, setRecentFiles] = useState<any[]>([]);
+  const [recentAnalyses, setRecentAnalyses] = useState<any[]>([]);
 
-  // Load case statistics when current case changes
   useEffect(() => {
     if (currentCase) {
       loadCaseStats();
-    } else {
-      setCaseStats(null);
+      loadRecentData();
     }
   }, [currentCase]);
 
-  // Load statistics for the current case
   const loadCaseStats = async () => {
     if (!currentCase) return;
     
     setIsLoadingStats(true);
-    
     try {
-      // Get statistics from database
-      const stats = await getCaseStatistics(currentCase.id);
-      
-      // Get actual counts from database
-      const occurrences = await getOccurrencesByCaseId(currentCase.id);
-      const images = await getImageAnalysesByCaseId(currentCase.id);
-      const audios = await getAudioTranscriptionsByCaseId(currentCase.id);
-      
-      // Format crime types data for the chart
-      const crimeTypes = stats?.statistics.crimeTypes 
-        ? Object.entries(stats.statistics.crimeTypes).map(([name, count]) => ({
-            name,
-            count: count as number
-          }))
-        : [];
-      
+      const [files, analyses] = await Promise.all([
+        fileUploadService.getCaseFiles(currentCase.id),
+        analysisService.getCaseAnalyses(currentCase.id)
+      ]);
+
+      const fileStats = files.reduce((acc, file) => {
+        if (file.fileType === 'image') acc.images++;
+        else if (file.fileType === 'audio') acc.audios++;
+        else acc.documents++;
+        return acc;
+      }, { images: 0, audios: 0, documents: 0 });
+
       setCaseStats({
-        occurrencesCount: occurrences.length,
-        imagesCount: images.length,
-        audiosCount: audios.length,
-        crimeTypes,
-        lastUpdated: stats?.statistics.lastUpdated || new Date().toISOString()
+        occurrences: files.length,
+        images: fileStats.images,
+        audios: fileStats.audios,
+        documents: fileStats.documents,
+        analyses: analyses.length,
+        lastUpdated: new Date().toISOString()
       });
     } catch (error) {
-      console.error('Error loading case statistics:', error);
+      console.error('Error loading case stats:', error);
     } finally {
       setIsLoadingStats(false);
     }
   };
 
-  return (
-    <div className="page-container py-6">
-      <div className="page-header">
-        <h1 className="page-title flex items-center gap-3">
-          <Shield className="h-8 w-8 text-brand" />
-          Dashboard
-        </h1>
-        <p className="page-description">
-          Visão geral dos casos e análises investigativas
-        </p>
-      </div>
+  const loadRecentData = async () => {
+    if (!currentCase) return;
 
-      {!currentCase ? (
-        <div>
-          <Card className="border-warning bg-warning-light">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-warning" />
-                <p className="text-warning-foreground">
-                  Selecione um caso para visualizar seu dashboard ou crie um novo caso.
-                </p>
+    try {
+      const [files, analyses] = await Promise.all([
+        fileUploadService.getCaseFiles(currentCase.id),
+        analysisService.getCaseAnalyses(currentCase.id)
+      ]);
+
+      setRecentFiles(files.slice(0, 5));
+      setRecentAnalyses(analyses.slice(0, 5));
+    } catch (error) {
+      console.error('Error loading recent data:', error);
+    }
+  };
+
+  const analysisModules = [
+    {
+      title: 'Análise de Texto',
+      description: 'Processamento de documentos e extração de entidades',
+      icon: FileText,
+      color: 'bg-blue-500',
+      route: '/occurrence-analysis'
+    },
+    {
+      title: 'Análise de Imagens',
+      description: 'Reconhecimento facial, OCR e detecção de objetos',
+      icon: Image,
+      color: 'bg-green-500',
+      route: '/image-analysis'
+    },
+    {
+      title: 'Análise de Áudio',
+      description: 'Transcrição e análise de conteúdo de áudio',
+      icon: AudioLines,
+      color: 'bg-purple-500',
+      route: '/audio-analysis'
+    },
+    {
+      title: 'Análise de Vínculos',
+      description: 'Mapeamento de relacionamentos e conexões',
+      icon: Link,
+      color: 'bg-orange-500',
+      route: '/link-analysis'
+    }
+  ];
+
+  const chartData = [
+    { name: 'Documentos', value: caseStats.documents },
+    { name: 'Imagens', value: caseStats.images },
+    { name: 'Áudios', value: caseStats.audios },
+    { name: 'Análises', value: caseStats.analyses }
+  ];
+
+  const handleCaseSelect = (selectedCase: any) => {
+    const mappedCase = {
+      id: selectedCase.id,
+      title: selectedCase.title,
+      description: selectedCase.description || '',
+      dateCreated: selectedCase.created_at,
+      lastModified: selectedCase.updated_at,
+      status: selectedCase.status,
+      case_type: selectedCase.case_type,
+      priority: selectedCase.priority
+    };
+    setCurrentCase(mappedCase.id);
+    setShowCaseManager(false);
+  };
+
+  if (!currentCase) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20 p-6">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="text-center space-y-4">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              Secur:AI Dashboard
+            </h1>
+            <p className="text-lg text-muted-foreground">
+              Sistema Inteligente de Análise e Investigação
+            </p>
+          </div>
+
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Nenhum caso selecionado. Selecione um caso existente ou crie um novo para começar.
+            </AlertDescription>
+          </Alert>
+
+          <div className="flex justify-center gap-4">
+            <Button onClick={() => setShowCaseManager(true)} size="lg">
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Caso
+            </Button>
+            <Button variant="outline" onClick={() => setShowCaseManager(true)} size="lg">
+              Gerenciar Casos
+            </Button>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {analysisModules.map((module, index) => (
+              <Card key={index} className="hover:shadow-lg transition-shadow cursor-not-allowed opacity-60">
+                <CardHeader className="pb-3">
+                  <div className={`w-12 h-12 rounded-lg ${module.color} flex items-center justify-center mb-2`}>
+                    <module.icon className="h-6 w-6 text-white" />
+                  </div>
+                  <CardTitle className="text-lg">{module.title}</CardTitle>
+                  <CardDescription>{module.description}</CardDescription>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {showCaseManager && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-background rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-auto m-4">
+              <CaseManager 
+                onCaseSelect={handleCaseSelect}
+              />
+              <div className="flex justify-end mt-4">
+                <Button variant="outline" onClick={() => setShowCaseManager(false)}>
+                  Fechar
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="feature-card">
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background to-secondary/20 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              {currentCase.title}
+            </h1>
+            <p className="text-muted-foreground mt-1">{currentCase.description}</p>
+            <Badge variant="secondary" className="mt-2">
+              Caso {currentCase.status || 'ativo'}
+            </Badge>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowFileUploader(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload
+            </Button>
+            <Button variant="outline" onClick={() => setShowCaseManager(true)}>
+              Gerenciar Casos
+            </Button>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total de Itens</CardTitle>
+              <div className="text-2xl font-bold">{caseStats.occurrences}</div>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Documentos</CardTitle>
+              <div className="text-2xl font-bold">{caseStats.documents}</div>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Imagens</CardTitle>
+              <div className="text-2xl font-bold">{caseStats.images}</div>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Áudios</CardTitle>
+              <div className="text-2xl font-bold">{caseStats.audios}</div>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Análises</CardTitle>
+              <div className="text-2xl font-bold">{caseStats.analyses}</div>
+            </CardHeader>
+          </Card>
+        </div>
+
+        {/* Main Content */}
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+            <TabsTrigger value="analysis">Módulos de Análise</TabsTrigger>
+            <TabsTrigger value="files">Arquivos Recentes</TabsTrigger>
+            <TabsTrigger value="results">Resultados</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Distribuição de Conteúdo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="hsl(var(--primary))" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Ações Rápidas</CardTitle>
+                  <CardDescription>Ferramentas de análise disponíveis</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {analysisModules.map((module, index) => (
+                    <div key={index} className="flex items-center gap-4 p-3 border rounded-lg hover:bg-secondary/50 transition-colors">
+                      <div className={`w-10 h-10 rounded-lg ${module.color} flex items-center justify-center`}>
+                        <module.icon className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium">{module.title}</h4>
+                        <p className="text-sm text-muted-foreground">{module.description}</p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => window.location.href = module.route}>
+                        Abrir
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="analysis" className="space-y-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {analysisModules.map((module, index) => (
+                <Card key={index} className="hover:shadow-lg transition-shadow cursor-pointer" 
+                      onClick={() => window.location.href = module.route}>
+                  <CardHeader className="pb-3">
+                    <div className={`w-12 h-12 rounded-lg ${module.color} flex items-center justify-center mb-2`}>
+                      <module.icon className="h-6 w-6 text-white" />
+                    </div>
+                    <CardTitle className="text-lg">{module.title}</CardTitle>
+                    <CardDescription>{module.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full">Iniciar Análise</Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="files" className="space-y-6">
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Folder className="h-5 w-5 text-brand" /> Casos Recentes
-                </CardTitle>
-                <CardDescription>
-                  Lista dos casos mais recentes
-                </CardDescription>
+                <CardTitle>Arquivos Recentes</CardTitle>
+                <CardDescription>Últimos arquivos enviados para este caso</CardDescription>
               </CardHeader>
               <CardContent>
-                {cases.length > 0 ? (
-                  <div className="space-y-4">
-                    {cases.slice(0, 5).map((caseItem) => (
-                      <div 
-                        key={caseItem.id} 
-                        className="flex justify-between items-center p-3 hover:bg-accent rounded-md cursor-pointer transition-colors"
-                        onClick={() => navigate(`/case-management`)}
-                      >
+                {recentFiles.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentFiles.map((file) => (
+                      <div key={file.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-3">
-                          <FolderArchive className="h-5 w-5 text-brand" />
+                          <FileText className="h-5 w-5 text-muted-foreground" />
                           <div>
-                            <h4 className="font-medium">{caseItem.title}</h4>
+                            <p className="font-medium">{file.filename}</p>
                             <p className="text-sm text-muted-foreground">
-                              {new Date(caseItem.dateCreated).toLocaleDateString('pt-BR')}
+                              {file.fileType} • {(file.fileSize / 1024 / 1024).toFixed(2)} MB
                             </p>
                           </div>
                         </div>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                        <Badge variant={file.analysisStatus === 'completed' ? 'default' : 'secondary'}>
+                          {file.analysisStatus}
+                        </Badge>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="empty-state">
-                    <FolderArchive className="h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground mb-4">Nenhum caso criado ainda</p>
-                    <Button onClick={() => navigate('/case-management')} className="gradient-text">
-                      Criar Novo Caso
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhum arquivo encontrado</p>
+                    <Button className="mt-4" onClick={() => setShowFileUploader(true)}>
+                      Fazer Upload
                     </Button>
                   </div>
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
 
+          <TabsContent value="results" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <List className="h-5 w-5" /> Módulos Disponíveis
-                </CardTitle>
-                <CardDescription>
-                  Acesse os módulos de análise
-                </CardDescription>
+                <CardTitle>Resultados de Análise</CardTitle>
+                <CardDescription>Análises concluídas para este caso</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Button 
-                    variant="outline" 
-                    className="flex justify-start items-center gap-2 h-auto py-3"
-                    onClick={() => navigate('/occurrence-analysis')}
-                  >
-                    <FileText className="h-5 w-5 text-emerald-600" />
-                    <span>Análise de Ocorrências</span>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    className="flex justify-start items-center gap-2 h-auto py-3"
-                    onClick={() => navigate('/image-analysis')}
-                  >
-                    <ImageIcon className="h-5 w-5 text-blue-600" />
-                    <span>Análise de Imagens</span>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    className="flex justify-start items-center gap-2 h-auto py-3"
-                    onClick={() => navigate('/audio-analysis')}
-                  >
-                    <AudioLines className="h-5 w-5 text-purple-600" />
-                    <span>Análise de Áudio</span>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    className="flex justify-start items-center gap-2 h-auto py-3"
-                    onClick={() => navigate('/link-analysis')}
-                  >
-                    <Layers className="h-5 w-5 text-orange-600" />
-                    <span>Análise de Vínculos</span>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    className="flex justify-start items-center gap-2 h-auto py-3 col-span-1 md:col-span-2"
-                    onClick={() => navigate('/investigation-report')}
-                  >
-                    <BookOpen className="h-5 w-5 text-red-600" />
-                    <span>Relatório de Investigação</span>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      ) : (
-        <div>
-          <div className="mb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                  <Folder className="h-5 w-5 text-brand" />
-                  <span>{currentCase.title}</span>
-                </h2>
-                <p className="text-muted-foreground mt-1">
-                  {currentCase.description || 'Sem descrição'}
-                </p>
-              </div>
-              <Badge className="status-active">
-                {currentCase.status || 'Ativo'}
-              </Badge>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <Button 
-              onClick={() => {
-                const { loadSeedData } = require('../services/seedDataService');
-                loadSeedData();
-                window.location.reload();
-              }}
-              variant="outline"
-              className="w-full"
-            >
-              🌱 Carregar Dados de Exemplo para Demonstração
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <Card className="stat-card">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Ocorrências</p>
-                    <div className="text-2xl font-bold">
-                      {isLoadingStats ? (
-                        <div className="loading-spinner h-6 w-6"></div>
-                      ) : (
-                        caseStats?.occurrencesCount || 0
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Documentos analisados
-                    </p>
-                  </div>
-                  <FileText className="h-8 w-8 text-success opacity-80" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="stat-card">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Imagens</p>
-                    <div className="text-2xl font-bold">
-                      {isLoadingStats ? (
-                        <div className="loading-spinner h-6 w-6"></div>
-                      ) : (
-                        caseStats?.imagesCount || 0
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Imagens processadas
-                    </p>
-                  </div>
-                  <Camera className="h-8 w-8 text-brand opacity-80" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="stat-card">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Áudios</p>
-                    <div className="text-2xl font-bold">
-                      {isLoadingStats ? (
-                        <div className="loading-spinner h-6 w-6"></div>
-                      ) : (
-                        caseStats?.audiosCount || 0
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Áudios transcritos
-                    </p>
-                  </div>
-                  <AudioLines className="h-8 w-8 text-info opacity-80" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2">
-              <Card className="h-full">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChartHorizontal className="h-5 w-5" /> Tipos de Crimes Identificados
-                  </CardTitle>
-                  <CardDescription>
-                    Análise dos tipos de crimes detectados nos documentos
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {caseStats?.crimeTypes && caseStats.crimeTypes.length > 0 ? (
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={caseStats.crimeTypes}
-                          layout="vertical"
-                          margin={{ top: 5, right: 30, left: 50, bottom: 5 }}
-                        >
-                          <XAxis type="number" />
-                          <YAxis 
-                            dataKey="name" 
-                            type="category"
-                            width={120}
-                            tick={{ fontSize: 12 }}
-                          />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="count" name="Ocorrências" fill="#6366f1" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                     <div className="empty-state h-64">
-                       <PieChart className="h-10 w-10 text-muted-foreground mb-3" />
-                       <p className="text-muted-foreground">
-                         Nenhum tipo de crime identificado ainda. 
-                         Analise documentos para gerar estatísticas.
-                       </p>
-                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Badge variant="outline" className="border-gray-400">Tags</Badge> Etiquetas de Crimes
-                </CardTitle>
-                <CardDescription>
-                  Tags automáticas geradas pela IA
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {caseStats?.crimeTypes && caseStats.crimeTypes.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {caseStats.crimeTypes.map((crime) => (
-                      <Badge 
-                        key={crime.name}
-                        variant="secondary" 
-                        className="bg-blue-50 text-blue-800 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-300"
-                      >
-                        {crime.name}
-                      </Badge>
+                {recentAnalyses.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentAnalyses.map((analysis) => (
+                      <div key={analysis.id} className="p-4 border rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant="outline">{analysis.analysisType}</Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(analysis.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-sm">Modelo: {analysis.modelUsed}</p>
+                        {analysis.confidenceScore && (
+                          <p className="text-sm">Confiança: {(analysis.confidenceScore * 100).toFixed(1)}%</p>
+                        )}
+                      </div>
                     ))}
                   </div>
-                 ) : (
-                   <p className="text-muted-foreground py-6 text-center">
-                     Nenhuma tag detectada ainda
-                   </p>
-                 )}
+                ) : (
+                  <div className="text-center py-8">
+                    <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhuma análise encontrada</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Modals */}
+      {showCaseManager && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-auto m-4">
+            <CaseManager 
+              onCaseSelect={handleCaseSelect}
+              selectedCaseId={currentCase?.id}
+            />
+            <div className="flex justify-end mt-4">
+              <Button variant="outline" onClick={() => setShowCaseManager(false)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showFileUploader && currentCase && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 max-w-2xl w-full m-4">
+            <FileUploader 
+              caseId={currentCase.id} 
+              onClose={() => setShowFileUploader(false)}
+              onUploadComplete={() => {
+                loadCaseStats();
+                loadRecentData();
+              }}
+            />
           </div>
         </div>
       )}
     </div>
   );
-};
-
-export default Dashboard;
+}

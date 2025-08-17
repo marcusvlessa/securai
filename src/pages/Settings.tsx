@@ -6,18 +6,20 @@ import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Key, Bot, Database, HardDrive, Globe, Languages, Lock, AlertTriangle, Info, EyeOff, Eye, CheckCircle } from 'lucide-react';
+import { Key, Bot, Database, HardDrive, Globe, Languages, Lock, AlertTriangle, Info, EyeOff, Eye, CheckCircle, Camera, Brain, Volume2 } from 'lucide-react';
 import { getGroqSettings, saveGroqSettings, GroqSettings, hasValidApiKey } from '../services/groqService';
 
 const Settings = () => {
   const [settings, setSettings] = useState<GroqSettings>({
     groqApiKey: '',
     groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-    groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    model: 'llama-3.2-90b-vision-preview',
+    groqModel: 'llama-3.2-90b-vision-preview', // Modelo padrão para análise de imagem (disponível)
+    model: 'llama-3.2-90b-vision-preview', // Modelo padrão para análise de imagem (disponível)
     whisperModel: 'whisper-large-v3',
     whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
-    language: 'pt'
+    language: 'pt',
+    imageAnalysisEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    imageAnalysisModel: 'llama-3.2-90b-vision-preview'
   });
   
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
@@ -278,83 +280,217 @@ const Settings = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectLabel>Modelos de Produção</SelectLabel>
-                    <SelectItem value="gemma2-9b-it">Gemma 2 9B</SelectItem>
-                    <SelectItem value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile</SelectItem>
-                    <SelectItem value="llama-3.1-8b-instant">Llama 3.1 8B Instant</SelectItem>
-                    <SelectItem value="llama-guard-3-8b">Llama Guard 3 8B</SelectItem>
+                    <SelectLabel>Modelos de Análise de Imagem (Prioritários)</SelectLabel>
+                    <SelectItem value="llama-3.3-70b-versatile">🎯 Llama 3.3 70B Versatile (RECOMENDADO - Especializado em Imagens)</SelectItem>
+                    <SelectItem value="llama-3.2-70b-versatile">Llama 3.2 70B Versatile</SelectItem>
+                    <SelectItem value="llama-3.1-8b-instruct">Llama 3.1 8B Instruct</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Modelos de Texto</SelectLabel>
+                    <SelectItem value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B</SelectItem>
                     <SelectItem value="llama3-70b-8192">Llama 3 70B</SelectItem>
                     <SelectItem value="llama3-8b-8192">Llama 3 8B</SelectItem>
                   </SelectGroup>
                   <SelectGroup>
-                    <SelectLabel>Modelos de Preview</SelectLabel>
-                    <SelectItem value="allam-2-7b">Allam 2 7B</SelectItem>
-                    <SelectItem value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill Llama 70B</SelectItem>
-                    <SelectItem value="meta-llama/llama-4-maverick-17b-128e-instruct">Llama 4 Maverick 17B</SelectItem>
-                    <SelectItem value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B (Recomendado)</SelectItem>
+                    <SelectLabel>Modelos de Segurança</SelectLabel>
+                    <SelectItem value="llama-guard-3-8b">Llama Guard 3 8B</SelectItem>
                     <SelectItem value="meta-llama/Llama-Guard-4-12B">Llama Guard 4 12B</SelectItem>
-                    <SelectItem value="mistral-saba-24b">Mistral Saba 24B</SelectItem>
-                    <SelectItem value="qwen-qwq-32b">Qwen QWQ 32B</SelectItem>
                   </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Sistemas de Preview</SelectLabel>
-                    <SelectItem value="compound-beta">Compound Beta</SelectItem>
-                    <SelectItem value="compound-beta-mini">Compound Beta Mini</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="whisperModel">Modelo de Transcrição</Label>
-              <Select 
-                value={settings.whisperModel} 
-                onValueChange={(value) => handleSettingsChange('whisperModel', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um modelo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Modelos de Transcrição</SelectLabel>
-                    <SelectItem value="whisper-large-v3">Whisper Large V3</SelectItem>
-                    <SelectItem value="whisper-large-v3-turbo">Whisper Large V3 Turbo</SelectItem>
-                    <SelectItem value="distil-whisper-large-v3-en">Distil Whisper Large V3 EN</SelectItem>
-                    <SelectItem value="distil-whisper-large-v3">Distil Whisper Large V3</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="whisperEndpoint">Endpoint de Transcrição</Label>
-              <Input
-                id="whisperEndpoint" 
-                value={settings.whisperApiEndpoint}
-                onChange={(e) => handleSettingsChange('whisperApiEndpoint', e.target.value)}
-                placeholder="https://api.groq.com/openai/v1/audio/transcriptions"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="language">Idioma do Sistema</Label>
-              <Select
-                value={settings.language}
-                onValueChange={(value) => handleSettingsChange('language', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um idioma" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pt">Português (Brasil)</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="es">Español</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </CardContent>
           <CardFooter>
             <Button onClick={handleSaveSettings} className="w-full">Salvar Configurações</Button>
+          </CardFooter>
+        </Card>
+
+        {/* Image Analysis Settings Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5" />
+              Configurações de Análise de Imagem
+            </CardTitle>
+            <CardDescription>Configure especificamente para análise forense de imagens</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                 <div className="flex items-center gap-2 text-blue-800 mb-2">
+                     <Brain className="h-4 w-4" />
+                     <span className="font-medium">Modelo Prioritário: Llama 3.3 70B Versatile</span>
+                   </div>
+                   <p className="text-sm text-blue-700">
+                     Especializado em análise de imagem, OCR, detecção facial e reconhecimento de objetos para investigações criminais.
+                   </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="imageAnalysisModel">Modelo para Análise de Imagem</Label>
+              <Select 
+                value={settings.imageAnalysisModel} 
+                onValueChange={(value) => handleSettingsChange('imageAnalysisModel', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o modelo para análise de imagem" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Modelos Especializados em Imagem</SelectLabel>
+                    <SelectItem value="llama-3.3-70b-versatile">🎯 Llama 3.3 70B Versatile (RECOMENDADO)</SelectItem>
+                    <SelectItem value="llama-3.2-70b-versatile">Llama 3.2 70B Versatile</SelectItem>
+                    <SelectItem value="llama-3.1-8b-instruct">Llama 3.1 8B Instruct</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Este modelo será usado especificamente para análise de imagens e visão computacional
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="imageAnalysisEndpoint">Endpoint para Análise de Imagem</Label>
+              <Input
+                id="imageAnalysisEndpoint" 
+                value={settings.imageAnalysisEndpoint}
+                onChange={(e) => handleSettingsChange('imageAnalysisEndpoint', e.target.value)}
+                placeholder="https://api.groq.com/openai/v1/chat/completions"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Endpoint específico para requisições de análise de imagem
+              </p>
+            </div>
+
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2 text-green-800 mb-2">
+                <CheckCircle className="h-4 w-4" />
+                <span className="font-medium">Capacidades Automáticas</span>
+              </div>
+              <ul className="text-sm text-green-700 space-y-1">
+                <li>• <strong>OCR Automático:</strong> Extração completa de texto</li>
+                <li>• <strong>Detecção Facial:</strong> Identificação automática de rostos</li>
+                <li>• <strong>Reconhecimento de Placas:</strong> Formato brasileiro e Mercosul</li>
+                <li>• <strong>Análise de Objetos:</strong> Classificação automática</li>
+                <li>• <strong>Relatório Completo:</strong> Geração automática de relatórios</li>
+              </ul>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleSaveSettings} className="w-full">Salvar Configurações de Imagem</Button>
+          </CardFooter>
+        </Card>
+
+        {/* Audio Analysis Settings Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Volume2 className="h-5 w-5" />
+              Configurações de Análise de Áudio
+            </CardTitle>
+            <CardDescription>Configure especificamente para transcrição e análise de áudio</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <div className="flex items-center gap-2 text-purple-800 mb-2">
+                <Brain className="h-4 w-4" />
+                <span className="font-medium">Modelo Prioritário: Whisper Large V3</span>
+              </div>
+              <p className="text-sm text-purple-700">
+                Especializado em transcrição de áudio com alta precisão e suporte a múltiplos idiomas para investigações criminais.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="whisperModel">Modelo Whisper para Transcrição</Label>
+              <Select 
+                value={settings.whisperModel} 
+                onValueChange={(value) => handleSettingsChange('whisperModel', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o modelo Whisper" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Modelos Whisper Disponíveis</SelectLabel>
+                    <SelectItem value="whisper-large-v3">🎯 Whisper Large V3 (RECOMENDADO - Máxima Precisão)</SelectItem>
+                    <SelectItem value="whisper-large-v2">Whisper Large V2</SelectItem>
+                    <SelectItem value="whisper-medium">Whisper Medium</SelectItem>
+                    <SelectItem value="whisper-small">Whisper Small</SelectItem>
+                    <SelectItem value="whisper-tiny">Whisper Tiny (Rápido)</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Este modelo será usado especificamente para transcrição de áudio via API GROQ
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="whisperApiEndpoint">Endpoint para Transcrição de Áudio</Label>
+              <Input
+                id="whisperApiEndpoint" 
+                value={settings.whisperApiEndpoint}
+                onChange={(e) => handleSettingsChange('whisperApiEndpoint', e.target.value)}
+                placeholder="https://api.groq.com/openai/v1/audio/transcriptions"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Endpoint específico para requisições de transcrição de áudio
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="language">Idioma para Transcrição</Label>
+              <Select
+                value={settings.language}
+                onValueChange={(value) => handleSettingsChange('language', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o idioma principal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pt">🇧🇷 Português (Brasil) - RECOMENDADO</SelectItem>
+                  <SelectItem value="en">🇺🇸 English</SelectItem>
+                  <SelectItem value="es">🇪🇸 Español</SelectItem>
+                  <SelectItem value="fr">🇫🇷 Français</SelectItem>
+                  <SelectItem value="de">🇩🇪 Deutsch</SelectItem>
+                  <SelectItem value="auto">🔍 Detecção Automática</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Idioma principal para transcrição de áudio (Whisper detecta automaticamente outros idiomas)
+              </p>
+            </div>
+
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2 text-green-800 mb-2">
+                <CheckCircle className="h-4 w-4" />
+                <span className="font-medium">Capacidades Automáticas de Áudio</span>
+              </div>
+              <ul className="text-sm text-green-700 space-y-1">
+                <li>• <strong>Transcrição Automática:</strong> Conversão de áudio para texto</li>
+                <li>• <strong>Compressão Inteligente:</strong> Redução automática de arquivos grandes</li>
+                <li>• <strong>Divisão em Chunks:</strong> Processamento de áudios longos</li>
+                <li>• <strong>Speaker Diarization:</strong> Identificação de diferentes falantes</li>
+                <li>• <strong>Suporte Multi-idioma:</strong> Detecção automática de idiomas</li>
+              </ul>
+            </div>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-800 mb-2">
+                <Info className="h-4 w-4" />
+                <span className="font-medium">Limitações e Recomendações</span>
+              </div>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• <strong>Tamanho máximo:</strong> 25MB por arquivo</li>
+                <li>• <strong>Tamanho recomendado:</strong> Até 5MB para melhor performance</li>
+                <li>• <strong>Formatos suportados:</strong> WAV, MP3, MP4, OPUS, M4A, FLAC, AAC, OGG</li>
+                <li>• <strong>Compressão automática:</strong> Arquivos grandes são comprimidos automaticamente</li>
+                <li>• <strong>Chunking automático:</strong> Áudios muito longos são divididos em partes</li>
+              </ul>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleSaveSettings} className="w-full">Salvar Configurações de Áudio</Button>
           </CardFooter>
         </Card>
         
@@ -384,22 +520,7 @@ const Settings = () => {
               <Switch checked={isEncryption} onCheckedChange={handleToggleEncryption} />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="language">Idioma do Sistema</Label>
-              <Select
-                value={settings.language}
-                onValueChange={(value) => handleSettingsChange('language', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um idioma" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pt">Português (Brasil)</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="es">Español</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
           </CardContent>
         </Card>
         
@@ -471,14 +592,16 @@ const Settings = () => {
               <ul className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
                 <li>• React + TypeScript</li>
                 <li>• API GROQ para processamento de IA</li>
+                <li>• Llama 3.3 70B Versatile para análise de imagem</li>
+                <li>• Whisper Large V3 para transcrição de áudio</li>
                 <li>• Armazenamento local para privacidade</li>
               </ul>
             </div>
             
             <div className="space-y-1">
-              <p className="font-medium">Modelos Disponíveis</p>
+              <p className="font-medium">Modelos Prioritários</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Acesso a diversos modelos para processamento de texto e áudio através da API GROQ
+                <strong>Llama 3.3 70B Versatile</strong> para análise forense de imagens e <strong>Whisper Large V3</strong> para transcrição de áudio com detecção automática completa
               </p>
             </div>
             

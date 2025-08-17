@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste - Configurações de Áudio SecurAI</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1f2937;
+        }
+        .header h1 {
+            color: #3b82f6;
+            margin-bottom: 10px;
+        }
+        .config-section {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3b82f6;
+        }
+        .config-item {
+            margin-bottom: 15px;
+        }
+        .config-item label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #374151;
+        }
+        .config-item input, .config-item select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .config-item input:focus, .config-item select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .info-box {
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .info-box h4 {
+            margin: 0 0 10px 0;
+            color: #1e40af;
+        }
+        .info-box ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .info-box li {
+            margin-bottom: 5px;
+            color: #1e40af;
+        }
+        .test-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .test-button:hover {
+            background: #2563eb;
+        }
+        .test-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        .status.warning {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+        }
+        .log {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 Teste - Configurações de Áudio SecurAI</h1>
+            <p>Verifique e teste as configurações centralizadas de áudio do sistema</p>
+        </div>
+
+        <div class="config-section">
+            <h3>🔧 Configurações de Áudio</h3>
+            
+            <div class="config-item">
+                <label for="whisperModel">Modelo Whisper:</label>
+                <select id="whisperModel">
+                    <option value="whisper-large-v3">🎯 Whisper Large V3 (RECOMENDADO)</option>
+                    <option value="whisper-large-v2">Whisper Large V2</option>
+                    <option value="whisper-medium">Whisper Medium</option>
+                    <option value="whisper-small">Whisper Small</option>
+                    <option value="whisper-tiny">Whisper Tiny</option>
+                </select>
+            </div>
+
+            <div class="config-item">
+                <label for="whisperEndpoint">Endpoint da API:</label>
+                <input type="text" id="whisperEndpoint" value="https://api.groq.com/openai/v1/audio/transcriptions" placeholder="Endpoint para transcrição de áudio">
+            </div>
+
+            <div class="config-item">
+                <label for="language">Idioma Principal:</label>
+                <select id="language">
+                    <option value="pt">🇧🇷 Português (Brasil)</option>
+                    <option value="en">🇺🇸 English</option>
+                    <option value="es">🇪🇸 Español</option>
+                    <option value="fr">🇫🇷 Français</option>
+                    <option value="de">🇩🇪 Deutsch</option>
+                    <option value="auto">🔍 Detecção Automática</option>
+                </select>
+            </div>
+
+            <div class="info-box">
+                <h4>📋 Informações Importantes</h4>
+                <ul>
+                    <li><strong>Tamanho máximo:</strong> 25MB por arquivo</li>
+                    <li><strong>Tamanho recomendado:</strong> Até 5MB para melhor performance</li>
+                    <li><strong>Formatos suportados:</strong> WAV, MP3, MP4, OPUS, M4A, FLAC, AAC, OGG</li>
+                    <li><strong>Compressão automática:</strong> Arquivos grandes são comprimidos automaticamente</li>
+                    <li><strong>Chunking automático:</strong> Áudios muito longos são divididos em partes</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>🧪 Testes de Configuração</h3>
+            
+            <button class="test-button" onclick="testLocalStorage()">Testar LocalStorage</button>
+            <button class="test-button" onclick="testGroqSettings()">Testar Configurações GROQ</button>
+            <button class="test-button" onclick="testWhisperModel()">Testar Modelo Whisper</button>
+            <button class="test-button" onclick="clearLog()">Limpar Log</button>
+            
+            <div id="status"></div>
+        </div>
+
+        <div class="config-section">
+            <h3>📊 Log de Testes</h3>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // Função para adicionar logs
+        function addLog(message) {
+            const log = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            log.textContent += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Função para mostrar status
+        function showStatus(message, type = 'success') {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+
+        // Função para limpar log
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+            showStatus('Log limpo', 'success');
+        }
+
+        // Testar localStorage
+        function testLocalStorage() {
+            addLog('🧪 Testando localStorage...');
+            
+            try {
+                const testKey = 'securai-test-audio';
+                const testValue = { test: true, timestamp: Date.now() };
+                
+                localStorage.setItem(testKey, JSON.stringify(testValue));
+                const retrieved = JSON.parse(localStorage.getItem(testKey) || '{}');
+                
+                if (retrieved.test) {
+                    localStorage.removeItem(testKey);
+                    addLog('✅ localStorage funcionando corretamente');
+                    showStatus('localStorage funcionando', 'success');
+                } else {
+                    throw new Error('Falha ao recuperar dados');
+                }
+            } catch (error) {
+                addLog(`❌ Erro no localStorage: ${error.message}`);
+                showStatus('Erro no localStorage', 'error');
+            }
+        }
+
+        // Testar configurações GROQ
+        function testGroqSettings() {
+            addLog('🧪 Testando configurações GROQ...');
+            
+            try {
+                const storageKey = 'securai-api-settings';
+                const stored = localStorage.getItem(storageKey);
+                
+                if (stored) {
+                    const settings = JSON.parse(stored);
+                    addLog(`✅ Configurações encontradas no localStorage`);
+                    addLog(`   - Modelo Whisper: ${settings.whisperModel || 'Não configurado'}`);
+                    addLog(`   - Endpoint: ${settings.whisperApiEndpoint || 'Não configurado'}`);
+                    addLog(`   - Idioma: ${settings.language || 'Não configurado'}`);
+                    addLog(`   - API Key: ${settings.groqApiKey ? 'Configurada' : 'Não configurada'}`);
+                    
+                    if (settings.whisperModel === 'whisper-large-v3') {
+                        showStatus('Configurações GROQ corretas', 'success');
+                    } else {
+                        showStatus('Modelo Whisper incorreto', 'warning');
+                    }
+                } else {
+                    addLog('⚠️ Nenhuma configuração encontrada no localStorage');
+                    showStatus('Configurações não encontradas', 'warning');
+                }
+            } catch (error) {
+                addLog(`❌ Erro ao testar configurações: ${error.message}`);
+                showStatus('Erro ao testar configurações', 'error');
+            }
+        }
+
+        // Testar modelo Whisper
+        function testWhisperModel() {
+            addLog('🧪 Testando modelo Whisper...');
+            
+            const selectedModel = document.getElementById('whisperModel').value;
+            const selectedEndpoint = document.getElementById('whisperEndpoint').value;
+            const selectedLanguage = document.getElementById('language').value;
+            
+            addLog(`   - Modelo selecionado: ${selectedModel}`);
+            addLog(`   - Endpoint: ${selectedEndpoint}`);
+            addLog(`   - Idioma: ${selectedLanguage}`);
+            
+            if (selectedModel === 'whisper-large-v3') {
+                addLog('✅ Modelo Whisper correto selecionado');
+                showStatus('Modelo Whisper correto', 'success');
+            } else {
+                addLog('⚠️ Modelo Whisper não é o recomendado');
+                showStatus('Modelo Whisper não recomendado', 'warning');
+            }
+            
+            if (selectedEndpoint.includes('api.groq.com') && selectedEndpoint.includes('audio/transcriptions')) {
+                addLog('✅ Endpoint correto para transcrição de áudio');
+            } else {
+                addLog('❌ Endpoint incorreto para transcrição de áudio');
+                showStatus('Endpoint incorreto', 'error');
+            }
+        }
+
+        // Carregar configurações salvas
+        function loadSavedSettings() {
+            addLog('📥 Carregando configurações salvas...');
+            
+            try {
+                const storageKey = 'securai-api-settings';
+                const stored = localStorage.getItem(storageKey);
+                
+                if (stored) {
+                    const settings = JSON.parse(stored);
+                    
+                    if (settings.whisperModel) {
+                        document.getElementById('whisperModel').value = settings.whisperModel;
+                        addLog(`   - Modelo Whisper carregado: ${settings.whisperModel}`);
+                    }
+                    
+                    if (settings.whisperApiEndpoint) {
+                        document.getElementById('whisperEndpoint').value = settings.whisperApiEndpoint;
+                        addLog(`   - Endpoint carregado: ${settings.whisperApiEndpoint}`);
+                    }
+                    
+                    if (settings.language) {
+                        document.getElementById('language').value = settings.language;
+                        addLog(`   - Idioma carregado: ${settings.language}`);
+                    }
+                    
+                    addLog('✅ Configurações carregadas com sucesso');
+                } else {
+                    addLog('⚠️ Nenhuma configuração encontrada');
+                }
+            } catch (error) {
+                addLog(`❌ Erro ao carregar configurações: ${error.message}`);
+            }
+        }
+
+        // Salvar configurações
+        function saveSettings() {
+            addLog('💾 Salvando configurações...');
+            
+            try {
+                const settings = {
+                    whisperModel: document.getElementById('whisperModel').value,
+                    whisperApiEndpoint: document.getElementById('whisperEndpoint').value,
+                    language: document.getElementById('language').value
+                };
+                
+                const storageKey = 'securai-api-settings';
+                const existing = localStorage.getItem(storageKey);
+                let currentSettings = {};
+                
+                if (existing) {
+                    currentSettings = JSON.parse(existing);
+                }
+                
+                const updatedSettings = {
+                    ...currentSettings,
+                    ...settings
+                };
+                
+                localStorage.setItem(storageKey, JSON.stringify(updatedSettings));
+                addLog('✅ Configurações salvas com sucesso');
+                showStatus('Configurações salvas', 'success');
+                
+            } catch (error) {
+                addLog(`❌ Erro ao salvar configurações: ${error.message}`);
+                showStatus('Erro ao salvar', 'error');
+            }
+        }
+
+        // Event listeners para salvar automaticamente
+        document.getElementById('whisperModel').addEventListener('change', saveSettings);
+        document.getElementById('whisperEndpoint').addEventListener('change', saveSettings);
+        document.getElementById('language').addEventListener('change', saveSettings);
+
+        // Carregar configurações ao iniciar
+        window.addEventListener('load', () => {
+            addLog('🚀 Iniciando teste de configurações de áudio...');
+            loadSavedSettings();
+        });
+    </script>
+</body>
+</html>

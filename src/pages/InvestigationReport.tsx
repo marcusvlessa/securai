@@ -9,95 +9,134 @@ import { useCase } from '../contexts/CaseContext';
 import { generateInvestigationReportWithGroq } from '../services/groqService';
 
 const InvestigationReport = () => {
+  console.log('🔍 InvestigationReport: Componente sendo renderizado');
+  
   const { currentCase, getCaseData } = useCase();
   const [reportContent, setReportContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState('report');
   const [evidences, setEvidences] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  console.log('🔍 InvestigationReport: currentCase:', currentCase);
+  console.log('🔍 InvestigationReport: getCaseData function:', typeof getCaseData);
 
   // Fetch evidence data when case changes
   useEffect(() => {
+    console.log('🔍 InvestigationReport: useEffect executando, currentCase:', currentCase);
+    
     if (currentCase) {
-      const combinedEvidence: any[] = [];
-      
-      // Combine all types of evidence
-      const occurrenceAnalysisData = getCaseData('occurrenceAnalysis') || [];
-      occurrenceAnalysisData.forEach((item: any) => {
-        combinedEvidence.push({
-          name: item.filename || "Documento sem nome",
-          type: 'text',
-          content: item.analysis || "",
-          date: item.timestamp
+      try {
+        console.log('🔍 InvestigationReport: Processando caso:', currentCase.title);
+        
+        const combinedEvidence: any[] = [];
+        
+        // Combine all types of evidence
+        const occurrenceAnalysisData = getCaseData('occurrenceAnalysis') || [];
+        console.log('🔍 InvestigationReport: Dados de ocorrência:', occurrenceAnalysisData);
+        
+        occurrenceAnalysisData.forEach((item: any) => {
+          combinedEvidence.push({
+            name: item.filename || "Documento sem nome",
+            type: 'text',
+            content: item.analysis || "",
+            date: item.timestamp
+          });
         });
-      });
 
-      const imageAnalysisData = getCaseData('imageAnalysis') || [];
-      imageAnalysisData.forEach((item: any) => {
-        combinedEvidence.push({
-          name: item.imageName || "Imagem sem nome",
-          type: 'image',
-          analysis: item.processingResults,
-          date: item.timestamp
+        const imageAnalysisData = getCaseData('imageAnalysis') || [];
+        console.log('🔍 InvestigationReport: Dados de imagem:', imageAnalysisData);
+        
+        imageAnalysisData.forEach((item: any) => {
+          combinedEvidence.push({
+            name: item.imageName || "Imagem sem nome",
+            type: 'image',
+            analysis: item.processingResults,
+            date: item.timestamp
+          });
         });
-      });
 
-      const audioAnalysisData = getCaseData('audioAnalysis') || [];
-      audioAnalysisData.forEach((item: any) => {
-        combinedEvidence.push({
-          name: item.filename || "Áudio sem nome",
-          type: 'audio',
-          transcript: item.transcript || "",
-          date: item.timestamp
+        const audioAnalysisData = getCaseData('audioAnalysis') || [];
+        console.log('🔍 InvestigationReport: Dados de áudio:', audioAnalysisData);
+        
+        audioAnalysisData.forEach((item: any) => {
+          combinedEvidence.push({
+            name: item.filename || "Áudio sem nome",
+            type: 'audio',
+            transcript: item.transcript || "",
+            date: item.timestamp
+          });
         });
-      });
 
-      const linkAnalysisData = getCaseData('linkAnalysis') || [];
-      linkAnalysisData.forEach((item: any) => {
-        combinedEvidence.push({
-          name: item.filename || "Análise de vínculo sem nome",
-          type: 'link',
-          graphData: item.networkData || null,
-          date: item.timestamp
+        const linkAnalysisData = getCaseData('linkAnalysis') || [];
+        console.log('🔍 InvestigationReport: Dados de vínculo:', linkAnalysisData);
+        
+        linkAnalysisData.forEach((item: any) => {
+          combinedEvidence.push({
+            name: item.filename || "Análise de vínculo sem nome",
+            type: 'link',
+            graphData: item.networkData || null,
+            date: item.timestamp
+          });
         });
-      });
 
-      // Sort by date (newest first)
-      combinedEvidence.sort((a, b) => {
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-      });
+        // Sort by date (newest first)
+        combinedEvidence.sort((a, b) => {
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        });
 
-      setEvidences(combinedEvidence);
+        console.log('🔍 InvestigationReport: Evidências combinadas:', combinedEvidence);
+        setEvidences(combinedEvidence);
+        setError(null);
+      } catch (err) {
+        console.error('🔍 InvestigationReport: Erro ao processar evidências:', err);
+        setError(`Erro ao processar evidências: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+        setEvidences([]);
+      }
+    } else {
+      console.log('🔍 InvestigationReport: Nenhum caso selecionado');
+      setEvidences([]);
+      setError(null);
     }
   }, [currentCase, getCaseData]);
 
   const generateReport = async () => {
+    console.log('🔍 InvestigationReport: Iniciando geração de relatório');
+    
     if (!currentCase) {
-      toast.error('Por favor, selecione um caso primeiro');
+      const errorMsg = 'Por favor, selecione um caso primeiro';
+      console.error('🔍 InvestigationReport:', errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     if (evidences.length === 0) {
-      toast.error('Não há evidências disponíveis para gerar um relatório');
+      const errorMsg = 'Não há evidências disponíveis para gerar um relatório';
+      console.error('🔍 InvestigationReport:', errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     setIsGenerating(true);
+    setError(null);
 
     try {
-      console.log('Generating report with evidence count:', evidences.length);
+      console.log('🔍 InvestigationReport: Gerando relatório com evidências:', evidences.length);
       
       // Send evidence data to report generator
-      console.log('Evidence data being sent to report generator:', evidences);
+      console.log('🔍 InvestigationReport: Dados sendo enviados para gerador:', evidences);
       const report = await generateInvestigationReportWithGroq(currentCase, evidences);
       
-      console.log('Report generated successfully, length:', report.length);
+      console.log('🔍 InvestigationReport: Relatório gerado com sucesso, tamanho:', report.length);
       setReportContent(report);
       setActiveTab('report');
       toast.success('Relatório de investigação gerado com sucesso');
     } catch (error) {
-      console.error('Error generating investigation report:', error);
-      toast.error('Erro ao gerar relatório de investigação: ' + 
-                 (error instanceof Error ? error.message : 'Erro desconhecido'));
+      console.error('🔍 InvestigationReport: Erro ao gerar relatório:', error);
+      const errorMsg = 'Erro ao gerar relatório de investigação: ' + 
+                 (error instanceof Error ? error.message : 'Erro desconhecido');
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsGenerating(false);
     }
@@ -118,6 +157,14 @@ const InvestigationReport = () => {
     document.body.removeChild(element);
   };
 
+  console.log('🔍 InvestigationReport: Renderizando componente com:', {
+    currentCase: !!currentCase,
+    evidencesCount: evidences.length,
+    reportContent: !!reportContent,
+    error,
+    isGenerating
+  });
+
   return (
     <div className="page-container py-6">
       <div className="page-header">
@@ -129,6 +176,28 @@ const InvestigationReport = () => {
           Gere relatórios detalhados baseados nas evidências do caso
         </p>
       </div>
+
+      {/* Debug Info */}
+      <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+        <h3 className="text-sm font-medium mb-2">Debug Info:</h3>
+        <p className="text-xs">Caso selecionado: {currentCase ? 'Sim' : 'Não'}</p>
+        <p className="text-xs">Evidências: {evidences.length}</p>
+        <p className="text-xs">Erro: {error || 'Nenhum'}</p>
+        <p className="text-xs">getCaseData: {typeof getCaseData}</p>
+      </div>
+
+      {error && (
+        <Card className="border-destructive bg-destructive-light mb-4">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              <p className="text-destructive-foreground">
+                {error}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {!currentCase ? (
         <Card className="border-warning bg-warning-light">

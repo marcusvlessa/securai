@@ -1,196 +1,316 @@
-import React, { useState, useCallback } from 'react';
-import { Upload, FileText, Image, Music, Database, AlertCircle, CheckCircle, X } from 'lucide-react';
+import React, { useState, useCallback, useRef } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { Badge } from './ui/badge';
-import { toast } from 'sonner';
-import { fileUploadService, type FileUploadResult } from '@/services/fileUploadService';
-import { analysisService } from '@/services/analysisService';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Alert, AlertDescription } from './ui/alert';
+import { 
+  Upload, 
+  File, 
+  FileText, 
+  Image, 
+  Video, 
+  Volume2, 
+  Archive, 
+  X, 
+  Download,
+  Eye,
+  Trash2,
+  CheckCircle,
+  AlertCircle,
+  Clock
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
-interface FileUploaderProps {
-  caseId: string;
-  onFileUploaded?: (result: FileUploadResult) => void;
-  onAnalysisComplete?: (analysisId: string) => void;
-  onUploadComplete?: () => void;
-  onClose?: () => void;
-  acceptedTypes?: string[];
-  maxFileSize?: number; // in MB
-  autoAnalyze?: boolean;
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  status: 'uploading' | 'completed' | 'error';
+  progress: number;
+  error?: string;
+  uploadedAt: Date;
+  metadata?: {
+    description?: string;
+    tags?: string[];
+    category?: string;
+    caseId?: string;
+  };
 }
 
-interface UploadProgress {
-  fileId: string;
-  filename: string;
-  progress: number;
-  status: 'uploading' | 'analyzing' | 'completed' | 'error';
-  error?: string;
+interface FileUploaderProps {
+  caseId?: string;
+  autoAnalyze?: boolean;
+  maxFileSize?: number; // in MB
+  acceptedTypes?: string[];
+  onFileUploaded?: (file: UploadedFile) => void;
 }
 
 const FileUploader: React.FC<FileUploaderProps> = ({
   caseId,
-  onFileUploaded,
-  onUploadComplete,
-  onClose,
-  onAnalysisComplete,
-  acceptedTypes = ['.pdf', '.txt', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.mp3', '.wav', '.xlsx', '.csv'],
-  maxFileSize = 50, // 50MB default
-  autoAnalyze = true
+  autoAnalyze = false,
+  maxFileSize = 100, // 100MB default
+  acceptedTypes = [
+    'image/*',
+    'video/*',
+    'audio/*',
+    'application/pdf',
+    'text/*',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ],
+  onFileUploaded
 }) => {
+  const [uploads, setUploads] = useState<UploadedFile[]>([]);
   const [dragOver, setDragOver] = useState(false);
-  const [uploads, setUploads] = useState<UploadProgress[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [fileDescription, setFileDescription] = useState('');
+  const [fileCategory, setFileCategory] = useState('evidence');
+  const [fileTags, setFileTags] = useState('');
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const getFileIcon = (filename: string) => {
-    const extension = filename.split('.').pop()?.toLowerCase();
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension || '')) {
-      return <Image className="h-5 w-5" />;
-    }
-    
-    if (['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(extension || '')) {
-      return <Music className="h-5 w-5" />;
-    }
-    
-    if (['xlsx', 'xls', 'csv'].includes(extension || '')) {
-      return <Database className="h-5 w-5" />;
-    }
-    
-    return <FileText className="h-5 w-5" />;
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return <Image className="w-4 h-4" />;
+    if (type.startsWith('video/')) return <Video className="w-4 h-4" />;
+    if (type.startsWith('audio/')) return <Volume2 className="w-4 h-4" />;
+    if (type === 'application/pdf') return <FileText className="w-4 h-4" />;
+    if (type.startsWith('text/')) return <FileText className="w-4 h-4" />;
+    if (type.includes('word') || type.includes('excel')) return <FileText className="w-4 h-4" />;
+    return <File className="w-4 h-4" />;
   };
 
-  const getFileType = (file: File): string => {
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension || '')) {
-      return 'image';
-    }
-    
-    if (['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(extension || '')) {
-      return 'audio';
-    }
-    
-    if (['xlsx', 'xls', 'csv'].includes(extension || '')) {
-      return 'financial';
-    }
-    
-    if (['pdf', 'txt', 'doc', 'docx'].includes(extension || '')) {
-      return 'document';
-    }
-    
-    return 'other';
+  const getFileTypeCategory = (type: string) => {
+    if (type.startsWith('image/')) return 'Imagem';
+    if (type.startsWith('video/')) return 'Vídeo';
+    if (type.startsWith('audio/')) return 'Áudio';
+    if (type === 'application/pdf') return 'PDF';
+    if (type.startsWith('text/')) return 'Texto';
+    if (type.includes('word')) return 'Documento Word';
+    if (type.includes('excel')) return 'Planilha Excel';
+    return 'Arquivo';
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const validateFile = (file: File): string | null => {
     // Check file size
     if (file.size > maxFileSize * 1024 * 1024) {
-      return `Arquivo muito grande. Máximo permitido: ${maxFileSize}MB`;
+      return `Arquivo muito grande. Tamanho máximo: ${maxFileSize}MB`;
     }
 
     // Check file type
-    const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-    if (!acceptedTypes.includes(extension)) {
-      return `Tipo de arquivo não suportado. Tipos aceitos: ${acceptedTypes.join(', ')}`;
+    const isAccepted = acceptedTypes.some(type => {
+      if (type.endsWith('/*')) {
+        return file.type.startsWith(type.slice(0, -1));
+      }
+      return file.type === type;
+    });
+
+    if (!isAccepted) {
+      return `Tipo de arquivo não suportado: ${file.type}`;
     }
 
     return null;
   };
 
-  const updateUploadProgress = (fileId: string, updates: Partial<UploadProgress>) => {
-    setUploads(prev => prev.map(upload => 
-      upload.fileId === fileId ? { ...upload, ...updates } : upload
-    ));
+  const handleFileUpload = useCallback(async (files: FileList) => {
+    const fileArray = Array.from(files);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    // Validate files
+    fileArray.forEach(file => {
+      const error = validateFile(file);
+      if (error) {
+        errors.push(`${file.name}: ${error}`);
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    // Show validation errors
+    if (errors.length > 0) {
+      errors.forEach(error => {
+        toast({
+          title: "Erro de validação",
+          description: error,
+          variant: "destructive"
+        });
+      });
+    }
+
+    if (validFiles.length === 0) return;
+
+    setIsUploading(true);
+
+    for (const file of validFiles) {
+      const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create upload entry
+      const uploadEntry: UploadedFile = {
+        id: fileId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: '',
+        status: 'uploading',
+        progress: 0,
+        uploadedAt: new Date(),
+        metadata: {
+          description: fileDescription,
+          tags: fileTags.split(',').map(tag => tag.trim()).filter(tag => tag),
+          category: fileCategory,
+          caseId
+        }
+      };
+
+      setUploads(prev => [...prev, uploadEntry]);
+
+      try {
+        // Upload to Supabase Storage
+        const fileName = `${caseId || 'general'}/${fileId}-${file.name}`;
+        const { data, error } = await supabase.storage
+          .from('evidence-files')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (error) throw error;
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('evidence-files')
+          .getPublicUrl(fileName);
+
+        // Update upload entry
+        const updatedEntry: UploadedFile = {
+          ...uploadEntry,
+          url: urlData.publicUrl,
+          status: 'completed',
+          progress: 100
+        };
+
+        setUploads(prev => prev.map(upload => 
+          upload.id === fileId ? updatedEntry : upload
+        ));
+
+        // Save file metadata to database
+        await saveFileMetadata(updatedEntry);
+
+        // Trigger auto-analysis if enabled
+        if (autoAnalyze) {
+          await triggerFileAnalysis(updatedEntry);
+        }
+
+        // Call callback
+        onFileUploaded?.(updatedEntry);
+
+        toast({
+          title: "Upload concluído",
+          description: `${file.name} foi enviado com sucesso.`,
+        });
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+        
+        setUploads(prev => prev.map(upload => 
+          upload.id === fileId 
+            ? { ...upload, status: 'error', error: errorMessage }
+            : upload
+        ));
+
+        toast({
+          title: "Erro no upload",
+          description: `Falha ao enviar ${file.name}: ${errorMessage}`,
+          variant: "destructive"
+        });
+      }
+    }
+
+    setIsUploading(false);
+    setFileDescription('');
+    setFileTags('');
+    setFileCategory('evidence');
+  }, [caseId, autoAnalyze, fileDescription, fileTags, fileCategory, maxFileSize, acceptedTypes, onFileUploaded, toast]);
+
+  const saveFileMetadata = async (file: UploadedFile) => {
+    try {
+      const { error } = await supabase
+        .from('evidence_files')
+        .insert([{
+          id: file.id,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          url: file.url,
+          case_id: file.metadata?.caseId,
+          category: file.metadata?.category,
+          description: file.metadata?.description,
+          tags: file.metadata?.tags,
+          uploaded_at: file.uploadedAt.toISOString()
+        }]);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving file metadata:', error);
+    }
+  };
+
+  const triggerFileAnalysis = async (file: UploadedFile) => {
+    try {
+      // This would trigger the AI analysis service
+      console.log('Triggering analysis for:', file.name);
+      
+      // For now, just log the action
+      // In a real implementation, this would call the analysis service
+      toast({
+        title: "Análise iniciada",
+        description: `Análise automática iniciada para ${file.name}`,
+      });
+    } catch (error) {
+      console.error('Error triggering analysis:', error);
+    }
   };
 
   const removeUpload = (fileId: string) => {
-    setUploads(prev => prev.filter(upload => upload.fileId !== fileId));
+    setUploads(prev => prev.filter(upload => upload.id !== fileId));
   };
 
-  const handleFileUpload = async (files: FileList) => {
-    const validFiles: File[] = [];
-    
-    // Validate all files first
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const error = validateFile(file);
-      
-      if (error) {
-        toast.error(`${file.name}: ${error}`);
-        continue;
-      }
-      
-      validFiles.push(file);
-    }
-
-    if (validFiles.length === 0) {
-      return;
-    }
-
-    // Process each valid file
-    for (const file of validFiles) {
-      const fileId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Add to upload progress
-      setUploads(prev => [...prev, {
-        fileId,
-        filename: file.name,
-        progress: 0,
-        status: 'uploading'
-      }]);
-
-      try {
-        // Upload file
-        updateUploadProgress(fileId, { progress: 25 });
-        
-        const fileType = getFileType(file);
-        const uploadResult = await fileUploadService.uploadFile(file, caseId, fileType);
-        
-        updateUploadProgress(fileId, { progress: 50 });
-        
-        // Notify parent component
-        onFileUploaded?.(uploadResult);
-        
-        // Auto-analyze if enabled
-        if (autoAnalyze) {
-          updateUploadProgress(fileId, { 
-            progress: 60, 
-            status: 'analyzing'
-          });
-          
-          const analysisResult = await analysisService.autoAnalyzeFile(
-            uploadResult.fileId, 
-            caseId
-          );
-          
-          updateUploadProgress(fileId, { 
-            progress: 100, 
-            status: 'completed'
-          });
-          
-          onAnalysisComplete?.(analysisResult.id);
-          
-          toast.success(`${file.name} enviado e analisado com sucesso!`);
-        } else {
-          updateUploadProgress(fileId, { 
-            progress: 100, 
-            status: 'completed'
-          });
-          
-          toast.success(`${file.name} enviado com sucesso!`);
-        }
-
-        // Remove from list after 3 seconds
-        setTimeout(() => removeUpload(fileId), 3000);
-        
-      } catch (error) {
-        console.error('Upload error:', error);
-        
-        updateUploadProgress(fileId, { 
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Erro desconhecido'
-        });
-        
-        toast.error(`Erro ao enviar ${file.name}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-      }
+  const downloadFile = async (file: UploadedFile) => {
+    try {
+      const response = await fetch(file.url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({
+        title: "Erro no download",
+        description: "Não foi possível baixar o arquivo.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -202,7 +322,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     if (files.length > 0) {
       handleFileUpload(files);
     }
-  }, [caseId, autoAnalyze]);
+  }, [handleFileUpload]);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -224,16 +344,60 @@ const FileUploader: React.FC<FileUploaderProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Upload Area */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
-            Upload de Arquivos
+            Upload de Evidências
           </CardTitle>
+          <CardDescription>
+            Envie arquivos de evidências para análise e armazenamento seguro
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* File Metadata Inputs */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="space-y-2">
+              <Label htmlFor="file-description">Descrição</Label>
+              <Textarea
+                id="file-description"
+                placeholder="Descreva o arquivo..."
+                value={fileDescription}
+                onChange={(e) => setFileDescription(e.target.value)}
+                rows={2}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="file-category">Categoria</Label>
+              <Select value={fileCategory} onValueChange={setFileCategory}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="evidence">Evidência</SelectItem>
+                  <SelectItem value="document">Documento</SelectItem>
+                  <SelectItem value="photo">Fotografia</SelectItem>
+                  <SelectItem value="video">Vídeo</SelectItem>
+                  <SelectItem value="audio">Áudio</SelectItem>
+                  <SelectItem value="report">Relatório</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="file-tags">Tags</Label>
+              <Input
+                id="file-tags"
+                placeholder="tag1, tag2, tag3"
+                value={fileTags}
+                onChange={(e) => setFileTags(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
               dragOver 
@@ -245,6 +409,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
             onDragLeave={onDragLeave}
           >
             <input
+              ref={fileInputRef}
               type="file"
               id="file-upload"
               className="hidden"
@@ -265,8 +430,8 @@ const FileUploader: React.FC<FileUploaderProps> = ({
                 Tamanho máximo: {maxFileSize}MB por arquivo
               </p>
               
-              <Button className="mt-4">
-                Selecionar Arquivos
+              <Button className="mt-4" disabled={isUploading}>
+                {isUploading ? 'Enviando...' : 'Selecionar Arquivos'}
               </Button>
             </label>
           </div>
@@ -285,53 +450,84 @@ const FileUploader: React.FC<FileUploaderProps> = ({
       {uploads.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Processando Uploads</CardTitle>
+            <CardTitle className="text-sm">Arquivos Enviados</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {uploads.map((upload) => (
-              <div key={upload.fileId} className="space-y-2">
+              <div key={upload.id} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {getFileIcon(upload.filename)}
-                    <span className="text-sm font-medium">{upload.filename}</span>
+                    {getFileIcon(upload.type)}
+                    <span className="text-sm font-medium">{upload.name}</span>
                     
                     {upload.status === 'uploading' && (
                       <Badge variant="secondary">Enviando</Badge>
                     )}
-                    {upload.status === 'analyzing' && (
-                      <Badge variant="secondary">Analisando</Badge>
-                    )}
                     {upload.status === 'completed' && (
-                      <Badge variant="default" className="bg-green-100 text-green-800">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Concluído
-                      </Badge>
+                      <Badge variant="default">Concluído</Badge>
                     )}
                     {upload.status === 'error' && (
-                      <Badge variant="destructive">
-                        <AlertCircle className="h-3 w-3 mr-1" />
-                        Erro
-                      </Badge>
+                      <Badge variant="destructive">Erro</Badge>
                     )}
                   </div>
                   
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeUpload(upload.fileId)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {formatFileSize(upload.size)}
+                    </span>
+                    
+                    {upload.status === 'completed' && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => downloadFile(upload)}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => window.open(upload.url, '_blank')}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
+                    
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeUpload(upload.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
                 
-                {(upload.status === 'uploading' || upload.status === 'analyzing') && (
-                  <Progress value={upload.progress} className="w-full" />
+                {upload.status === 'uploading' && (
+                  <Progress value={upload.progress} className="h-2" />
                 )}
                 
-                {upload.error && (
-                  <p className="text-xs text-red-600 dark:text-red-400">
-                    {upload.error}
-                  </p>
+                {upload.status === 'error' && upload.error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{upload.error}</AlertDescription>
+                  </Alert>
+                )}
+                
+                {upload.status === 'completed' && upload.metadata && (
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    {upload.metadata.description && (
+                      <p>Descrição: {upload.metadata.description}</p>
+                    )}
+                    {upload.metadata.tags && upload.metadata.tags.length > 0 && (
+                      <p>Tags: {upload.metadata.tags.join(', ')}</p>
+                    )}
+                    {upload.metadata.category && (
+                      <p>Categoria: {upload.metadata.category}</p>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

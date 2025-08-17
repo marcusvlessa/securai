@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Frontend application
+  securai-app:
+    build: .
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - securai-db
+    networks:
+      - securai-network
+
+  # PostgreSQL database (for local development)
+  securai-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: securai
+      POSTGRES_USER: securai_user
+      POSTGRES_PASSWORD: securai_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - securai-network
+
+  # Redis for caching (optional)
+  securai-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - securai-network
+
+  # Nginx reverse proxy (optional)
+  securai-nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - securai-app
+    networks:
+      - securai-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  securai-network:
+    driver: bridge

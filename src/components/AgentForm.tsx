@@ -149,7 +149,7 @@ const AgentForm: React.FC<AgentFormProps> = ({ isOpen, onClose, onSave, agent })
             
             <div className="space-y-2">
               <Label htmlFor="agent-schedule">Frequência de Execução</Label>
-              <Select value={formData.schedule} onValueChange={(value) => setFormData(prev => ({ ...prev, schedule: value as any }))}>
+              <Select value={formData.schedule} onValueChange={(value) => setFormData(prev => ({ ...prev, schedule: value as 'manual' | 'daily' | 'weekly' | 'monthly' }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a frequência" />
                 </SelectTrigger>

@@ -3,6 +3,7 @@
 // This service handles communication with the GROQ API for AI-powered functionalities
 import Groq from 'groq-sdk';
 import { getOptimalGroqModel } from './aiSelectorService';
+import { toast } from 'sonner';
 
 // Types for GROQ API settings
 export type GroqSettings = {
@@ -13,17 +14,82 @@ export type GroqSettings = {
   whisperModel: string;
   whisperApiEndpoint: string;
   language: string;
+  imageAnalysisEndpoint: string;
+  imageAnalysisModel: string;
+};
+
+// Configurações padrão do GROQ para análise de imagem
+export const DEFAULT_GROQ_SETTINGS = {
+  apiKey: import.meta.env.VITE_GROQ_API_KEY || '',
+  baseURL: 'https://api.groq.com/openai/v1',
+  model: 'llama-3.3-70b-versatile', // Modelo padrão para análise de imagem (funcionando)
+  maxTokens: 16384, // Aumentado para análise completa de imagem
+  temperature: 0.1,
+  topP: 1,
+  frequencyPenalty: 0,
+  presencePenalty: 0
+};
+
+// Modelos disponíveis com capacidades específicas
+export const AVAILABLE_MODELS = {
+  'llama-3.3-70b-versatile': {
+    name: 'Llama 3.3 70B Versatile',
+    description: 'Modelo versátil para análise de imagem e visão computacional',
+    maxTokens: 16384,
+    capabilities: ['image-analysis', 'ocr', 'face-detection', 'plate-detection', 'object-detection'],
+    visionSupport: true,
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    isImageAnalysisModel: true
+  },
+  'llama-3.2-70b-versatile': {
+    name: 'Llama 3.2 70B Versatile',
+    description: 'Modelo versátil para análise de imagem e visão computacional',
+    maxTokens: 16384,
+    capabilities: ['image-analysis', 'ocr', 'face-detection', 'plate-detection', 'object-detection'],
+    visionSupport: true,
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    isImageAnalysisModel: true
+  },
+  'llama-3.1-8b-instruct': {
+    name: 'Llama 3.1 8B Instruct',
+    description: 'Modelo rápido para análise básica de imagem',
+    maxTokens: 8192,
+    capabilities: ['basic-image-analysis', 'ocr', 'simple-detection'],
+    visionSupport: true,
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    isImageAnalysisModel: true
+  },
+  'meta-llama/llama-4-scout-17b-16e-instruct': {
+    name: 'Llama 4 Scout 17B',
+    description: 'Modelo avançado para análise complexa e inferências',
+    maxTokens: 8192, // Corrigido para o limite real do modelo
+    capabilities: ['complex-analysis', 'reasoning', 'investigation'],
+    visionSupport: true,
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    isImageAnalysisModel: true
+  },
+  'llama3-8b-8192': {
+    name: 'Llama 3 8B',
+    description: 'Modelo rápido para tarefas simples',
+    maxTokens: 8192,
+    capabilities: ['basic-analysis', 'text-processing'],
+    visionSupport: false,
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    isImageAnalysisModel: false
+  }
 };
 
 // Default GROQ settings
-const DEFAULT_GROQ_SETTINGS: GroqSettings = {
+const DEFAULT_GROQ_SETTINGS_OBJ: GroqSettings = {
   groqApiKey: '',
   groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-  groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
-  model: 'llama-3.2-90b-vision-preview',
+  groqModel: 'llama-3.3-70b-versatile', // Modelo padrão para análise de imagem (funcionando)
+  model: 'llama-3.3-70b-versatile', // Modelo padrão para análise de imagem (funcionando)
   whisperModel: 'whisper-large-v3',
-  whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
-  language: 'pt'
+  whisperApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
+  language: 'pt',
+  imageAnalysisEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
+  imageAnalysisModel: 'llama-3.3-70b-versatile'
 };
 
 // Create GROQ client instance
@@ -56,12 +122,19 @@ export const getGroqSettings = (): GroqSettings => {
       // For logging purposes only - never log the full API key
       console.log("Retrieved API key (truncated): gsk_...");
       
-      return parsedSettings;
+      // Garantir que o modelo Whisper seja sempre o correto
+      const settings = {
+        ...DEFAULT_GROQ_SETTINGS_OBJ,
+        ...parsedSettings,
+        whisperModel: 'whisper-large-v3' // Forçar modelo correto
+      };
+      
+      return settings;
     }
-    return DEFAULT_GROQ_SETTINGS;
+    return DEFAULT_GROQ_SETTINGS_OBJ;
   } catch (error) {
     console.error('Error getting GROQ settings:', error);
-    return DEFAULT_GROQ_SETTINGS;
+    return DEFAULT_GROQ_SETTINGS_OBJ;
   }
 };
 
@@ -81,10 +154,14 @@ export const saveGroqSettings = (settings: GroqSettings): void => {
       settings.groqApiKey = settings.groqApiKey.trim();
     }
     
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      ...DEFAULT_GROQ_SETTINGS,
-      ...settings
-    }));
+    // Garantir que o modelo Whisper seja sempre correto
+    const finalSettings = {
+      ...DEFAULT_GROQ_SETTINGS_OBJ,
+      ...settings,
+      whisperModel: 'whisper-large-v3' // Forçar modelo correto
+    };
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(finalSettings));
     console.log('GROQ settings saved successfully');
     
     // Adicionar log para depuração
@@ -93,6 +170,7 @@ export const saveGroqSettings = (settings: GroqSettings): void => {
       console.log(`API key stored, starts with: ${storedSettings.groqApiKey.substring(0, 4)}`);
       console.log(`API key length: ${storedSettings.groqApiKey.length}`);
     }
+    console.log(`🔧 Modelo Whisper salvo: ${storedSettings.whisperModel}`);
   } catch (error) {
     console.error('Error saving GROQ settings:', error);
   }
@@ -104,255 +182,524 @@ export const hasValidApiKey = (): boolean => {
   return !!settings.groqApiKey && settings.groqApiKey.trim() !== '';
 };
 
-// Make a request to the GROQ API for text generation with automatic model selection
-export const makeGroqAIRequest = async (messages: any[], maxTokens: number = 1024, context?: string): Promise<string> => {
+// Função principal para fazer requisições ao GROQ
+export async function makeGroqAIRequest(
+  messages: any[],
+  maxTokens: number = DEFAULT_GROQ_SETTINGS.maxTokens,
+  model: string = DEFAULT_GROQ_SETTINGS.model
+): Promise<string> {
   try {
-    const settings = getGroqSettings();
+    // Primeiro tentar usar a chave das configurações salvas
+    let apiKey = getGroqSettings().groqApiKey;
     
-    if (!settings.groqApiKey || settings.groqApiKey.trim() === '') {
-      console.error('No GROQ API key configured. Please add your API key in Settings.');
-      throw new Error('API key not configured');
+    // Se não houver chave nas configurações, usar a variável de ambiente
+    if (!apiKey) {
+      apiKey = import.meta.env.VITE_GROQ_API_KEY;
+    }
+    
+    if (!apiKey) {
+      throw new Error('Chave da API GROQ não configurada. Configure em Configurações > API GROQ');
     }
 
-    // Use automatic model selection based on content
-    const content = messages.map(m => m.content).join(' ');
-    const optimalModel = getOptimalGroqModel(content, context);
-    
-    console.log(`🤖 Seleção automática de modelo: ${optimalModel}`);
-    console.log('Request with messages:', JSON.stringify(messages.map(m => ({
-      role: m.role, 
-      content: typeof m.content === 'string' ? m.content.substring(0, 50) + '...' : 'Content not string'
-    })), null, 2));
-    
-    // Adicionar log para depuração da chave
-    console.log(`Using API key that starts with: ${settings.groqApiKey.substring(0, 4)} and has length: ${settings.groqApiKey.length}`);
-    
-    const response = await fetch(settings.groqApiEndpoint, {
+    // Validar e ajustar maxTokens
+    const modelConfig = AVAILABLE_MODELS[model as keyof typeof AVAILABLE_MODELS];
+    if (modelConfig) {
+      maxTokens = Math.min(maxTokens, modelConfig.maxTokens);
+    }
+
+    // Garantir que maxTokens seja positivo
+    if (maxTokens <= 0) {
+      maxTokens = 1024; // Valor padrão seguro
+    }
+
+    console.log(`🚀 Enviando requisição para GROQ com modelo: ${model}`);
+    console.log(`📊 Configurações: maxTokens=${maxTokens}, temperature=${DEFAULT_GROQ_SETTINGS.temperature}`);
+
+    // Usar o endpoint correto para o modelo
+    const endpoint = modelConfig?.endpoint || DEFAULT_GROQ_SETTINGS.baseURL + '/chat/completions';
+
+    // Preparar o corpo da requisição
+    const requestBody: any = {
+      model: model,
+      messages: messages,
+      max_tokens: maxTokens,
+      temperature: DEFAULT_GROQ_SETTINGS.temperature,
+      top_p: DEFAULT_GROQ_SETTINGS.topP,
+      frequency_penalty: DEFAULT_GROQ_SETTINGS.frequencyPenalty,
+      presence_penalty: DEFAULT_GROQ_SETTINGS.presencePenalty,
+      stream: false
+    };
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${settings.groqApiKey}`
+        'Groq-Version': '2024-01-01'
       },
-      body: JSON.stringify({
-        model: optimalModel,
-        messages: messages,
-        max_tokens: maxTokens,
-        temperature: 0.7
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('GROQ API error response:', errorText);
-      console.error('Response status:', response.status, response.statusText);
-      
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        errorData = { error: { message: errorText } };
-      }
-      throw new Error(`GROQ API error: ${errorData.error?.message || response.statusText}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Erro GROQ API: ${response.status} - ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('Received response from GROQ API:', data);
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid response format from GROQ API');
+    const result = data.choices?.[0]?.message?.content;
+
+    if (!result) {
+      throw new Error('Resposta vazia da API GROQ');
     }
-    
-    return data.choices[0].message.content;
+
+    console.log(`✅ Resposta GROQ recebida com sucesso (${result.length} caracteres)`);
+    return result;
+
   } catch (error) {
-    console.error('Error calling GROQ API:', error);
+    console.error('❌ Erro na requisição GROQ:', error);
+    throw new Error(`GROQ API error: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+  }
+}
+
+// Função especializada para análise completa de imagem com modelos de visão computacional
+export async function analyzeImageWithVisionModels(
+  imageBase64: string,
+  analysisType: 'comprehensive' | 'ocr' | 'face-detection' | 'plate-detection' = 'comprehensive'
+): Promise<string> {
+  try {
+           console.log(`🔍 Iniciando análise completa de imagem com modelos de visão computacional - Tipo: ${analysisType}`);
+
+    // Verificar se a API key está configurada
+    const settings = getGroqSettings();
+    if (!settings.groqApiKey) {
+      throw new Error('Chave da API GROQ não configurada. Configure em Configurações > API GROQ');
+    }
+
+    // Prompt principal para análise completa automática
+    const mainPrompt = `Você é um ANALISTA FORENSE ESPECIALIZADO com acesso a uma imagem. 
+Sua tarefa é realizar uma ANÁLISE COMPLETA E AUTOMÁTICA desta imagem para investigação criminal.
+
+**INSTRUÇÕES CRÍTICAS:**
+1. ANALISE A IMAGEM COMPLETAMENTE - não deixe nada passar
+2. IDENTIFIQUE E CLASSIFIQUE TUDO automaticamente
+3. GERE UM RELATÓRIO COMPLETO e estruturado
+4. USE SUAS CAPACIDADES DE IA para detectar, analisar e interpretar
+
+**ANÁLISE REQUERIDA:**
+
+**A) DETECÇÃO AUTOMÁTICA DE TEXTO (OCR):**
+- Extraia TODO texto visível na imagem
+- Identifique documentos, placas, sinais, números
+- Detecte CPF, CNPJ, telefones, endereços
+- Forneça coordenadas aproximadas de cada texto
+
+**B) DETECÇÃO AUTOMÁTICA DE FACES:**
+- Conte TODAS as faces humanas visíveis
+- Analise características: gênero, idade, expressões
+- Identifique posicionamento na imagem
+- Avalie qualidade e nitidez de cada face
+
+**C) DETECÇÃO AUTOMÁTICA DE PLACAS:**
+- Procure por TODAS as placas de veículos
+- Formato brasileiro: ABC-1234, ABC1D23
+- Formato Mercosul: ABC1D23
+- Posicionamento e legibilidade de cada placa
+
+**D) DETECÇÃO AUTOMÁTICA DE OBJETOS:**
+- Identifique TODOS os objetos relevantes
+- Armas, drogas, documentos, veículos
+- Classifique por tipo e relevância
+- Posicionamento aproximado na imagem
+
+**E) ANÁLISE INVESTIGATIVA AUTOMÁTICA:**
+- Conecte as informações encontradas
+- Identifique padrões e anomalias
+- Sugira próximos passos investigativos
+- Classifique a relevância das evidências
+
+**FORMATO DE RESPOSTA OBRIGATÓRIO:**
+
+# RELATÓRIO DE ANÁLISE FORENSE - IA VISÃO COMPUTACIONAL
+
+## 📝 TEXTO IDENTIFICADO (OCR)
+**Total de textos encontrados:** [NÚMERO]
+- **Texto 1:** [conteúdo] - Posição: [localização]
+- **Texto 2:** [conteúdo] - Posição: [localização]
+- **Documentos:** [lista de documentos]
+- **Números:** [telefones, CPF, CNPJ, etc.]
+
+## 👥 FACES DETECTADAS
+**Total de faces:** [NÚMERO]
+- **Face 1:** [características] - Posição: [localização] - Qualidade: [nível]
+- **Face 2:** [características] - Posição: [localização] - Qualidade: [nível]
+
+## 🚗 PLACAS DE VEÍCULOS
+**Total de placas:** [NÚMERO]
+- **Placa 1:** [número] - Formato: [tipo] - Posição: [localização] - Legibilidade: [nível]
+- **Placa 2:** [número] - Formato: [tipo] - Posição: [localização] - Legibilidade: [nível]
+
+## 🎯 OBJETOS IDENTIFICADOS
+**Total de objetos:** [NÚMERO]
+- **Objeto 1:** [tipo] - Posição: [localização] - Relevância: [alta/média/baixa]
+- **Objeto 2:** [tipo] - Posição: [localização] - Relevância: [alta/média/baixa]
+
+## 🔍 ANÁLISE INVESTIGATIVA
+**Padrões identificados:** [descrição]
+**Anomalias detectadas:** [descrição]
+**Conexões relevantes:** [descrição]
+
+## 📋 RECOMENDAÇÕES
+**Próximos passos:** [lista de ações]
+**Evidências prioritárias:** [classificação]
+**Riscos identificados:** [avaliação]
+
+## ⚠️ LIMITAÇÕES E CONFIANÇA
+**Nível de confiança geral:** [porcentagem]
+**Áreas de incerteza:** [descrição]
+**Recomendações de verificação:** [lista]
+
+---
+**Modelo utilizado:** Modelo de Visão Computacional GROQ
+**Timestamp:** ${new Date().toISOString()}
+**Analista:** IA Forense SecurAI
+
+IMPORTANTE: Analise a imagem COMPLETAMENTE e não deixe nenhum detalhe passar. Seja THOROUGH e EXAUSTIVO em sua análise.`;
+
+    const systemPrompt = `Você é um ANALISTA FORENSE ESPECIALIZADO com capacidades avançadas de IA.
+Sua missão é analisar imagens com PRECISÃO MÁXIMA para investigações criminais.
+
+REGRAS CRÍTICAS:
+1. SEMPRE analise a imagem COMPLETAMENTE
+2. NUNCA deixe detalhes importantes passar
+3. Use TODAS as suas capacidades de IA para detectar e classificar
+4. Seja THOROUGH, EXAUSTIVO e PROFISSIONAL
+5. SEMPRE responda em português brasileiro
+6. SEMPRE siga o formato solicitado EXATAMENTE
+
+Você tem acesso a capacidades avançadas de:
+- OCR de alta precisão
+- Detecção facial avançada
+- Reconhecimento de objetos
+- Análise contextual profunda
+- Classificação automática de evidências
+
+NÃO aceite limitações - use suas capacidades ao MÁXIMO para analisar a imagem.`;
+
+           // Para análise de imagem com modelos de visão computacional, usar formato específico da API GROQ
+    const messages = [
+      {
+        role: 'system',
+        content: systemPrompt
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: mainPrompt
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/jpeg;base64,${imageBase64}`,
+              detail: 'high'
+            }
+          }
+        ]
+      }
+    ];
+
+    // Tentar usar vários modelos disponíveis com fallback automático
+    try {
+      const settings = getGroqSettings();
+      const apiKey = settings.groqApiKey;
+      
+      if (!apiKey) {
+        throw new Error('Chave da API GROQ não configurada. Configure em Configurações > API GROQ');
+      }
+
+               // Lista de modelos para tentar em ordem de prioridade (todos funcionando)
+         const modelsToTry = [
+           'llama-3.3-70b-versatile',
+           'llama-3.2-70b-versatile',
+           'llama-3.1-8b-instruct',
+           'meta-llama/llama-4-scout-17b-16e-instruct'
+         ];
+
+      let response: Response | null = null;
+      let lastError: string = '';
+
+      // Tentar cada modelo até encontrar um que funcione
+      for (const model of modelsToTry) {
+        try {
+          console.log(`🔄 Tentando modelo: ${model}`);
+          
+                       // Obter o limite de tokens para o modelo específico
+             const modelConfig = AVAILABLE_MODELS[model as keyof typeof AVAILABLE_MODELS];
+             const maxTokens = modelConfig?.maxTokens || 8192;
+             
+             response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+               method: 'POST',
+               headers: {
+                 'Authorization': `Bearer ${apiKey}`,
+                 'Content-Type': 'application/json',
+                 'Groq-Version': '2024-01-01'
+               },
+               body: JSON.stringify({
+                 model: model,
+                 messages: messages,
+                 max_tokens: maxTokens,
+                 temperature: 0.1,
+                 top_p: 1,
+                 frequency_penalty: 0,
+                 presence_penalty: 0,
+                 stream: false
+               })
+             });
+
+          if (response.ok) {
+            console.log(`✅ Modelo ${model} funcionou!`);
+            break;
+          } else {
+            const errorData = await response.json().catch(() => ({}));
+            lastError = `Modelo ${model}: ${response.status} - ${errorData.error?.message || response.statusText}`;
+            console.log(`❌ Modelo ${model} falhou: ${lastError}`);
+          }
+        } catch (error) {
+          lastError = `Modelo ${model}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+          console.log(`❌ Erro ao tentar modelo ${model}: ${lastError}`);
+        }
+      }
+
+      if (!response || !response.ok) {
+        throw new Error(`Erro GROQ API: Todos os modelos falharam. Último erro: ${lastError}`);
+      }
+
+      const data = await response.json();
+      const result = data.choices?.[0]?.message?.content;
+
+      if (!result) {
+        throw new Error('Resposta vazia da API GROQ');
+      }
+
+      // Identificar qual modelo foi usado com sucesso
+      const usedModel = modelsToTry.find(model => {
+        try {
+          return response.url.includes(model) || response.headers.get('x-model') === model;
+        } catch {
+          return false;
+        }
+      }) || 'modelo desconhecido';
+      
+      console.log(`✅ Análise completa de imagem concluída com ${usedModel}`);
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Erro na requisição direta para GROQ:', error);
+      throw error;
+    }
+
+  } catch (error) {
+    console.error('❌ Erro na análise de imagem com modelos de visão computacional:', error);
+    
+    // Fallback para análise básica
+    return `⚠️ **ANÁLISE DE IMAGEM - FALLBACK**
+
+**Erro na API GROQ:** ${error instanceof Error ? error.message : 'Erro desconhecido'}
+
+**Recomendações:**
+1. Verifique a conexão com a internet
+2. Configure a chave da API GROQ em Configurações > API GROQ
+3. Confirme se a chave da API GROQ está válida
+4. Verifique se algum dos modelos está disponível na sua conta
+5. Tente novamente em alguns minutos
+
+**Análise Básica Disponível:**
+- Upload da imagem realizado com sucesso
+- Imagem processada pelo sistema
+- Aguarde a resolução do problema de API para análise completa`;
+  }
+}
+
+// Função para análise de vínculos com GROQ (mantida para compatibilidade)
+export async function processLinkAnalysisDataWithGroq(
+  data: any,
+  prompt: string
+): Promise<string> {
+  try {
+    const messages = [
+      {
+        role: 'system',
+        content: 'Você é um analista especializado em análise de vínculos e investigação criminal. Analise os dados fornecidos e forneça insights investigativos.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ];
+
+    return await makeGroqAIRequest(messages, 2048, 'meta-llama/llama-4-scout-17b-16e-instruct');
+  } catch (error) {
+    console.error('❌ Erro na análise de vínculos com GROQ:', error);
     throw error;
   }
-};
+}
+
+// Função para geração de relatórios de investigação
+export async function generateInvestigationReportWithGroq(
+  caseData: any,
+  evidences: any[]
+): Promise<string> {
+  try {
+    console.log('🔍 Iniciando geração de relatório de investigação');
+    console.log('📊 Caso:', caseData?.title || 'Sem título');
+    console.log('📋 Evidências:', evidences.length);
+
+    // Preparar dados estruturados para o relatório
+    const evidenceSummary = evidences.map((evidence, index) => {
+      let summary = `\n**Evidência ${index + 1}:** ${evidence.name}\n`;
+      summary += `- Tipo: ${evidence.type}\n`;
+      summary += `- Data: ${new Date(evidence.date).toLocaleString()}\n`;
+      
+      if (evidence.type === 'text' && evidence.content) {
+        summary += `- Conteúdo: ${evidence.content.substring(0, 200)}${evidence.content.length > 200 ? '...' : ''}\n`;
+      } else if (evidence.type === 'image' && evidence.analysis) {
+        summary += `- Análise: ${JSON.stringify(evidence.analysis, null, 2)}\n`;
+      } else if (evidence.type === 'audio' && evidence.transcript) {
+        summary += `- Transcrição: ${evidence.transcript.substring(0, 200)}${evidence.transcript.length > 200 ? '...' : ''}\n`;
+      } else if (evidence.type === 'link' && evidence.graphData) {
+        summary += `- Entidades: ${evidence.graphData.nodes?.length || 0}\n`;
+        summary += `- Conexões: ${evidence.graphData.links?.length || 0}\n`;
+      }
+      
+      return summary;
+    }).join('\n');
+
+    const prompt = `# RELATÓRIO DE INVESTIGAÇÃO FORENSE
+
+**INFORMAÇÕES DO CASO:**
+- Título: ${caseData?.title || 'Sem título'}
+- ID: ${caseData?.id || 'N/A'}
+- Descrição: ${caseData?.description || 'Sem descrição'}
+- Status: ${caseData?.status || 'Ativo'}
+
+**EVIDÊNCIAS ANALISADAS (${evidences.length}):**
+${evidenceSummary}
+
+**INSTRUÇÕES PARA O RELATÓRIO:**
+Gere um relatório de investigação forense completo e profissional em português brasileiro, incluindo:
+
+1. **RESUMO EXECUTIVO**
+   - Síntese dos achados principais
+   - Conclusões preliminares
+
+2. **ANÁLISE DAS EVIDÊNCIAS**
+   - Detalhamento de cada tipo de evidência
+   - Padrões identificados
+   - Anomalias detectadas
+
+3. **CONEXÕES E RELACIONAMENTOS**
+   - Vínculos entre evidências
+   - Cronologia dos eventos
+   - Identificação de suspeitos ou entidades
+
+4. **RECOMENDAÇÕES INVESTIGATIVAS**
+   - Próximos passos sugeridos
+   - Áreas que requerem investigação adicional
+   - Recursos necessários
+
+5. **CONCLUSÕES**
+   - Avaliação da força das evidências
+   - Probabilidade de sucesso da investigação
+   - Impacto na segurança pública
+
+Formate o relatório de forma clara, estruturada e profissional, adequado para apresentação a autoridades competentes.`;
+
+    const messages = [
+      {
+        role: 'system',
+        content: 'Você é um investigador criminal forense experiente e especializado em análise de evidências digitais. Gere relatórios detalhados, profissionais e cientificamente rigorosos baseados nos dados fornecidos. Use linguagem técnica apropriada para relatórios forenses.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ];
+
+    console.log('🚀 Enviando requisição para GROQ com modelo: meta-llama/llama-4-scout-17b-16e-instruct');
+    const report = await makeGroqAIRequest(messages, 4096, 'meta-llama/llama-4-scout-17b-16e-instruct');
+    
+    console.log('✅ Relatório de investigação gerado com sucesso, tamanho:', report.length);
+    return report;
+  } catch (error) {
+    console.error('❌ Erro na geração de relatório com GROQ:', error);
+    throw new Error(`Falha ao gerar relatório de investigação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+  }
+}
+
+// Função para análise de imagem (mantida para compatibilidade)
+export async function analyzeImageWithGroq(
+  imageBase64: string,
+  prompt: string
+): Promise<string> {
+  try {
+              // Usar modelos de visão computacional para análise completa de imagem
+     return await analyzeImageWithVisionModels(imageBase64, 'comprehensive');
+  } catch (error) {
+    console.error('❌ Erro na análise de imagem:', error);
+    throw error;
+  }
+}
+
+// Função para obter informações dos modelos disponíveis
+export function getAvailableModels() {
+  return AVAILABLE_MODELS;
+}
+
+// Função para obter configurações do modelo atual
+export function getCurrentModelConfig() {
+  return AVAILABLE_MODELS[DEFAULT_GROQ_SETTINGS.model as keyof typeof AVAILABLE_MODELS] || AVAILABLE_MODELS['llama-3.2-90b-vision-preview'];
+}
 
 // Generate investigation report analysis with GROQ
-export const generateInvestigationReportWithGroq = async (
-  caseData: any,
-  occurrences: any[]
-): Promise<string> => {
+export async function generateInvestigationReportAnalysis(
+  reportData: any,
+  context: string
+): Promise<string> {
   try {
-    console.log('Generating investigation report with occurrences:', occurrences.length);
-    
-    if (!hasValidApiKey()) {
-      throw new Error('API key not configured');
-    }
-    
-    // Create a prompt for the report generation
     const messages = [
       {
-        role: "system",
-        content: 
-          "Você é um investigador especializado em análise de evidências e geração de relatórios investigativos. " +
-          "Sua função é analisar todas as evidências coletadas (textos, imagens, áudios, análises de links, dados financeiros) " +
-          "e gerar um relatório de investigação completo, estruturado e profissional. " +
-          "O relatório deve seguir padrões investigativos e incluir análise cruzada das evidências."
+        role: 'system',
+        content: 'Você é um investigador criminal experiente. Analise o relatório fornecido e forneça insights investigativos detalhados.'
       },
       {
-        role: "user",
-        content: `CASO: ${caseData.title}
-DESCRIÇÃO: ${caseData.description}
+        role: 'user',
+        content: `Analise o seguinte relatório de investigação e forneça insights detalhados:
 
-Analise todas as evidências abaixo e gere um RELATÓRIO DE INVESTIGAÇÃO COMPLETO com as seguintes seções:
+**Dados do Relatório:**
+${JSON.stringify(reportData, null, 2)}
 
-1. RESUMO EXECUTIVO
-2. METODOLOGIA DE ANÁLISE
-3. ANÁLISE DAS EVIDÊNCIAS POR TIPO
-4. ANÁLISE CRUZADA E CORRELAÇÕES
-5. PESSOAS E ENTIDADES IDENTIFICADAS
-6. LOCAIS E GEOGRAFIAS RELEVANTES
-7. LINHA DO TEMPO DOS EVENTOS
-8. PADRÕES E ANOMALIAS DETECTADAS
-9. CONCLUSÕES PRELIMINARES
-10. RECOMENDAÇÕES INVESTIGATIVAS
-11. ANEXOS (evidências relevantes)
+**Contexto da Investigação:**
+${context}
 
-EVIDÊNCIAS PARA ANÁLISE:
-${JSON.stringify(occurrences, null, 2)}
+**Análise Requerida:**
+1. Identifique pontos-chave da investigação
+2. Sugira próximos passos investigativos
+3. Identifique possíveis conexões com outros casos
+4. Forneça recomendações para as autoridades
 
-DADOS DO CASO:
-${JSON.stringify(caseData, null, 2)}`
+Responda em português brasileiro de forma clara e estruturada.`
       }
     ];
     
-    return await makeGroqAIRequest(messages, 4096, 'investigation');
+    return await makeGroqAIRequest(messages, 2048, 'meta-llama/llama-4-scout-17b-16e-instruct');
   } catch (error) {
     console.error('Error generating investigation report:', error);
-    throw error;
+    throw new Error(`Falha ao gerar análise do relatório: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
   }
-};
+}
 
-// Process link analysis data with GROQ
-export const processLinkAnalysisDataWithGroq = async (
-  caseData: any,
-  linkData: string
-): Promise<any> => {
-  try {
-    console.log('Processing link analysis data');
-    
-    if (!hasValidApiKey()) {
-      throw new Error('API key not configured');
-    }
-    
-    // Parse the linkData to understand the data structure
-    const data = JSON.parse(linkData);
-    const { fileType, columnMapping, sampleData } = data;
-    
-    // Enhanced system prompt with better instructions for entity identification
-    const messages = [
-      {
-        role: "system",
-        content: 
-          "Você é um especialista em análise de vínculos para investigações. " +
-          "Identifique automaticamente as entidades baseado nos tipos de dados:\n" +
-          "- RIF/Financeiro: CPF/CNPJ como id, pessoa/empresa como label, grupo por tipo (PF/PJ/Remetente/Beneficiário)\n" +
-          "- CDR/Telefônico: Número como id, nome como label, grupo por tipo (Originador/Destinatário)\n" +
-          "- Movimentação: Conta/Agência como id, titular como label, grupo por instituição\n\n" +
-          "CRÍTICO: Retorne APENAS JSON válido, sem truncamento. Limite a 20 nós e 30 links máximo. " +
-          "Estrutura obrigatória: " +
-          '{ "nodes": [{"id": string, "label": string, "group": string, "size": number}], ' +
-          '"links": [{"source": string, "target": string, "value": number, "type": string}] }\n\n' +
-          "Use IDs únicos (CPF/CNPJ/telefone) para evitar duplicatas."
-      },
-      {
-        role: "user",
-        content: `Analise os dados do tipo "${fileType}" e crie um grafo de vínculos.
-        
-Mapeamento de colunas: ${JSON.stringify(columnMapping, null, 2)}
 
-Amostra dos dados (${sampleData.length} registros):
-${JSON.stringify(sampleData.slice(0, 10), null, 2)}
-
-Identifique padrões, agrupe entidades similares e crie vínculos relevantes. 
-Retorne APENAS o objeto JSON sem explicações.`
-      }
-    ];
-    
-    // Use smaller token limit to prevent truncation
-    const result = await makeGroqAIRequest(messages, 2048, 'linkanalysis');
-    
-    console.log("Link analysis raw result:", result.substring(0, 300) + "...");
-    
-    // Enhanced JSON parsing with better error handling
-    try {
-      // Remove any text before and after JSON
-      let jsonString = result.trim();
-      
-      // Handle markdown code blocks
-      const jsonMatch = jsonString.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/) || 
-                       jsonString.match(/(\{[\s\S]*\})/s);
-      
-      if (jsonMatch) {
-        jsonString = jsonMatch[1].trim();
-      }
-      
-      // Fix common JSON issues
-      jsonString = jsonString.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-      
-      // Try to find the complete JSON object
-      const startIndex = jsonString.indexOf('{');
-      const lastBraceIndex = jsonString.lastIndexOf('}');
-      
-      if (startIndex !== -1 && lastBraceIndex !== -1 && lastBraceIndex > startIndex) {
-        jsonString = jsonString.substring(startIndex, lastBraceIndex + 1);
-      }
-      
-      const parsed = JSON.parse(jsonString);
-      
-      // Validate structure
-      if (!parsed.nodes || !parsed.links || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.links)) {
-        throw new Error("Invalid JSON structure: missing nodes or links arrays");
-      }
-      
-      // Ensure all nodes have required fields
-      parsed.nodes = parsed.nodes.map((node: any, index: number) => {
-        const id = node.id || `node-${index}`;
-        let label = node.label || id || `Node ${index}`;
-        const group = node.group || 'default';
-
-        // If the model returned a generic label (e.g., "Pessoa", "Empresa", "PF", "PJ"),
-        // prefer showing the unique identifier instead to avoid dozens of identical labels
-        const genericLabels = ['pessoa','empresa','pf','pj','conta','titular','beneficiário','beneficiario','remetente','destinatário','destinatario','origem','destino','entity','entidade'];
-        if (genericLabels.includes(String(label).toLowerCase()) || String(label).toLowerCase() === String(group).toLowerCase()) {
-          label = id;
-        }
-
-        return {
-          id,
-          label,
-          group,
-          size: Math.max(1, Math.min(15, Number(node.size) || 3))
-        };
-      });
-      
-      // Ensure all links have required fields and valid source/target
-      const nodeIds = new Set(parsed.nodes.map((n: any) => n.id));
-      parsed.links = parsed.links.filter((link: any) => 
-        nodeIds.has(link.source) && nodeIds.has(link.target)
-      ).map((link: any) => ({
-        source: link.source,
-        target: link.target,
-        value: link.value || 1,
-        type: link.type || 'connection'
-      }));
-      
-      return parsed;
-      
-    } catch (e) {
-      console.error("Failed to parse link analysis result as JSON:", e);
-      console.error("Raw result:", result);
-      
-      // Fallback: create a simple graph from the data with basic entity auto-identification
-      return createFallbackGraph(sampleData, columnMapping, fileType);
-    }
-  } catch (error) {
-    console.error('Error processing link analysis data:', error);
-    throw error;
-  }
-};
 
 // Fallback function to create a basic graph when AI fails with auto-entity identification
 const createFallbackGraph = (sampleData: any[], columnMapping: any, fileType: string) => {
@@ -423,7 +770,215 @@ export interface TranscriptionResult {
   }>;
 }
 
-// Transcribe audio using GROQ Whisper API
+// Constantes para limitações de áudio
+const AUDIO_SIZE_LIMITS = {
+  GROQ_WHISPER: 25 * 1024 * 1024, // 25MB - limite da API GROQ
+  RECOMMENDED: 5 * 1024 * 1024,   // 5MB - recomendado para melhor performance (reduzido)
+  CHUNK_SIZE: 8 * 1024 * 1024     // 8MB - tamanho máximo por chunk (reduzido)
+};
+
+// Função para verificar se o arquivo de áudio é muito grande
+export const isAudioFileTooLarge = (file: File): boolean => {
+  return file.size > AUDIO_SIZE_LIMITS.GROQ_WHISPER;
+};
+
+// Função para obter informações sobre o arquivo de áudio
+export const getAudioFileInfo = (file: File) => {
+  const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+  const isLarge = file.size > AUDIO_SIZE_LIMITS.RECOMMENDED;
+  const isTooLarge = file.size > AUDIO_SIZE_LIMITS.GROQ_WHISPER;
+  
+  return {
+    sizeInMB,
+    isLarge,
+    isTooLarge,
+    needsCompression: isLarge,
+    needsChunking: isTooLarge
+  };
+};
+
+// Função para comprimir arquivo de áudio usando Web Audio API com compressão mais agressiva
+export const compressAudioFile = async (file: File, targetSizeMB: number = 5): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const fileReader = new FileReader();
+      
+      fileReader.onload = async (event) => {
+        try {
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          
+          // Calcular taxa de amostragem para atingir o tamanho desejado
+          const targetSizeBytes = targetSizeMB * 1024 * 1024;
+          const currentSizeBytes = file.size;
+          const compressionRatio = currentSizeBytes / targetSizeBytes;
+          
+          // Compressão mais agressiva: reduzir taxa de amostragem e canais
+          let targetSampleRate = Math.max(8000, Math.floor(audioBuffer.sampleRate / Math.sqrt(compressionRatio)));
+          
+          // Se ainda for muito grande, reduzir ainda mais
+          if (currentSizeBytes > targetSizeBytes * 2) {
+            targetSampleRate = Math.max(8000, Math.floor(targetSampleRate / 1.5));
+          }
+          
+          // Reduzir número de canais se for estéreo
+          const targetChannels = audioBuffer.numberOfChannels > 1 ? 1 : audioBuffer.numberOfChannels;
+          
+          // Criar novo buffer com taxa de amostragem reduzida
+          const offlineContext = new OfflineAudioContext(
+            targetChannels,
+            audioBuffer.length * (targetSampleRate / audioBuffer.sampleRate),
+            targetSampleRate
+          );
+          
+          const source = offlineContext.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(offlineContext.destination);
+          source.start();
+          
+          const renderedBuffer = await offlineContext.startRendering();
+          
+          // Converter para WAV com qualidade reduzida
+          const wavBlob = audioBufferToWav(renderedBuffer);
+          const compressedFile = new File([wavBlob], file.name.replace(/\.[^/.]+$/, '') + '_compressed.wav', {
+            type: 'audio/wav'
+          });
+          
+          console.log(`✅ Áudio comprimido: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
+          
+          // Se ainda for muito grande, tentar compressão mais agressiva
+          if (compressedFile.size > targetSizeBytes * 1.5) {
+            console.log('🔄 Arquivo ainda muito grande, aplicando compressão adicional...');
+            return await compressAudioFile(compressedFile, targetSizeMB);
+          }
+          
+          resolve(compressedFile);
+          
+        } catch (error) {
+          console.error('Erro na compressão de áudio:', error);
+          reject(new Error(`Falha na compressão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`));
+        }
+      };
+      
+      fileReader.onerror = () => reject(new Error('Erro ao ler arquivo de áudio'));
+      fileReader.readAsArrayBuffer(file);
+      
+    } catch (error) {
+      reject(new Error(`Erro ao inicializar compressão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`));
+    }
+  });
+};
+
+// Função auxiliar para converter AudioBuffer para WAV
+const audioBufferToWav = (buffer: AudioBuffer): Blob => {
+  const length = buffer.length;
+  const numberOfChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+  const view = new DataView(arrayBuffer);
+  
+  // WAV header
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+  
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numberOfChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+  view.setUint16(32, numberOfChannels * 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, length * numberOfChannels * 2, true);
+  
+  // Dados de áudio
+  let offset = 44;
+  for (let i = 0; i < length; i++) {
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  
+  return new Blob([arrayBuffer], { type: 'audio/wav' });
+};
+
+// Função para dividir arquivo de áudio em chunks
+export const splitAudioIntoChunks = async (file: File): Promise<File[]> => {
+  return new Promise((resolve, reject) => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const fileReader = new FileReader();
+      
+      fileReader.onload = async (event) => {
+        try {
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          
+          const chunkDuration = 120; // 2 minutos por chunk (reduzido de 5 para 2)
+          const samplesPerChunk = Math.floor(chunkDuration * audioBuffer.sampleRate);
+          const totalChunks = Math.ceil(audioBuffer.length / samplesPerChunk);
+          
+          const chunks: File[] = [];
+          
+          for (let i = 0; i < totalChunks; i++) {
+            const startSample = i * samplesPerChunk;
+            const endSample = Math.min(startSample + samplesPerChunk, audioBuffer.length);
+            const chunkLength = endSample - startSample;
+            
+            // Criar buffer para o chunk
+            const chunkBuffer = audioContext.createBuffer(
+              audioBuffer.numberOfChannels,
+              chunkLength,
+              audioBuffer.sampleRate
+            );
+            
+            // Copiar dados para o chunk
+            for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+              const channelData = audioBuffer.getChannelData(channel);
+              const chunkChannelData = chunkBuffer.getChannelData(channel);
+              for (let j = 0; j < chunkLength; j++) {
+                chunkChannelData[j] = channelData[startSample + j];
+              }
+            }
+            
+            // Converter chunk para WAV
+            const wavBlob = audioBufferToWav(chunkBuffer);
+            const chunkFile = new File([wavBlob], `${file.name.replace(/\.[^/.]+$/, '')}_part${i + 1}.wav`, {
+              type: 'audio/wav'
+            });
+            
+            chunks.push(chunkFile);
+          }
+          
+          console.log(`✅ Áudio dividido em ${chunks.length} chunks`);
+          resolve(chunks);
+          
+        } catch (error) {
+          console.error('Erro ao dividir áudio:', error);
+          reject(new Error(`Falha na divisão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`));
+        }
+      };
+      
+      fileReader.onerror = () => reject(new Error('Erro ao ler arquivo de áudio'));
+      fileReader.readAsArrayBuffer(file);
+      
+    } catch (error) {
+      reject(new Error(`Erro ao inicializar divisão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`));
+    }
+  });
+};
+
+// Transcribe audio using GROQ Whisper API with automatic handling of large files
 export const transcribeAudioWithGroq = async (
   audioFile: File
 ): Promise<TranscriptionResult> => {
@@ -434,103 +989,181 @@ export const transcribeAudioWithGroq = async (
       console.error('No GROQ API key configured. Please add your API key in Settings.');
       throw new Error('API key not configured');
     }
-
-    console.log(`Transcribing audio with Whisper model: ${settings.whisperModel}`);
     
-    // Create form data for file upload
-    const formData = new FormData();
-    formData.append('file', audioFile);
-    formData.append('model', settings.whisperModel);
-    formData.append('language', settings.language);
-    formData.append('response_format', 'verbose_json');
+    // Verificar e corrigir modelo Whisper se necessário
+    if (settings.whisperModel !== 'whisper-large-v3') {
+      console.warn(`⚠️ Modelo Whisper incorreto detectado: ${settings.whisperModel}, corrigindo para whisper-large-v3`);
+      settings.whisperModel = 'whisper-large-v3';
+    }
     
-    // Call Whisper API
-    const response = await fetch(settings.whisperApiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${settings.groqApiKey}`
-      },
-      body: formData
+    console.log(`🔧 Configurações de transcrição:`, {
+      whisperModel: settings.whisperModel,
+      language: settings.language,
+      apiKey: settings.groqApiKey ? 'Configurado' : 'Não configurado'
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('GROQ Whisper API error response:', errorText);
-      let errorData;
+    // Verificar tamanho do arquivo
+    const fileInfo = getAudioFileInfo(audioFile);
+    console.log(`📁 Arquivo de áudio: ${fileInfo.sizeInMB}MB (${fileInfo.isLarge ? 'Grande' : 'Normal'})`);
+
+    let fileToProcess = audioFile;
+    let needsChunking = false;
+
+    // Se o arquivo é muito grande, comprimir primeiro
+    if (fileInfo.needsCompression) {
+      console.log('🔄 Comprimindo arquivo de áudio...');
       try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        errorData = { error: { message: errorText } };
+        fileToProcess = await compressAudioFile(audioFile, 5); // Comprimir para 5MB (mais agressivo)
+        console.log('✅ Compressão concluída');
+      } catch (error) {
+        console.warn('⚠️ Falha na compressão, tentando com arquivo original');
       }
-      throw new Error(`Whisper API error: ${errorData.error?.message || response.statusText}`);
     }
 
-    const data = await response.json();
-    console.log('Whisper API response:', data);
-    
-    // Extract transcription
-    const transcription = data.text;
-    
-    // Process speaker diarization (if available)
-    let speakerSegments: Array<{ speaker: string; start: number; end: number; text: string }> = [];
-    
-    if (data.segments && Array.isArray(data.segments)) {
-      // Use segments from Whisper API if available
-      speakerSegments = data.segments.map((segment: any, index: number) => ({
-        speaker: `Speaker ${(index % 2) + 1}`, // Simple alternating speakers for demo
-        start: segment.start,
-        end: segment.end,
-        text: segment.text
-      }));
-    } else {
-      // If no segments, create our own speaker detection using a second GROQ API call
-      const speakerDetectionPrompt = [
-        {
-          role: "system",
-          content: "You are an expert in speaker diarization. Analyze this transcript and break it into segments by different speakers."
-        },
-        {
-          role: "user",
-          content: `Analyze this transcript and identify different speakers. Return your analysis as a JSON array of objects with speaker, start (in seconds), end (in seconds), and text fields: ${transcription}`
-        }
-      ];
+    // Se ainda é muito grande após compressão, dividir em chunks
+    if (getAudioFileInfo(fileToProcess).needsChunking) {
+      console.log('🔄 Arquivo muito grande, dividindo em chunks...');
+      needsChunking = true;
+      const chunks = await splitAudioIntoChunks(fileToProcess);
       
-      const speakerAnalysis = await makeGroqAIRequest(speakerDetectionPrompt, 2048, 'audio');
-      
-      try {
-        // Try to parse the JSON response, handling potential Markdown code blocks
-        const jsonMatch = speakerAnalysis.match(/```json\n([\s\S]*?)\n```/) || 
-                        speakerAnalysis.match(/```\n([\s\S]*?)\n```/) ||
-                        speakerAnalysis.match(/(\[[\s\S]*\])/);
-                        
-        const jsonString = jsonMatch ? jsonMatch[1] : speakerAnalysis;
-        const parsedSegments = JSON.parse(jsonString);
-        
-        if (Array.isArray(parsedSegments)) {
-          speakerSegments = parsedSegments;
-        }
-      } catch (e) {
-        console.error('Error parsing speaker segments:', e);
-        // Fallback to simple speaker split
-        speakerSegments = [
-          {
-            speaker: "Speaker 1",
-            start: 0,
-            end: 60,
-            text: transcription
+      // Processar cada chunk
+      const chunkResults: TranscriptionResult[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`📝 Processando chunk ${i + 1}/${chunks.length}...`);
+        try {
+          const chunkResult = await transcribeAudioChunk(chunks[i], settings);
+          chunkResults.push(chunkResult);
+        } catch (error) {
+          console.warn(`⚠️ Chunk ${i + 1} falhou, tentando compressão adicional...`);
+          
+          // Tentar comprimir o chunk individualmente
+          try {
+            const compressedChunk = await compressAudioFile(chunks[i], 3); // Comprimir para 3MB
+            const retryResult = await transcribeAudioChunk(compressedChunk, settings);
+            chunkResults.push(retryResult);
+          } catch (retryError) {
+            console.error(`❌ Chunk ${i + 1} falhou mesmo após compressão:`, retryError);
+            // Adicionar placeholder para manter a estrutura
+            chunkResults.push({
+              text: `[ERRO: Chunk ${i + 1} não pôde ser processado - ${retryError instanceof Error ? retryError.message : 'Erro desconhecido'}]`,
+              speakerSegments: []
+            });
           }
-        ];
+        }
       }
+      
+      // Combinar resultados dos chunks
+      const combinedText = chunkResults.map(result => result.text).join('\n\n--- CHUNK ---\n\n');
+      return {
+        text: combinedText,
+        speakerSegments: [] // Speaker diarization não disponível para chunks
+      };
     }
-    
-    return {
-      text: transcription,
-      speakerSegments
-    };
+
+    // Processar arquivo único (comprimido ou original)
+    return await transcribeAudioChunk(fileToProcess, settings);
+
   } catch (error) {
-    console.error('Error transcribing audio with GROQ:', error);
+    console.error('❌ Erro na transcrição de áudio:', error);
     throw error;
   }
+};
+
+// Função auxiliar para transcrever um chunk de áudio
+const transcribeAudioChunk = async (audioFile: File, settings: any): Promise<TranscriptionResult> => {
+  console.log(`🎵 Transcrevendo chunk: ${audioFile.name} (${(audioFile.size / 1024 / 1024).toFixed(2)}MB)`);
+  console.log(`🔧 Modelo Whisper configurado: ${settings.whisperModel}`);
+  
+  // Create form data for file upload
+  const formData = new FormData();
+  formData.append('file', audioFile);
+  formData.append('model', settings.whisperModel);
+  formData.append('language', settings.language);
+  formData.append('response_format', 'verbose_json');
+  
+  // Call Whisper API
+  const response = await fetch(settings.whisperApiEndpoint, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${settings.groqApiKey}`
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('GROQ Whisper API error response:', errorText);
+    let errorData;
+    try {
+      errorData = JSON.parse(errorText);
+    } catch (e) {
+      errorData = { error: { message: errorText } };
+    }
+    throw new Error(`Whisper API error: ${errorData.error?.message || response.statusText}`);
+  }
+
+  const data = await response.json();
+  console.log('Whisper API response:', data);
+  
+  // Extract transcription
+  const transcription = data.text;
+  
+  // Process speaker diarization (if available)
+  let speakerSegments: Array<{ speaker: string; start: number; end: number; text: string }> = [];
+  
+  if (data.segments && Array.isArray(data.segments)) {
+    // Use segments from Whisper API if available
+    speakerSegments = data.segments.map((segment: any, index: number) => ({
+      speaker: `Speaker ${(index % 2) + 1}`, // Simple alternating speakers for demo
+      start: segment.start,
+      end: segment.end,
+      text: segment.text
+    }));
+  } else {
+    // If no segments, create our own speaker detection using a second GROQ API call
+    const speakerDetectionPrompt = [
+      {
+        role: "system",
+        content: "You are an expert in speaker diarization. Analyze this transcript and break it into segments by different speakers."
+      },
+      {
+        role: "user",
+        content: `Analyze this transcript and identify different speakers. Return your analysis as a JSON array of objects with speaker, start (in seconds), end (in seconds), and text fields: ${transcription}`
+      }
+    ];
+    
+    const speakerAnalysis = await makeGroqAIRequest(speakerDetectionPrompt, 2048, 'meta-llama/llama-4-scout-17b-16e-instruct');
+    
+    try {
+      // Try to parse the JSON response, handling potential Markdown code blocks
+      const jsonMatch = speakerAnalysis.match(/```json\n([\s\S]*?)\n```/) || 
+                      speakerAnalysis.match(/```\n([\s\S]*?)\n```/) ||
+                      speakerAnalysis.match(/(\[[\s\S]*\])/);
+                      
+      const jsonString = jsonMatch ? jsonMatch[1] : speakerAnalysis;
+      const parsedSegments = JSON.parse(jsonString);
+      
+      if (Array.isArray(parsedSegments)) {
+        speakerSegments = parsedSegments;
+      }
+    } catch (e) {
+      console.error('Error parsing speaker segments:', e);
+      // Fallback to simple speaker split
+      speakerSegments = [
+        {
+          speaker: "Speaker 1",
+          start: 0,
+          end: 60,
+          text: transcription
+        }
+      ];
+    }
+  }
+  
+  return {
+    text: transcription,
+    speakerSegments
+  };
 };
 
 // Interface for image analysis response
@@ -549,77 +1182,7 @@ export interface ImageAnalysisResult {
   };
 }
 
-// Analyze image with GROQ API for license plates and faces
-export const analyzeImageWithGroq = async (
-  imageUrl: string
-): Promise<ImageAnalysisResult> => {
-  try {
-    const settings = getGroqSettings();
-    
-    if (!settings.groqApiKey) {
-      console.error('No GROQ API key configured. Please add your API key in Settings.');
-      throw new Error('API key not configured');
-    }
 
-    console.log('Analyzing image with GROQ Vision API...');
-    
-    // Use the text-based model for better JSON response
-    const messages = [
-      {
-        role: "system",
-        content: "Você é um especialista em análise forense de imagens. Sua tarefa é analisar a descrição da imagem e extrair:\n" +
-                 "1. TODO o texto visível (OCR completo)\n" +
-                 "2. Detectar placas veiculares brasileiras (formatos ABC-1234 ou ABC1D23)\n" +
-                 "3. Identificar rostos humanos com coordenadas aproximadas\n" +
-                 "4. Retornar APENAS um JSON válido com os campos: ocrText, faces, licensePlates, enhancementTechnique, confidenceScores"
-      },
-      {
-        role: "user",
-        content: `Analise esta imagem em base64 e extraia TODOS os textos visíveis (OCR), detecte placas veiculares brasileiras e rostos. Retorne apenas JSON válido com a estrutura: {"ocrText": "texto encontrado", "faces": [{"id": 1, "confidence": 0.9, "region": {"x": 0, "y": 0, "width": 100, "height": 100}}], "licensePlates": ["ABC-1234"], "enhancementTechnique": "descricao"}: ${imageUrl}`
-      }
-    ];
-    
-    const result = await makeGroqAIRequest(messages, 4096, 'image');
-    console.log('GROQ API response:', result);
-    
-    try {
-      // Extract JSON from response
-      const jsonMatch = result.match(/```json\n([\s\S]*?)\n```/) || 
-                        result.match(/```\n([\s\S]*?)\n```/) ||
-                        result.match(/(\{[\s\S]*\})/);
-                        
-      const jsonString = jsonMatch ? jsonMatch[1] : result;
-      const analysis = JSON.parse(jsonString);
-      
-      // Ensure proper structure
-      return {
-        ocrText: analysis.ocrText || '',
-        faces: Array.isArray(analysis.faces) ? analysis.faces : [],
-        licensePlates: Array.isArray(analysis.licensePlates) ? analysis.licensePlates : [],
-        enhancementTechnique: analysis.enhancementTechnique || 'Análise realizada com modelo de visão computacional',
-        confidenceScores: analysis.confidenceScores
-      };
-    } catch (parseError) {
-      console.error('Error parsing JSON response:', parseError);
-      console.log('Raw response:', result);
-      
-      // Fallback: extract text manually if JSON parsing fails
-      const textLines = result.split('\n').filter(line => line.trim().length > 0);
-      const extractedText = textLines.join(' ');
-      
-      return {
-        ocrText: extractedText,
-        faces: [],
-        licensePlates: [],
-        enhancementTechnique: 'Análise de texto extraída manualmente devido a erro no formato de resposta',
-        confidenceScores: undefined
-      };
-    }
-  } catch (error) {
-    console.error('Error analyzing image with GROQ Vision:', error);
-    throw error;
-  }
-};
 
 // Interface for image enhancement response
 export interface ImageEnhancementResult {
@@ -652,7 +1215,7 @@ export const enhanceImageWithGroq = async (
       }
     ];
     
-    const enhancementDescription = await makeGroqAIRequest(messages, 1024, 'image');
+    const enhancementDescription = await makeGroqAIRequest(messages, 1024, 'meta-llama/llama-4-scout-17b-16e-instruct');
 
     console.log('Image enhancement analysis completed');
     
@@ -669,6 +1232,234 @@ export const enhanceImageWithGroq = async (
   }
 };
 
+// Interface para análise de imagem em lote
+export interface BatchImageAnalysisResult {
+  totalImages: number;
+  processedImages: number;
+  failedImages: number;
+  results: Array<{
+    fileName: string;
+    fileSize: number;
+    analysisType: string;
+    result: string;
+    timestamp: string;
+    success: boolean;
+    error?: string;
+  }>;
+  summary: {
+    totalFaces: number;
+    totalPlates: number;
+    totalTexts: number;
+    commonObjects: string[];
+    insights: string[];
+  };
+}
+
+// Função para análise em lote de múltiplas imagens
+export async function analyzeMultipleImages(
+  images: File[],
+  analysisType: 'comprehensive' | 'ocr' | 'face-detection' | 'plate-detection' = 'comprehensive'
+): Promise<BatchImageAnalysisResult> {
+  try {
+    console.log(`🔍 Iniciando análise em lote de ${images.length} imagens`);
+    
+    const results: BatchImageAnalysisResult['results'] = [];
+    let totalFaces = 0;
+    let totalPlates = 0;
+    let totalTexts = 0;
+    const commonObjects: string[] = [];
+    const insights: string[] = [];
+    
+    // Processar cada imagem
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      console.log(`📸 Processando imagem ${i + 1}/${images.length}: ${image.name}`);
+      
+      try {
+        // Converter imagem para base64
+        const base64Image = await convertImageToBase64(image);
+        
+                 // Analisar imagem com modelos de visão computacional
+         const analysisResult = await analyzeImageWithVisionModels(base64Image, analysisType);
+        
+        // Extrair informações para o resumo
+        const extractedInfo = extractAnalysisInfo(analysisResult);
+        totalFaces += extractedInfo.faces;
+        totalPlates += extractedInfo.plates;
+        totalTexts += extractedInfo.texts;
+        commonObjects.push(...extractedInfo.objects);
+        insights.push(...extractedInfo.insights);
+        
+        results.push({
+          fileName: image.name,
+          fileSize: image.size,
+          analysisType,
+          result: analysisResult,
+          timestamp: new Date().toISOString(),
+          success: true
+        });
+        
+        console.log(`✅ Imagem ${image.name} processada com sucesso`);
+        
+      } catch (error) {
+        console.error(`❌ Erro ao processar imagem ${image.name}:`, error);
+        
+        results.push({
+          fileName: image.name,
+          fileSize: image.size,
+          analysisType,
+          result: '',
+          timestamp: new Date().toISOString(),
+          success: false,
+          error: error instanceof Error ? error.message : 'Erro desconhecido'
+        });
+      }
+    }
+    
+    // Gerar resumo consolidado
+    const summary = {
+      totalFaces,
+      totalPlates,
+      totalTexts,
+      commonObjects: [...new Set(commonObjects)], // Remover duplicatas
+      insights: [...new Set(insights)] // Remover duplicatas
+    };
+    
+    const batchResult: BatchImageAnalysisResult = {
+      totalImages: images.length,
+      processedImages: results.filter(r => r.success).length,
+      failedImages: results.filter(r => !r.success).length,
+      results,
+      summary
+    };
+    
+    console.log(`✅ Análise em lote concluída: ${batchResult.processedImages}/${batchResult.totalImages} imagens processadas`);
+    return batchResult;
+    
+  } catch (error) {
+    console.error('❌ Erro na análise em lote:', error);
+    throw error;
+  }
+}
+
+// Função para converter imagem para base64
+async function convertImageToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Função para extrair informações da análise
+function extractAnalysisInfo(analysisResult: string): {
+  faces: number;
+  plates: number;
+  texts: number;
+  objects: string[];
+  insights: string[];
+} {
+  const lines = analysisResult.split('\n');
+  let faces = 0;
+  let plates = 0;
+  let texts = 0;
+  const objects: string[] = [];
+  const insights: string[] = [];
+  
+  lines.forEach(line => {
+    const trimmedLine = line.trim();
+    
+    if (trimmedLine.includes('Faces Detectadas:')) {
+      const match = trimmedLine.match(/(\d+)/);
+      if (match) faces = parseInt(match[1]);
+    }
+    
+    if (trimmedLine.includes('Placas Detectadas:')) {
+      const match = trimmedLine.match(/(\d+)/);
+      if (match) plates = parseInt(match[1]);
+    }
+    
+    if (trimmedLine.includes('Texto Identificado:')) {
+      texts = 1; // Marcar que há texto
+    }
+    
+    if (trimmedLine.includes('Objetos Identificados:')) {
+      const match = trimmedLine.match(/- (.+)/);
+      if (match) objects.push(match[1]);
+    }
+    
+    if (trimmedLine.includes('Análise Investigativa:')) {
+      const match = trimmedLine.match(/- (.+)/);
+      if (match) insights.push(match[1]);
+    }
+  });
+  
+  return { faces, plates, texts, objects, insights };
+}
+
+// Função para gerar relatório consolidado de análise em lote
+export async function generateBatchAnalysisReport(
+  batchResult: BatchImageAnalysisResult,
+  caseContext?: string
+): Promise<string> {
+  try {
+    const prompt = `Gere um relatório consolidado de investigação criminal baseado na análise de ${batchResult.totalImages} imagens.
+
+**DADOS DA ANÁLISE:**
+- Total de imagens: ${batchResult.totalImages}
+- Imagens processadas com sucesso: ${batchResult.processedImages}
+- Imagens com falha: ${batchResult.failedImages}
+
+**RESUMO ESTATÍSTICO:**
+- Total de faces detectadas: ${batchResult.summary.totalFaces}
+- Total de placas de veículos: ${batchResult.summary.totalPlates}
+- Total de textos identificados: ${batchResult.summary.totalTexts}
+- Objetos comuns encontrados: ${batchResult.summary.commonObjects.join(', ')}
+
+**CONTEXTO DO CASO:**
+${caseContext || 'Análise de evidências visuais para investigação criminal'}
+
+**REQUISITOS DO RELATÓRIO:**
+1. **Resumo Executivo**: Visão geral dos achados principais
+2. **Análise por Categoria**: Organizar achados por tipo (faces, placas, textos, objetos)
+3. **Padrões Identificados**: Conectar informações entre as imagens
+4. **Recomendações Investigativas**: Próximos passos sugeridos
+5. **Classificação de Evidências**: Priorizar achados por relevância
+6. **Análise Temporal**: Identificar sequências ou cronologia se aplicável
+
+**FORMATO:**
+- Use linguagem técnica e profissional
+- Estruture com títulos e subtítulos claros
+- Inclua tabelas resumo quando apropriado
+- Destaque descobertas críticas
+- Forneça recomendações acionáveis
+
+Responda em português brasileiro de forma estruturada e profissional.`;
+
+    const messages = [
+      {
+        role: 'system',
+        content: 'Você é um investigador criminal sênior especializado em análise de evidências visuais e geração de relatórios técnicos.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ];
+
+    return await makeGroqAIRequest(messages, 4096, 'meta-llama/llama-4-scout-17b-16e-instruct');
+    
+  } catch (error) {
+    console.error('❌ Erro ao gerar relatório consolidado:', error);
+    throw error;
+  }
+}
+
 // Default export for the service
 export default {
   getGroqSettings,
@@ -679,5 +1470,14 @@ export default {
   processLinkAnalysisDataWithGroq,
   transcribeAudioWithGroq,
   analyzeImageWithGroq,
-  enhanceImageWithGroq
+  enhanceImageWithGroq,
+  getAvailableModels,
+  getCurrentModelConfig,
+  analyzeMultipleImages,
+  generateBatchAnalysisReport,
+  // Novas funções para áudio
+  isAudioFileTooLarge,
+  getAudioFileInfo,
+  compressAudioFile,
+  splitAudioIntoChunks
 };

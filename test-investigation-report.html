@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste - Módulo de Relatório de Investigação</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Teste do Módulo de Relatório de Investigação</h1>
+    
+    <div class="test-section">
+        <h2>1. Teste de Roteamento</h2>
+        <p>Verificar se a rota <code>/investigation-report</code> está funcionando:</p>
+        <button class="test-button" onclick="testRoute()">Testar Rota</button>
+        <div id="route-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Teste de API GROQ</h2>
+        <p>Verificar se a API GROQ está configurada e funcionando:</p>
+        <button class="test-button" onclick="testGroqAPI()">Testar API GROQ</button>
+        <div id="groq-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Teste de Contexto do Caso</h2>
+        <p>Verificar se o contexto do caso está funcionando:</p>
+        <button class="test-button" onclick="testCaseContext()">Testar Contexto</button>
+        <div id="context-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Teste de Geração de Relatório</h2>
+        <p>Verificar se a geração de relatório está funcionando:</p>
+        <button class="test-button" onclick="testReportGeneration()">Testar Geração</button>
+        <div id="report-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Logs de Debug</h2>
+        <div id="debug-logs" class="result"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('debug-logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logEntry.className = `log-entry ${type}`;
+            logsDiv.appendChild(logEntry);
+        }
+
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            log(message, type);
+        }
+
+        async function testRoute() {
+            try {
+                log('Testando rota /investigation-report...');
+                const response = await fetch('/investigation-report');
+                
+                if (response.ok) {
+                    showResult('route-result', `✅ Rota funcionando! Status: ${response.status}`, 'success');
+                } else {
+                    showResult('route-result', `❌ Erro na rota! Status: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                showResult('route-result', `❌ Erro ao testar rota: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGroqAPI() {
+            try {
+                log('Testando API GROQ...');
+                
+                // Verificar se há configurações salvas
+                const settings = localStorage.getItem('securai-api-settings');
+                if (settings) {
+                    const parsedSettings = JSON.parse(settings);
+                    if (parsedSettings.groqApiKey) {
+                        showResult('groq-result', `✅ API GROQ configurada! Chave: ${parsedSettings.groqApiKey.substring(0, 10)}...`, 'success');
+                    } else {
+                        showResult('groq-result', '⚠️ API GROQ não configurada - chave vazia', 'error');
+                    }
+                } else {
+                    showResult('groq-result', '⚠️ API GROQ não configurada - configurações não encontradas', 'error');
+                }
+            } catch (error) {
+                showResult('groq-result', `❌ Erro ao testar API GROQ: ${error.message}`, 'error');
+            }
+        }
+
+        function testCaseContext() {
+            try {
+                log('Testando contexto do caso...');
+                
+                // Verificar se há caso selecionado
+                const currentCase = localStorage.getItem('securai-current-case');
+                if (currentCase) {
+                    const parsedCase = JSON.parse(currentCase);
+                    showResult('context-result', `✅ Caso selecionado: ${parsedCase.title}`, 'success');
+                } else {
+                    showResult('context-result', '⚠️ Nenhum caso selecionado', 'error');
+                }
+            } catch (error) {
+                showResult('context-result', `❌ Erro ao testar contexto: ${error.message}`, 'error');
+            }
+        }
+
+        async function testReportGeneration() {
+            try {
+                log('Testando geração de relatório...');
+                
+                // Simular dados de teste
+                const testCase = {
+                    id: 'test-case-1',
+                    title: 'Caso de Teste',
+                    description: 'Descrição do caso de teste',
+                    status: 'open'
+                };
+                
+                const testEvidences = [
+                    {
+                        name: 'Documento de Teste',
+                        type: 'text',
+                        content: 'Conteúdo de teste para análise',
+                        date: new Date().toISOString()
+                    }
+                ];
+                
+                showResult('report-result', `✅ Dados de teste preparados: ${testEvidences.length} evidências`, 'success');
+                log(`Caso de teste: ${testCase.title}`);
+                log(`Evidências: ${testEvidences.length}`);
+                
+            } catch (error) {
+                showResult('report-result', `❌ Erro ao testar geração: ${error.message}`, 'error');
+            }
+        }
+
+        // Inicializar logs
+        log('Sistema de teste iniciado');
+        log('Verifique o console do navegador para mais detalhes');
+        
+        // Adicionar listener para erros globais
+        window.addEventListener('error', (event) => {
+            log(`❌ Erro global: ${event.error?.message || event.message}`, 'error');
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            log(`❌ Promise rejeitada: ${event.reason}`, 'error');
+        });
+    </script>
+</body>
+</html>

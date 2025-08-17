@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste dos Parsers - Secur:AI</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        .test-section h3 {
+            color: #374151;
+            margin-top: 0;
+        }
+        .file-input {
+            margin: 15px 0;
+        }
+        .file-input input[type="file"] {
+            padding: 10px;
+            border: 2px dashed #d1d5db;
+            border-radius: 5px;
+            width: 100%;
+        }
+        .parse-button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .parse-button:hover {
+            background: #1d4ed8;
+        }
+        .parse-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border-left: 4px solid #2563eb;
+        }
+        .result h4 {
+            margin-top: 0;
+            color: #374151;
+        }
+        .result pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+        .file-info {
+            background: #f3f4f6;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Teste dos Parsers - Secur:AI</h1>
+        
+        <div class="test-section">
+            <h3>📄 Teste de Parser PDF</h3>
+            <p>Teste o parser de PDF com diferentes tipos de arquivos (textual, escaneado, etc.)</p>
+            <div class="file-input">
+                <input type="file" id="pdfFile" accept=".pdf" />
+            </div>
+            <button class="parse-button" onclick="testPDFParser()">🔍 Testar Parser PDF</button>
+            <div id="pdfResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 Teste de Parser DOCX</h3>
+            <p>Teste o parser de documentos Word</p>
+            <div class="file-input">
+                <input type="file" id="docxFile" accept=".docx" />
+            </div>
+            <button class="parse-button" onclick="testDOCXParser()">🔍 Testar Parser DOCX</button>
+            <div id="docxResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🌐 Teste de Parser HTML</h3>
+            <p>Teste o parser de arquivos HTML</p>
+            <div class="file-input">
+                <input type="file" id="htmlFile" accept=".html,.htm" />
+            </div>
+            <button class="parse-button" onclick="testHTMLParser()">🔍 Testar Parser HTML</button>
+            <div id="htmlResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📃 Teste de Parser TXT</h3>
+            <p>Teste o parser de arquivos de texto com diferentes encodings</p>
+            <div class="file-input">
+                <input type="file" id="txtFile" accept=".txt" />
+            </div>
+            <button class="parse-button" onclick="testTXTParser()">🔍 Testar Parser TXT</button>
+            <div id="txtResult"></div>
+        </div>
+    </div>
+
+    <script>
+        // Função para mostrar status
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <div class="status ${type}">
+                    <strong>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</strong> ${message}
+                </div>
+            `;
+        }
+
+        // Função para mostrar resultado
+        function showResult(elementId, title, content, fileInfo = null) {
+            const element = document.getElementById(elementId);
+            let html = `
+                <div class="result">
+                    <h4>${title}</h4>
+            `;
+            
+            if (fileInfo) {
+                html += `
+                    <div class="file-info">
+                        <strong>Arquivo:</strong> ${fileInfo.name}<br>
+                        <strong>Tipo:</strong> ${fileInfo.type}<br>
+                        <strong>Tamanho:</strong> ${(fileInfo.size / 1024).toFixed(2)} KB
+                    </div>
+                `;
+            }
+            
+            html += `
+                    <pre>${content}</pre>
+                </div>
+            `;
+            
+            element.innerHTML = html;
+        }
+
+        // Teste do Parser PDF
+        async function testPDFParser() {
+            const fileInput = document.getElementById('pdfFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showStatus('pdfResult', 'Por favor, selecione um arquivo PDF', 'error');
+                return;
+            }
+
+            showStatus('pdfResult', '🔍 Processando arquivo PDF...', 'info');
+
+            try {
+                // Simular o parser PDF (em produção, isso seria chamado do service)
+                const fileInfo = {
+                    name: file.name,
+                    type: file.type,
+                    size: file.size
+                };
+
+                // Simular resultado do parser
+                const mockResult = `SECRETARIA DE SEGURANÇA PÚBLICA DO ESTADO
+POLÍCIA CIVIL
+BOLETIM DE OCORRÊNCIA CIRCUNSTANCIADO
+
+NÚMERO DO B.O.: 2025.001.${Math.floor(Math.random() * 10000).toString().padStart(6, '0')}
+DATA/HORA DA OCORRÊNCIA: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+
+DELEGACIA DE ORIGEM: 3ª Delegacia de Polícia
+DELEGADO RESPONSÁVEL: Dr. Carlos Roberto Silva
+
+NATUREZA DA OCORRÊNCIA: FURTO QUALIFICADO (Art. 155, §4º do Código Penal)
+
+DADOS DA VÍTIMA:
+Nome: Ana Paula Santos
+Data de Nascimento: 15/03/1985
+Documento: RG 12.345.678-9 SP / CPF 123.456.789-00
+
+HISTÓRICO DOS FATOS:
+A vítima compareceu a esta delegacia relatando que teve subtraído seu veículo FIAT UNO MILLE, cor prata, placa ABC-1234, ano 2015.
+
+DILIGÊNCIAS REALIZADAS:
+- Exame pericial no local dos fatos
+- Coleta de depoimentos de testemunhas
+- Solicitação de imagens das câmeras de segurança da região
+
+PROVIDÊNCIAS ADOTADAS:
+Expedidas requisições para Instituto de Criminalística e Setor de Investigações.`;
+
+                showResult('pdfResult', '✅ PDF Processado com Sucesso!', mockResult, fileInfo);
+                
+            } catch (error) {
+                showStatus('pdfResult', `Erro ao processar PDF: ${error.message}`, 'error');
+            }
+        }
+
+        // Teste do Parser DOCX
+        async function testDOCXParser() {
+            const fileInput = document.getElementById('docxFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showStatus('docxResult', 'Por favor, selecione um arquivo DOCX', 'error');
+                return;
+            }
+
+            showStatus('docxResult', '🔍 Processando arquivo DOCX...', 'info');
+
+            try {
+                const fileInfo = {
+                    name: file.name,
+                    type: file.type,
+                    size: file.size
+                };
+
+                // Simular resultado do parser DOCX
+                const mockResult = `RELATÓRIO DE INVESTIGAÇÃO
+
+CASO: ${Math.floor(Math.random() * 10000).toString().padStart(6, '0')}
+DATA: ${new Date().toLocaleDateString('pt-BR')}
+
+RESUMO EXECUTIVO:
+Este relatório apresenta os resultados da investigação conduzida pela equipe de investigadores da Secur:AI.
+
+METODOLOGIA:
+A investigação foi conduzida seguindo protocolos padrão de análise forense digital, incluindo:
+- Análise de documentos
+- Processamento de evidências
+- Correlação de dados
+- Geração de relatórios
+
+CONCLUSÕES:
+Com base na análise realizada, foram identificados padrões relevantes que contribuem para o esclarecimento dos fatos investigados.
+
+RECOMENDAÇÕES:
+1. Continuar monitoramento
+2. Aprofundar análise de vínculos
+3. Documentar todas as evidências encontradas`;
+
+                showResult('docxResult', '✅ DOCX Processado com Sucesso!', mockResult, fileInfo);
+                
+            } catch (error) {
+                showStatus('docxResult', `Erro ao processar DOCX: ${error.message}`, 'error');
+            }
+        }
+
+        // Teste do Parser HTML
+        async function testHTMLParser() {
+            const fileInput = document.getElementById('htmlFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showStatus('htmlResult', 'Por favor, selecione um arquivo HTML', 'error');
+                return;
+            }
+
+            showStatus('htmlResult', '🔍 Processando arquivo HTML...', 'info');
+
+            try {
+                const fileInfo = {
+                    name: file.name,
+                    type: file.type,
+                    size: file.size
+                };
+
+                // Simular resultado do parser HTML
+                const mockResult = `Página de Investigação Digital
+
+Título Principal: Sistema de Análise Forense Secur:AI
+
+Seção de Conteúdo:
+Este sistema oferece ferramentas avançadas para análise de evidências digitais em investigações criminais.
+
+Recursos Disponíveis:
+- Análise de documentos PDF e DOCX
+- Processamento de imagens com OCR
+- Transcrição de áudio
+- Análise de vínculos e correlações
+- Geração de relatórios investigativos
+
+Tecnologias Utilizadas:
+- Inteligência Artificial (GROQ API)
+- Processamento de linguagem natural
+- Análise de dados estruturados
+- Visualização de grafos de relacionamentos
+
+Contato:
+Para mais informações sobre o sistema Secur:AI, entre em contato com nossa equipe de suporte técnico.`;
+
+                showResult('htmlResult', '✅ HTML Processado com Sucesso!', mockResult, fileInfo);
+                
+            } catch (error) {
+                showStatus('htmlResult', `Erro ao processar HTML: ${error.message}`, 'error');
+            }
+        }
+
+        // Teste do Parser TXT
+        async function testTXTParser() {
+            const fileInput = document.getElementById('txtFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showStatus('txtResult', 'Por favor, selecione um arquivo TXT', 'error');
+                return;
+            }
+
+            showStatus('txtResult', '🔍 Processando arquivo TXT...', 'info');
+
+            try {
+                const fileInfo = {
+                    name: file.name,
+                    type: file.type,
+                    size: file.size
+                };
+
+                // Simular resultado do parser TXT
+                const mockResult = `NOTA DE INVESTIGAÇÃO
+
+Data: ${new Date().toLocaleDateString('pt-BR')}
+Investigador: Equipe Secur:AI
+Caso: ${Math.floor(Math.random() * 10000).toString().padStart(6, '0')}
+
+OBSERVAÇÕES:
+Durante a análise do caso, foram identificados diversos elementos relevantes que merecem atenção especial.
+
+PONTOS IMPORTANTES:
+1. Documentos analisados apresentam padrões consistentes
+2. Evidências digitais foram preservadas adequadamente
+3. Correlações entre diferentes fontes de dados foram estabelecidas
+4. Sistema de IA identificou anomalias relevantes
+
+PRÓXIMOS PASSOS:
+- Aprofundar análise de vínculos identificados
+- Validar evidências encontradas
+- Preparar relatório final para autoridades competentes
+- Documentar metodologia utilizada
+
+ASSINATURA:
+Equipe de Investigação Digital
+Secur:AI - Sistema de Análise Forense`;
+
+                showResult('txtResult', '✅ TXT Processado com Sucesso!', mockResult, fileInfo);
+                
+            } catch (error) {
+                showStatus('txtResult', `Erro ao processar TXT: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

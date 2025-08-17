@@ -7,7 +7,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { toast } from 'sonner';
 import { useCase } from '../contexts/CaseContext';
-import { transcribeAudioWithGroq, makeGroqAIRequest } from '../services/groqService';
+import { transcribeAudioWithGroq, makeGroqAIRequest, getAudioFileInfo, isAudioFileTooLarge } from '../services/groqService';
 import { saveAudioTranscription, getAudioTranscriptionsByCaseId } from '../services/databaseService';
 
 interface AudioFile {
@@ -22,6 +22,15 @@ interface AudioFile {
     end: number;
     text: string;
   }[];
+  fileInfo?: {
+    sizeInMB: string;
+    isLarge: boolean;
+    isTooLarge: boolean;
+    needsCompression: boolean;
+    needsChunking: boolean;
+  };
+  status?: 'pending' | 'processing' | 'completed' | 'error';
+  error?: string;
 }
 
 const AudioAnalysis = () => {
@@ -64,6 +73,7 @@ const AudioAnalysis = () => {
     
     const validFiles: AudioFile[] = [];
     const invalidFiles: string[] = [];
+    const largeFiles: string[] = [];
     
     // Process multiple files
     Array.from(files).forEach((file, index) => {
@@ -76,6 +86,12 @@ const AudioAnalysis = () => {
         return;
       }
       
+      // Verificar tamanho do arquivo
+      const fileInfo = getAudioFileInfo(file);
+      if (fileInfo.isLarge) {
+        largeFiles.push(`${file.name} (${fileInfo.sizeInMB}MB)`);
+      }
+      
       // Create object URL for the audio file
       const audioUrl = URL.createObjectURL(file);
       
@@ -83,7 +99,9 @@ const AudioAnalysis = () => {
         id: `audio-${Date.now()}-${index}`,
         name: file.name,
         url: audioUrl,
-        file: file
+        file: file,
+        fileInfo: getAudioFileInfo(file),
+        status: 'pending'
       };
       
       validFiles.push(newAudio);
@@ -91,6 +109,10 @@ const AudioAnalysis = () => {
     
     if (invalidFiles.length > 0) {
       toast.error(`Arquivos inválidos ignorados: ${invalidFiles.join(', ')}`);
+    }
+    
+    if (largeFiles.length > 0) {
+      toast.warning(`Arquivos grandes detectados: ${largeFiles.join(', ')}. O sistema irá comprimir automaticamente.`);
     }
     
     if (validFiles.length > 0) {
@@ -104,6 +126,12 @@ const AudioAnalysis = () => {
     setIsTranscribing(true);
     
     try {
+      // Atualizar status para processando
+      const processingAudio = { ...audio, status: 'processing' as const };
+      setAudioFiles(prev => prev.map(a => 
+        a.id === audio.id ? processingAudio : a
+      ));
+      
       // Check if we already have this audio transcribed in the database
       if (currentCase) {
         const transcriptions = await getAudioTranscriptionsByCaseId(currentCase.id);
@@ -121,20 +149,19 @@ const AudioAnalysis = () => {
           }
           
           // Use existing transcription from DB
+          const completedAudio = { 
+            ...processingAudio, 
+            transcription: existingTranscription.transcription,
+            speakerSegments: speakerSegments,
+            status: 'completed' as const
+          };
+          
           const updatedAudioFiles = audioFiles.map(a => 
-            a.id === audio.id ? { 
-              ...a, 
-              transcription: existingTranscription.transcription,
-              speakerSegments: speakerSegments 
-            } : a
+            a.id === audio.id ? completedAudio : a
           );
           
           setAudioFiles(updatedAudioFiles);
-          setSelectedAudio({ 
-            ...audio, 
-            transcription: existingTranscription.transcription,
-            speakerSegments: speakerSegments
-          });
+          setSelectedAudio(completedAudio);
           toast.success('Transcrição recuperada do banco de dados');
           setIsTranscribing(false);
           return;
@@ -147,12 +174,19 @@ const AudioAnalysis = () => {
       console.log('Transcription completed successfully with speakers:', speakerSegments.length);
       
       // Update the audio file with transcription and speaker segments
+      const completedAudio = { 
+        ...processingAudio, 
+        transcription: text, 
+        speakerSegments,
+        status: 'completed' as const
+      };
+      
       const updatedAudioFiles = audioFiles.map(a => 
-        a.id === audio.id ? { ...a, transcription: text, speakerSegments } : a
+        a.id === audio.id ? completedAudio : a
       );
       
       setAudioFiles(updatedAudioFiles);
-      setSelectedAudio({ ...audio, transcription: text, speakerSegments });
+      setSelectedAudio(completedAudio);
       
       // Save to database if we have a case
       if (currentCase) {
@@ -168,7 +202,19 @@ const AudioAnalysis = () => {
       toast.success('Transcrição concluída com sucesso');
     } catch (error) {
       console.error('Transcription error:', error);
-      toast.error('Erro ao transcrever áudio');
+      
+      // Atualizar status para erro
+      const errorAudio = { 
+        ...audio, 
+        status: 'error' as const,
+        error: error instanceof Error ? error.message : 'Erro desconhecido'
+      };
+      
+      setAudioFiles(prev => prev.map(a => 
+        a.id === audio.id ? errorAudio : a
+      ));
+      
+      toast.error(`Erro na transcrição: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setIsTranscribing(false);
     }
@@ -365,6 +411,22 @@ ${allTranscriptions}`
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {/* Informações sobre limitações */}
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-800">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-blue-800 dark:text-blue-200">
+                                                 <p className="font-medium mb-1">📁 Limitações de Arquivo:</p>
+                         <ul className="space-y-1 text-xs">
+                           <li>• <strong>Recomendado:</strong> Até 5MB para melhor performance</li>
+                           <li>• <strong>Máximo:</strong> 25MB (será comprimido automaticamente)</li>
+                           <li>• <strong>Arquivos grandes:</strong> Serão divididos em chunks de 2 minutos</li>
+                           <li>• <strong>Formatos suportados:</strong> WAV, MP3, MP4, OPUS, M4A, FLAC, AAC, OGG</li>
+                         </ul>
+                      </div>
+                    </div>
+                  </div>
+                  
                   <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-6 text-center">
                     <Input
                       type="file"
@@ -415,8 +477,37 @@ ${allTranscriptions}`
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium truncate">{audio.name}</h4>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium truncate">{audio.name}</h4>
+                            {audio.fileInfo && (
+                              <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                <span>{audio.fileInfo.sizeInMB}MB</span>
+                                {audio.fileInfo.isLarge && (
+                                  <span className="px-1 py-0.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded text-xs">
+                                    Grande
+                                  </span>
+                                )}
+                                {audio.fileInfo.needsChunking && (
+                                  <span className="px-1 py-0.5 bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 rounded text-xs">
+                                    Muito Grande
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex gap-1">
+                            {/* Status do arquivo */}
+                            {audio.status === 'processing' && (
+                              <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full flex items-center gap-1">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-current" />
+                                Processando
+                              </span>
+                            )}
+                            {audio.status === 'error' && (
+                              <span className="px-2 py-1 text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded-full">
+                                Erro
+                              </span>
+                            )}
                             {audio.speakerSegments && audio.speakerSegments.length > 0 && (
                               <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full flex items-center gap-1">
                                 <Users size={12} />
@@ -438,11 +529,19 @@ ${allTranscriptions}`
                             variant={audio.transcription ? "outline" : "default"}
                             size="sm"
                             onClick={() => handleTranscribe(audio)}
-                            disabled={isTranscribing}
+                            disabled={isTranscribing || audio.status === 'processing'}
                           >
-                            {audio.transcription ? 'Transcrever Novamente' : 'Transcrever'}
+                            {audio.status === 'processing' ? 'Processando...' : 
+                             audio.transcription ? 'Transcrever Novamente' : 'Transcrever'}
                           </Button>
                         </div>
+                        
+                        {/* Mostrar erro se houver */}
+                        {audio.status === 'error' && audio.error && (
+                          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
+                            <strong>Erro:</strong> {audio.error}
+                          </div>
+                        )}
                       </div>
                     ))}
                     

@@ -1,171 +1,213 @@
 import React, { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
-import { Plus, X, Mail, Bot, Zap } from 'lucide-react';
-import { toast } from 'sonner';
-import { createVirtualAgent, EMAIL_REPORT_AGENT_TEMPLATE, VirtualAgent } from '../services/virtualAgentsService';
+import { Separator } from './ui/separator';
+import { 
+  Bot, 
+  Settings, 
+  Shield, 
+  Zap, 
+  Clock, 
+  Users, 
+  Database,
+  Mail,
+  Webhook,
+  Palette
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-interface VirtualAgentFormProps {
-  onAgentCreated: (agent: VirtualAgent) => void;
-  onCancel: () => void;
+interface AgentFunction {
+  name: string;
+  description: string;
+  category: string;
+  parameters: Record<string, string>;
 }
 
-const VirtualAgentForm: React.FC<VirtualAgentFormProps> = ({ onAgentCreated, onCancel }) => {
-  const [formData, setFormData] = useState({
+interface AgentSecurityRule {
+  name: string;
+  description: string;
+  type: 'access' | 'data' | 'execution';
+  enabled: boolean;
+}
+
+interface AgentConnector {
+  type: 'canva' | 'webhook' | 'email' | 'database';
+  name: string;
+  description: string;
+  config: Record<string, string>;
+}
+
+interface VirtualAgentFormData {
+  name: string;
+  description: string;
+  type: 'investigation' | 'analysis' | 'report' | 'notification';
+  isActive: boolean;
+  schedule: {
+    type: 'manual' | 'trigger' | 'interval';
+    trigger?: 'case_completed' | 'investigation_finished' | 'report_generated';
+    interval?: number;
+  };
+  scope: {
+    caseTypes: string[];
+    userRoles: string[];
+    dataAccess: 'own_cases' | 'department_cases' | 'all_cases';
+  };
+}
+
+const VirtualAgentForm: React.FC<{
+  onCancel: () => void;
+  onSubmit: (data: VirtualAgentFormData) => void;
+}> = ({ onCancel, onSubmit }) => {
+  const [isCreating, setIsCreating] = useState(false);
+  const { toast } = useToast();
+
+  const [formData, setFormData] = useState<VirtualAgentFormData>({
     name: '',
     description: '',
-    type: 'notification' as const,
+    type: 'notification',
     isActive: true,
     schedule: {
-      type: 'trigger' as const,
-      trigger: 'investigation_finished' as const
+      type: 'trigger',
+      trigger: 'investigation_finished'
     },
     scope: {
-      caseTypes: ['investigation'],
-      userRoles: ['investigator'],
-      dataAccess: 'own_cases' as const
+      caseTypes: [],
+      userRoles: [],
+      dataAccess: 'own_cases'
     }
   });
 
-  const [isCreating, setIsCreating] = useState(false);
-
-  const handleCreateEmailReportAgent = async () => {
-    setIsCreating(true);
-    try {
-      const agent = createVirtualAgent(EMAIL_REPORT_AGENT_TEMPLATE);
-      toast.success('Agente de relatório por email criado com sucesso!');
-      onAgentCreated(agent);
-    } catch (error) {
-      console.error('Error creating email report agent:', error);
-      toast.error('Erro ao criar agente de relatório por email');
-    } finally {
-      setIsCreating(false);
+  const availableFunctions: AgentFunction[] = [
+    {
+      name: 'analyze_case',
+      description: 'Analisa dados do caso e identifica padrões',
+      category: 'analysis',
+      parameters: { 'depth': 'number', 'focus_areas': 'string[]' }
+    },
+    {
+      name: 'generate_report',
+      description: 'Gera relatório baseado nos dados analisados',
+      category: 'report',
+      parameters: { 'format': 'string', 'sections': 'string[]' }
+    },
+    {
+      name: 'notify_users',
+      description: 'Envia notificações para usuários relevantes',
+      category: 'notification',
+      parameters: { 'channels': 'string[]', 'template': 'string' }
     }
-  };
+  ];
 
-  const handleCustomAgentSubmit = async (e: React.FormEvent) => {
+  const availableConnectors: AgentConnector[] = [
+    {
+      type: 'canva',
+      name: 'Canva',
+      description: 'Cria apresentações e documentos visuais',
+      config: { 'template_id': 'string', 'brand_colors': 'string[]' }
+    },
+    {
+      type: 'webhook',
+      name: 'Webhook',
+      description: 'Envia dados para sistemas externos',
+      config: { 'endpoint': 'string', 'headers': 'Record<string, string>' }
+    },
+    {
+      type: 'email',
+      name: 'Email',
+      description: 'Envia notificações por e-mail',
+      config: { 'smtp_server': 'string', 'from_address': 'string' }
+    },
+    {
+      type: 'database',
+      name: 'Database',
+      description: 'Armazena e recupera dados',
+      config: { 'connection_string': 'string', 'table_name': 'string' }
+    }
+  ];
+
+  const securityRules: AgentSecurityRule[] = [
+    {
+      name: 'Access Control',
+      description: 'Controla quem pode executar o agente',
+      type: 'access',
+      enabled: true
+    },
+    {
+      name: 'Data Encryption',
+      description: 'Criptografa dados sensíveis',
+      type: 'data',
+      enabled: true
+    },
+    {
+      name: 'Execution Limits',
+      description: 'Define limites de execução',
+      type: 'execution',
+      enabled: true
+    }
+  ];
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name.trim()) {
-      toast.error('Nome do agente é obrigatório');
+    if (!formData.name.trim() || !formData.description.trim()) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Nome e descrição são obrigatórios.",
+        variant: "destructive"
+      });
       return;
     }
 
     setIsCreating(true);
+    
     try {
-      const agent = createVirtualAgent({
-        ...formData,
-        functions: [
-          {
-            id: 'custom_function',
-            type: 'generate_summary',
-            name: 'Função Personalizada',
-            parameters: {},
-            isEnabled: true
-          }
-        ],
-        connectors: [
-          {
-            id: 'groq_connector',
-            type: 'groq',
-            name: 'GROQ AI',
-            configuration: {
-              model: 'llama3-8b-8192',
-              maxTokens: 2048
-            },
-            isEnabled: true
-          }
-        ],
-        securityRules: [
-          {
-            id: 'data_access_rule',
-            type: 'data_access',
-            rule: 'own_cases_only',
-            value: true,
-            isActive: true
-          }
-        ]
+      await onSubmit(formData);
+      toast({
+        title: "Agente criado",
+        description: "O agente virtual foi criado com sucesso.",
       });
-
-      toast.success('Agente virtual criado com sucesso!');
-      onAgentCreated(agent);
     } catch (error) {
-      console.error('Error creating custom agent:', error);
-      toast.error('Erro ao criar agente virtual');
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast({
+        title: "Erro ao criar agente",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setIsCreating(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Quick Template Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            Templates Rápidos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-blue-100 dark:bg-blue-900 p-2 rounded-lg">
-                    <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-medium">Agente de Relatório por Email</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Gera e envia relatórios executivos por email ao final da investigação
-                    </p>
-                    <div className="mt-3">
-                      <Button 
-                        onClick={handleCreateEmailReportAgent}
-                        disabled={isCreating}
-                        size="sm"
-                        className="w-full"
-                      >
-                        <Mail className="h-4 w-4 mr-2" />
-                        {isCreating ? 'Criando...' : 'Criar Agente'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">Email</Badge>
-                    <Badge variant="secondary">Sumário</Badge>
-                    <Badge variant="secondary">Auto-trigger</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-bold">Criar Agente Virtual</h1>
+        <p className="text-muted-foreground">
+          Configure um novo agente de IA para automatizar tarefas de investigação
+        </p>
+      </div>
 
-      {/* Custom Agent Form */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Bot className="h-5 w-5" />
-            Criar Agente Personalizado
+            Configuração Básica
           </CardTitle>
+          <CardDescription>
+            Defina as características principais do agente virtual
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleCustomAgentSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="name">Nome do Agente</Label>
+                <Label htmlFor="name">Nome *</Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -176,7 +218,7 @@ const VirtualAgentForm: React.FC<VirtualAgentFormProps> = ({ onAgentCreated, onC
               
               <div>
                 <Label htmlFor="type">Tipo</Label>
-                <Select value={formData.type} onValueChange={(value: any) => setFormData(prev => ({ ...prev, type: value }))}>
+                <Select value={formData.type} onValueChange={(value: 'investigation' | 'analysis' | 'report' | 'notification') => setFormData(prev => ({ ...prev, type: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -214,7 +256,7 @@ const VirtualAgentForm: React.FC<VirtualAgentFormProps> = ({ onAgentCreated, onC
                 <Label htmlFor="scheduleType">Tipo de Execução</Label>
                 <Select 
                   value={formData.schedule.type} 
-                  onValueChange={(value: any) => setFormData(prev => ({ 
+                  onValueChange={(value: 'manual' | 'trigger' | 'interval') => setFormData(prev => ({ 
                     ...prev, 
                     schedule: { ...prev.schedule, type: value }
                   }))}
@@ -235,7 +277,7 @@ const VirtualAgentForm: React.FC<VirtualAgentFormProps> = ({ onAgentCreated, onC
                   <Label htmlFor="trigger">Gatilho</Label>
                   <Select 
                     value={formData.schedule.trigger} 
-                    onValueChange={(value: any) => setFormData(prev => ({ 
+                    onValueChange={(value: 'case_completed' | 'investigation_finished' | 'report_generated') => setFormData(prev => ({ 
                       ...prev, 
                       schedule: { ...prev.schedule, trigger: value }
                     }))}

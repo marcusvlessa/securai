@@ -160,8 +160,8 @@ const OccurrenceAnalysis = () => {
       
       console.log('Sending content for AI analysis');
       
-      // Use the API to analyze the content
-      const aiAnalysis = await makeGroqAIRequest(messages, 4096);
+      // Use the API to analyze the content with safe token limit
+      const aiAnalysis = await makeGroqAIRequest(messages, 2048); // Reduzido para evitar erro de max_tokens
       
       console.log('Analysis completed successfully, length:', aiAnalysis.length);
       console.log('First 100 chars of analysis:', aiAnalysis.substring(0, 100));

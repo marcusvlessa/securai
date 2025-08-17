@@ -1,0 +1,7 @@
+origem,destino,tipo,peso
+João,Maria,conhece,5
+João,ABC-1234,possui,10
+Maria,123.456.789-00,identifica,8
+ABC-1234,Centro,estacionado,3
+Maria,Centro,frequenta,7
+João,Centro,frequenta,6

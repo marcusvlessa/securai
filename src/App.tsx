@@ -6,8 +6,8 @@ import { AppSidebar } from './components/AppSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
-import { Login } from './pages/auth/Login';
-import { Register } from './pages/auth/Register';
+import Login from './pages/auth/Login';
+import Register from './pages/auth/Register';
 import Index from './pages/Index';
 import { AdminPanel } from './pages/AdminPanel';
 import Dashboard from './pages/Dashboard';
@@ -19,10 +19,12 @@ import ImageAnalysis from './pages/ImageAnalysis';
 import CaseManagement from './pages/CaseManagement';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import Unauthorized from './pages/Unauthorized';
 import VirtualAgents from './pages/VirtualAgents';
 import FinancialAnalysis from './pages/FinancialAnalysis';
 import { CaseProvider } from './contexts/CaseContext';
 import { getGroqSettings, saveGroqSettings } from './services/groqService';
+import TestPage from './pages/TestPage';
 import './index.css';
 
 function App() {
@@ -34,8 +36,8 @@ function App() {
       saveGroqSettings({
         groqApiKey: '',  // Configurado pelo usuário na página de Configurações
         groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-        groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct', // Updated to requested default model
-        model: 'llama-3.2-90b-vision-preview', // Modelo para análise de imagens
+        groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct', // Modelo correto
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct', // Modelo correto para análise
         whisperModel: 'whisper-large-v3',  // Versão mais recente do modelo
         whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
         language: 'pt'  // Configuração padrão para português
@@ -176,6 +178,8 @@ function App() {
                 </ProtectedRoute>
               } />
               
+              <Route path="/test" element={<TestPage />} />
+              <Route path="/unauthorized" element={<Unauthorized />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Toaster />

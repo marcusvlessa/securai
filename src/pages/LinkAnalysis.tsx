@@ -1,644 +1,906 @@
 
-import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Database, Link as LinkIcon, AlertCircle, Play, Download, Settings } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Upload, 
+  FileText, 
+  BarChart3, 
+  Network, 
+  Brain, 
+  Download,
+  Eye,
+  EyeOff,
+  Filter,
+  Search,
+  Settings,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  Info,
+  Shield,
+  RefreshCw,
+  X
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { useCase } from '../contexts/CaseContext';
-import { processLinkAnalysisDataWithGroq, makeGroqAIRequest } from '../services/groqService';
-import LinkAnalysisUploader from '../components/LinkAnalysisUploader';
+import { AdvancedLinkGraph } from '@/components/AdvancedLinkGraph';
+import { 
+  LinkAnalysisService, 
+  ParsedData, 
+  LinkGraph, 
+  LinkNode, 
+  LinkEdge 
+} from '@/services/linkAnalysisService';
 
-interface NetworkNode {
-  id: string;
-  label: string;
-  group: string;
-  size: number;
-}
-
-interface NetworkLink {
-  source: string;
-  target: string;
-  value: number;
-  type: string;
-}
-
-interface NetworkData {
-  nodes: NetworkNode[];
-  links: NetworkLink[];
-}
-
-const LinkAnalysis = () => {
-  const { currentCase, saveToCurrentCase } = useCase();
-  const [uploadedData, setUploadedData] = useState<any[]>([]);
-  const [columnMapping, setColumnMapping] = useState<any>({});
-  const [fileType, setFileType] = useState<string>('');
-  const [graphImage, setGraphImage] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [networkData, setNetworkData] = useState<NetworkData | null>(null);
-  const [insights, setInsights] = useState<string>('');
-  const [isGeneratingInsights, setIsGeneratingInsights] = useState<boolean>(false);
+export default function LinkAnalysis() {
+  const [file, setFile] = useState<File | null>(null);
+  const [parsedData, setParsedData] = useState<ParsedData | null>(null);
+  const [graph, setGraph] = useState<LinkGraph | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<string>('');
+  const [isAnalyzingAI, setIsAnalyzingAI] = useState(false);
   
-  // Effect to draw the network graph when data changes
-  useEffect(() => {
-    if (networkData && networkData.nodes && networkData.links) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 800;
-      canvas.height = 600;
-      drawNetworkGraph(networkData, canvas);
-      
-      // Convert canvas to data URL for display
-      const dataUrl = canvas.toDataURL('image/png');
-      setGraphImage(dataUrl);
-    }
-  }, [networkData]);
+  // Configurações do grafo
+  const [sourceColumn, setSourceColumn] = useState<string>('');
+  const [targetColumn, setTargetColumn] = useState<string>('');
+  const [relationshipColumn, setRelationshipColumn] = useState<string>('');
+  const [weightColumn, setWeightColumn] = useState<string>('');
+  
+  // Estados de visualização
+  const [showPreview, setShowPreview] = useState(true);
+  const [showGraph, setShowGraph] = useState(false);
+  const [activeTab, setActiveTab] = useState('upload');
+  const [showConfigPanel, setShowConfigPanel] = useState(false);
 
-  const handleDataUploaded = (data: any[], mapping: any, dataType: string) => {
-    setUploadedData(data);
-    setColumnMapping(mapping);
-    setFileType(dataType);
-    toast.success(`${data.length} registros carregados para análise de vínculos`);
-  };
+  // Handle file upload
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) return;
 
-  const processData = async () => {
-    if (!uploadedData.length) {
-      toast.error('Por favor, carregue dados primeiro');
-      return;
-    }
+    console.log('📁 Arquivo selecionado:', selectedFile.name, selectedFile.type, selectedFile.size);
     
-    if (!currentCase) {
-      toast.error('Por favor, selecione um caso antes de prosseguir');
-      return;
-    }
-    
+    setFile(selectedFile);
     setIsProcessing(true);
     
     try {
-      // Transform uploaded data into network format using AI
-      const dataForAnalysis = {
-        fileType,
-        columnMapping,
-        sampleData: uploadedData.slice(0, 10), // Send first 10 records as sample
-        totalRecords: uploadedData.length
-      };
+      console.log('🚀 Iniciando análise do arquivo:', selectedFile.name);
       
-      // Process the data with GROQ to create network graph
-      const networkResult = await processLinkAnalysisDataWithGroq(currentCase, JSON.stringify(dataForAnalysis));
+      // Analisar arquivo
+      const result = await LinkAnalysisService.analyzeFile(selectedFile);
       
-      // Add default values if API returns incomplete data  
-      const processedData: NetworkData = {
-        nodes: networkResult.nodes || [],
-        links: networkResult.edges || networkResult.links || []
-      };
+      console.log('✅ Resultado da análise:', result);
+      console.log('📊 Dados parseados:', result.parsedData);
+      console.log('🔗 Grafo gerado:', result.graph);
       
-      // Update the network data state
-      setNetworkData(processedData);
+      setParsedData(result.parsedData);
+      setGraph(null);
       
-      // Save to case
-      saveToCurrentCase({
-        timestamp: new Date().toISOString(),
-        dataType: fileType,
-        recordsProcessed: uploadedData.length,
-        networkData: processedData
-      }, 'linkAnalysis');
+      // Aplicar identificação padrão robusta
+      applyDefaultColumnIdentification(result.parsedData);
       
-      toast.success(`Análise de vínculos processada: ${processedData.nodes.length} entidades, ${processedData.links.length} conexões`);
+      setShowGraph(false);
+      
+      console.log('🎯 Estado após processamento:', {
+        parsedData: result.parsedData,
+        graph: null,
+        showGraph: false,
+        sourceColumn,
+        targetColumn
+      });
+      
+      toast.success(`Arquivo processado com sucesso! ${result.parsedData.totalRows} linhas analisadas. Configure as colunas e clique em "Processar Análise de Vínculos".`);
+      
     } catch (error) {
-      console.error('Error processing link analysis data:', error);
-      toast.error('Erro ao processar dados para análise de vínculos: ' + 
-                 (error instanceof Error ? error.message : 'Erro desconhecido'));
+      console.error('❌ Erro ao processar arquivo:', error);
+      toast.error(`Erro ao processar arquivo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, []);
 
-  const generateInsights = async () => {
-    if (!networkData || !currentCase) {
-      toast.error('Processe os dados primeiro para gerar insights');
+  // Função robusta para identificação padrão de colunas
+  const applyDefaultColumnIdentification = (data: ParsedData) => {
+    if (!data || !data.columns || data.columns.length === 0) {
+      console.error('❌ Dados inválidos para identificação de colunas');
       return;
     }
 
-    setIsGeneratingInsights(true);
+    console.log('🔍 Aplicando identificação padrão de colunas...');
+    console.log('📊 Colunas disponíveis:', data.columns);
+    console.log('📊 Total de linhas:', data.data.length);
+
+    // Padrões expandidos para identificação
+    const patterns = {
+      source: [
+        'origem', 'source', 'from', 'de', 'remetente', 'emissor', 'cliente', 'fornecedor',
+        'vendedor', 'comprador', 'pagador', 'recebedor', 'pessoa1', 'entidade1', 'sujeito1',
+        'ator1', 'participante1', 'primeiro', 'inicio', 'partida', 'id', 'codigo', 'numero',
+        'matricula', 'registro', 'cpf', 'cnpj', 'documento', 'identificacao', 'rif',
+        'ordem', 'indexador', 'titular', 'responsavel', 'país', 'encaminhamento'
+      ],
+      target: [
+        'destino', 'target', 'to', 'para', 'destinatario', 'receptor', 'beneficiario',
+        'recebedor', 'cliente', 'fornecedor', 'vendedor', 'comprador', 'pessoa2', 'entidade2',
+        'sujeito2', 'ator2', 'participante2', 'segundo', 'fim', 'chegada', 'nome', 'descricao',
+        'titulo', 'rotulo', 'identificacao', 'beneficiario', 'remetente', 'observacoes',
+        'interlocutor', 'assinante'
+      ],
+      relationship: [
+        'tipo', 'relacao', 'relacionamento', 'operacao', 'acao', 'vinculo', 'status',
+        'categoria', 'funcao', 'papel', 'atividade', 'observacoes', 'descricao', 'motivo',
+        'finalidade', 'objetivo', 'resultado', 'consequencia', 'periodo', 'data'
+      ],
+      weight: [
+        'valor', 'montante', 'quantia', 'preco', 'custo', 'peso', 'forca', 'intensidade',
+        'frequencia', 'importancia', 'relevancia', 'score', 'rating', 'classificacao',
+        'prioridade', 'urgencia', 'criticidade', 'risco'
+      ]
+    };
+
+    // Função para calcular score de uma coluna baseado nos padrões
+    const calculateColumnScore = (columnName: string, patternList: string[]) => {
+      const colLower = columnName.toLowerCase();
+      let score = 0;
+      
+      patternList.forEach(pattern => {
+        if (colLower.includes(pattern)) {
+          score += 10; // Match exato
+        } else if (colLower.includes(pattern.substring(0, 3))) {
+          score += 5; // Match parcial
+        }
+      });
+      
+      // Bônus para colunas com dados únicos
+      const uniqueValues = new Set(data.data.map(row => row[columnName])).size;
+      if (uniqueValues > 1) {
+        score += Math.min(uniqueValues / 10, 5); // Máximo 5 pontos
+      }
+      
+      // Bônus para colunas com dados válidos
+      const validValues = data.data.filter(row => {
+        const val = row[columnName];
+        return val !== '' && val !== null && val !== undefined && val !== '-';
+      }).length;
+      score += (validValues / data.data.length) * 3; // Máximo 3 pontos
+      
+      return score;
+    };
+
+    // Calcular scores para todas as colunas
+    const columnScores = data.columns.map(col => ({
+      name: col,
+      sourceScore: calculateColumnScore(col, patterns.source),
+      targetScore: calculateColumnScore(col, patterns.target),
+      relationshipScore: calculateColumnScore(col, patterns.relationship),
+      weightScore: calculateColumnScore(col, patterns.weight)
+    }));
+
+    console.log('📊 Scores das colunas:', columnScores);
+
+    // Selecionar melhores colunas baseado nos scores
+    const bestSource = columnScores.reduce((best, current) => 
+      current.sourceScore > best.sourceScore ? current : best
+    );
+    const bestTarget = columnScores.reduce((best, current) => 
+      current.targetScore > best.targetScore ? current : best
+    );
+    const bestRelationship = columnScores.reduce((best, current) => 
+      current.relationshipScore > best.relationshipScore ? current : best
+    );
+    const bestWeight = columnScores.reduce((best, current) => 
+      current.weightScore > best.weightScore ? current : best
+    );
+
+    // Garantir que origem e destino sejam diferentes
+    let finalSource = bestSource.name;
+    let finalTarget = bestTarget.name;
+    
+    if (finalSource === finalTarget && data.columns.length > 1) {
+      // Se são iguais, usar a segunda melhor opção para destino
+      const secondBestTarget = columnScores
+        .filter(col => col.name !== finalSource)
+        .reduce((best, current) => 
+          current.targetScore > best.targetScore ? current : best
+        );
+      finalTarget = secondBestTarget.name;
+    }
+
+    // Aplicar configuração automática
+    setSourceColumn(finalSource);
+    setTargetColumn(finalTarget);
+    setRelationshipColumn(bestRelationship.relationshipScore > 0 ? bestRelationship.name : '');
+    setWeightColumn(bestWeight.weightScore > 0 ? bestWeight.name : '');
+
+    console.log('✅ Identificação padrão aplicada:', {
+      source: finalSource,
+      target: finalTarget,
+      relationship: bestRelationship.relationshipScore > 0 ? bestRelationship.name : 'N/A',
+      weight: bestWeight.weightScore > 0 ? bestWeight.name : 'N/A'
+    });
+
+    // Se não conseguiu identificar automaticamente, usar as primeiras colunas
+    if (!finalSource || !finalTarget) {
+      console.log('⚠️ Usando fallback para primeiras colunas');
+      setSourceColumn(data.columns[0] || '');
+      setTargetColumn(data.columns[1] || '');
+    }
+  };
+
+  // Função para detectar automaticamente as melhores colunas (manual)
+  const detectBestColumns = () => {
+    if (!parsedData) return;
+    applyDefaultColumnIdentification(parsedData);
+    toast.success('Configuração automática aplicada com sucesso!');
+  };
+
+  // Gerar grafo personalizado
+  const generateCustomGraph = useCallback(async () => {
+    if (!parsedData) {
+      toast.error('Faça upload de um arquivo primeiro');
+      return;
+    }
+
+    if (!sourceColumn || !targetColumn) {
+      toast.error('Configure as colunas de origem e destino');
+      return;
+    }
+
+    if (sourceColumn === targetColumn) {
+      toast.error('Origem e destino devem ser colunas diferentes');
+      return;
+    }
 
     try {
-      // Prepare network features for AI analysis
-      const features = {
-        totalNodes: networkData.nodes.length,
-        totalLinks: networkData.links.length,
-        density: networkData.links.length > 0 ? 
-          (2 * networkData.links.length) / (networkData.nodes.length * (networkData.nodes.length - 1)) : 0,
-        nodeGroups: [...new Set(networkData.nodes.map(n => n.group))],
-        linkTypes: [...new Set(networkData.links.map(l => l.type))],
-        topConnectedNodes: networkData.nodes
-          .map(node => ({
-            ...node,
-            connections: networkData.links.filter(l => l.source === node.id || l.target === node.id).length
-          }))
-          .sort((a, b) => b.connections - a.connections)
-          .slice(0, 5)
-      };
-
-      const messages = [
-        {
-          role: "system",
-          content: 
-            "Você é um especialista em análise de vínculos e investigações. " +
-            "Analise as características da rede fornecida e gere insights investigativos " +
-            "sobre padrões suspeitos, entidades-chave, e recomendações para a investigação. " +
-            "Forneça um relatório estruturado em português."
-        },
-        {
-          role: "user", 
-          content: `Analise esta rede de vínculos e forneça insights investigativos:\n\n` +
-                  `Caso: ${currentCase.title}\n` +
-                  `Tipo de dados: ${fileType}\n` +
-                  `Características da rede:\n${JSON.stringify(features, null, 2)}`
-        }
-      ];
-
-      const insightsResult = await makeGroqAIRequest(messages, 2048);
-      setInsights(insightsResult);
+      setIsProcessing(true);
       
-      toast.success('Insights de investigação gerados com sucesso');
+      console.log('🚀 Gerando grafo com configurações:', {
+        sourceColumn,
+        targetColumn,
+        relationshipColumn,
+        weightColumn,
+        totalRows: parsedData.totalRows,
+        columns: parsedData.columns
+      });
+      
+      // Validar que as colunas existem nos dados
+      if (!parsedData.columns.includes(sourceColumn)) {
+        throw new Error(`Coluna de origem "${sourceColumn}" não encontrada nos dados`);
+      }
+      
+      if (!parsedData.columns.includes(targetColumn)) {
+        throw new Error(`Coluna de destino "${targetColumn}" não encontrada nos dados`);
+      }
+      
+      // Verificar dados das colunas selecionadas
+      const sourceValues = parsedData.data.slice(0, 5).map(row => row[sourceColumn]);
+      const targetValues = parsedData.data.slice(0, 5).map(row => row[targetColumn]);
+      
+      console.log('🔍 Valores das colunas selecionadas:', {
+        sourceColumn,
+        sourceValues,
+        targetColumn,
+        targetValues
+      });
+      
+      const customGraph = LinkAnalysisService.generateCustomGraph(
+        parsedData,
+        sourceColumn,
+        targetColumn,
+        relationshipColumn || undefined,
+        weightColumn || undefined
+      );
+      
+      setGraph(customGraph);
+      setShowGraph(true);
+      
+      console.log('✅ Grafo gerado com sucesso:', customGraph);
+      
+      toast.success(`Grafo gerado com sucesso! ${customGraph.metadata.totalNodes} entidades e ${customGraph.metadata.totalEdges} relacionamentos.`);
+      
+      // Mudar para a aba de visualização automaticamente
+      setActiveTab('visualization');
+      
     } catch (error) {
-      console.error('Error generating insights:', error);
-      toast.error('Erro ao gerar insights: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+      console.error('❌ Erro ao gerar grafo:', error);
+      toast.error(`Erro ao gerar grafo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
-      setIsGeneratingInsights(false);
+      setIsProcessing(false);
     }
-  };
+  }, [parsedData, sourceColumn, targetColumn, relationshipColumn, weightColumn]);
 
-  const drawNetworkGraph = (data: NetworkData, canvas: HTMLCanvasElement) => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#f8fafc'; // Light background
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw title
-    ctx.font = 'bold 20px Arial';
-    ctx.fillStyle = '#1e293b';
-    ctx.textAlign = 'center';
-    ctx.fillText('Análise de Vínculos', canvas.width/2, 30);
-    
-    // Check if we have nodes and links
-    if (!data.nodes || data.nodes.length === 0 || !data.links || data.links.length === 0) {
-      ctx.font = '16px Arial';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText('Não há dados suficientes para exibir o grafo', canvas.width/2, canvas.height/2);
-      return;
-    }
-    
-    // Clean and prepare data: remove self-loops and isolated nodes
-    const nodeMap = new Map<string, NetworkNode>();
-    data.nodes.forEach(n => nodeMap.set(n.id, n));
-
-    const validLinks = (data.links || [])
-      .filter(l => l.source !== l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
-
-    const degrees: Record<string, number> = {};
-    validLinks.forEach(l => {
-      degrees[l.source] = (degrees[l.source] || 0) + 1;
-      degrees[l.target] = (degrees[l.target] || 0) + 1;
-    });
-
-    const nodes = data.nodes.filter(n => (degrees[n.id] || 0) > 0);
-
-    if (nodes.length === 0 || validLinks.length === 0) {
-      ctx.font = '16px Arial';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText('Não há vínculos válidos para exibir (verifique o mapeamento de colunas).', canvas.width/2, canvas.height/2);
+  // Analisar com IA
+  const analyzeWithAI = useCallback(async () => {
+    if (!graph) {
+      toast.error('Gere um grafo primeiro');
       return;
     }
 
-    // Fruchterman-Reingold force-directed layout for melhor organização
-    const width = canvas.width;
-    const height = canvas.height;
-    const area = width * height;
-    const k = Math.sqrt(area / nodes.length) * 0.6; // distância ideal
-    const tInitial = Math.max(width, height) / 8;
-    let t = tInitial;
-    const iterations = 300;
-    const padding = 60;
-    const gravity = 0.02;
-
-    // Posições iniciais em círculo com leve variação
-    const pos: Record<string, { x: number; y: number }> = {};
-    nodes.forEach((n, i) => {
-      const angle = (i / nodes.length) * 2 * Math.PI;
-      const r = Math.min(width, height) / 3;
-      pos[n.id] = {
-        x: width / 2 + r * Math.cos(angle) + (Math.random() - 0.5) * 20,
-        y: height / 2 + r * Math.sin(angle) + (Math.random() - 0.5) * 20,
-      };
-    });
-
-    // Funções de força
-    const frRepel = (dist: number) => (k * k) / Math.max(dist, 0.01);
-    const frAttract = (dist: number) => (dist * dist) / k;
-
-    for (let iter = 0; iter < iterations; iter++) {
-      const disp: Record<string, { x: number; y: number }> = {};
-      nodes.forEach(n => (disp[n.id] = { x: 0, y: 0 }));
-
-      // Forças repulsivas entre todos os nós
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const n1 = nodes[i].id;
-          const n2 = nodes[j].id;
-          const dx = pos[n1].x - pos[n2].x;
-          const dy = pos[n1].y - pos[n2].y;
-          const dist = Math.hypot(dx, dy) || 0.01;
-          const force = frRepel(dist);
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          disp[n1].x += fx; disp[n1].y += fy;
-          disp[n2].x -= fx; disp[n2].y -= fy;
-        }
-      }
-
-      // Forças atrativas nas arestas
-      validLinks.forEach(l => {
-        const s = l.source; const tId = l.target;
-        const dx = pos[s].x - pos[tId].x;
-        const dy = pos[s].y - pos[tId].y;
-        const dist = Math.hypot(dx, dy) || 0.01;
-        const weight = Math.max(1, Math.log10((l.value || 1) + 1));
-        const force = frAttract(dist) * weight * 0.5; // suaviza
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        disp[s].x -= fx; disp[s].y -= fy;
-        disp[tId].x += fx; disp[tId].y += fy;
-      });
-
-      // Gravidade para centro
-      nodes.forEach(n => {
-        const dxC = pos[n.id].x - width / 2;
-        const dyC = pos[n.id].y - height / 2;
-        disp[n.id].x -= dxC * gravity;
-        disp[n.id].y -= dyC * gravity;
-      });
-
-      // Atualiza posições com resfriamento
-      nodes.forEach(n => {
-        const d = Math.hypot(disp[n.id].x, disp[n.id].y) || 0.01;
-        const limit = Math.min(t, d);
-        pos[n.id].x += (disp[n.id].x / d) * limit;
-        pos[n.id].y += (disp[n.id].y / d) * limit;
-        pos[n.id].x = Math.max(padding, Math.min(width - padding, pos[n.id].x));
-        pos[n.id].y = Math.max(padding, Math.min(height - padding, pos[n.id].y));
-      });
-
-      t *= 0.95; // resfriamento
-      if (t < 0.1) break;
+    try {
+      setIsAnalyzingAI(true);
+      
+      console.log('🤖 Iniciando análise de IA para grafo:', graph);
+      
+      const analysis = await LinkAnalysisService.analyzeGraphWithAI(graph);
+      setAiAnalysis(analysis);
+      
+      console.log('✅ Análise de IA concluída:', analysis);
+      
+      toast.success('Análise de IA concluída!');
+      
+      // Mudar para a aba de análise automaticamente
+      setActiveTab('analysis');
+      
+    } catch (error) {
+      console.error('❌ Erro na análise de IA:', error);
+      toast.error(`Erro na análise de IA: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    } finally {
+      setIsAnalyzingAI(false);
     }
+  }, [graph]);
 
-    // Normalização: centralizar e ajustar escala para caber no canvas
-    {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      nodes.forEach(n => {
-        const p = pos[n.id];
-        if (!p) return;
-        minX = Math.min(minX, p.x);
-        maxX = Math.max(maxX, p.x);
-        minY = Math.min(minY, p.y);
-        maxY = Math.max(maxY, p.y);
-      });
-      const bbW = Math.max(1, maxX - minX);
-      const bbH = Math.max(1, maxY - minY);
-      const sx = (width - padding * 2) / bbW;
-      const sy = (height - padding * 2) / bbH;
-      const s = Math.min(sx, sy, 1.5);
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-      nodes.forEach(n => {
-        pos[n.id].x = (pos[n.id].x - cx) * s + width / 2;
-        pos[n.id].y = (pos[n.id].y - cy) * s + height / 2;
+  // Handlers de eventos do grafo
+  const handleNodeClick = useCallback((node: LinkNode) => {
+    console.log('Nó clicado:', node);
+    toast.info(`Entidade selecionada: ${node.id} (${node.type})`);
+  }, []);
+
+  const handleEdgeClick = useCallback((edge: LinkEdge) => {
+    console.log('Aresta clicada:', edge);
+    toast.info(`Relacionamento: ${edge.source} → ${edge.target} [${edge.type}]`);
+  }, []);
+
+  // Resetar análise
+  const resetAnalysis = useCallback(() => {
+    setFile(null);
+    setParsedData(null);
+    setGraph(null);
+    setAiAnalysis('');
+    setSourceColumn('');
+    setTargetColumn('');
+    setRelationshipColumn('');
+    setWeightColumn('');
+    setShowGraph(false);
+    setShowPreview(true);
+    setActiveTab('upload');
+    setShowConfigPanel(false);
+  }, []);
+
+  // Verificar se as colunas estão configuradas
+  const isConfigurationValid = sourceColumn && targetColumn && sourceColumn !== targetColumn;
+
+  // Debug: mostrar estado das configurações
+  useEffect(() => {
+    if (parsedData) {
+      console.log('🔍 Estado das configurações:', {
+        sourceColumn,
+        targetColumn,
+        relationshipColumn,
+        weightColumn,
+        isConfigurationValid,
+        totalColumns: parsedData.columns.length,
+        columns: parsedData.columns
       });
     }
-
-    // Desenha arestas primeiro
-    validLinks.forEach(link => {
-      const sourcePos = pos[link.source];
-      const targetPos = pos[link.target];
-      if (!sourcePos || !targetPos) return;
-
-      switch (link.type) {
-        case 'associate':
-        case 'knows':
-          ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
-          break;
-        case 'owns':
-          ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)';
-          break;
-        case 'works_at':
-        case 'lives_at':
-        case 'visits':
-          ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)';
-          break;
-        case 'client':
-        case 'transaction':
-          ctx.strokeStyle = 'rgba(217, 119, 6, 0.6)';
-          break;
-        case 'related_to':
-          ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)';
-          break;
-        default:
-          ctx.strokeStyle = 'rgba(30, 41, 59, 0.9)';
-      }
-
-      ctx.lineWidth = Math.max(2, Math.min(6, 1 + Math.log10(((link.value || 1) + 1)) * 2));
-      ctx.beginPath();
-      ctx.moveTo(sourcePos.x, sourcePos.y);
-      ctx.lineTo(targetPos.x, targetPos.y);
-      ctx.stroke();
-
-      ctx.font = '9px Arial';
-      ctx.fillStyle = '#64748b';
-      const midX = (sourcePos.x + targetPos.x) / 2;
-      const midY = (sourcePos.y + targetPos.y) / 2;
-      ctx.fillText(link.type, midX, midY);
-    });
-
-    // Desenha nós por cima
-    nodes.forEach(node => {
-      const p = pos[node.id];
-      if (!p) return;
-
-      switch (node.group) {
-        case 'suspect':
-          ctx.fillStyle = '#ef4444';
-          break;
-        case 'victim':
-          ctx.fillStyle = '#3b82f6';
-          break;
-        case 'witness':
-          ctx.fillStyle = '#10b981';
-          break;
-        case 'location':
-          ctx.fillStyle = '#f59e0b';
-          break;
-        case 'evidence':
-          ctx.fillStyle = '#8b5cf6';
-          break;
-        case 'organization':
-          ctx.fillStyle = '#ec4899';
-          break;
-        default:
-          ctx.fillStyle = '#64748b';
-      }
-
-      const size = Math.max(5, Math.min(15, node.size || Math.sqrt(degrees[node.id] || 1) + 4));
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, size, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      ctx.font = 'bold 10px Arial';
-      ctx.fillStyle = '#1e293b';
-      ctx.textAlign = 'center';
-      ctx.fillText(String(node.label), p.x, p.y + size + 10);
-    });
-
-    // Legenda
-    const legendX = 20;
-    let legendY = 60;
-    const types = ['suspect', 'victim', 'witness', 'location', 'evidence', 'organization'];
-    const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
-    const legends = ['Suspeito', 'Vítima', 'Testemunha', 'Local', 'Evidência', 'Organização'];
-
-    ctx.font = 'bold 12px Arial';
-    ctx.fillStyle = '#1e293b';
-    ctx.textAlign = 'left';
-    ctx.fillText('Legenda:', legendX, legendY - 20);
-
-    types.forEach((type, i) => {
-      ctx.fillStyle = colors[i];
-      ctx.beginPath();
-      ctx.arc(legendX + 7, legendY, 7, 0, 2 * Math.PI);
-      ctx.fill();
-
-      ctx.fillStyle = '#1e293b';
-      ctx.font = '11px Arial';
-      ctx.fillText(legends[i], legendX + 20, legendY + 4);
-
-      legendY += 20;
-    });
-
-    // Estatísticas filtradas
-    ctx.font = 'bold 12px Arial';
-    ctx.fillStyle = '#1e293b';
-    ctx.textAlign = 'left';
-    ctx.fillText('Estatísticas:', canvas.width - 150, 60);
-
-    ctx.font = '11px Arial';
-    ctx.fillText(`Nós: ${nodes.length}`, canvas.width - 150, 80);
-    ctx.fillText(`Arestas: ${validLinks.length}`, canvas.width - 150, 100);
-
-    const density = (2 * validLinks.length) / (nodes.length * (nodes.length - 1));
-    ctx.fillText(`Densidade: ${isFinite(density) ? density.toFixed(3) : '0.000'}`, canvas.width - 150, 120);
-
-    const avgDegree = nodes.length ? (validLinks.length * 2) / nodes.length : 0;
-    ctx.fillText(`Grau médio: ${avgDegree.toFixed(2)}`, canvas.width - 150, 140);
-  };
+  }, [parsedData, sourceColumn, targetColumn, relationshipColumn, weightColumn, isConfigurationValid]);
 
   return (
-    <div className="page-container py-6">
-      <div className="page-header">
-        <h1 className="page-title flex items-center gap-3">
-          <LinkIcon className="h-8 w-8 text-brand" />
-          Análise de Vínculo
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-primary mb-2 flex items-center justify-center gap-3">
+          <Shield className="h-10 w-10 text-primary" />
+          Análise de Vínculos
         </h1>
-        <p className="page-description">
-          Identifique conexões e relações a partir de dados tabulares
+        <p className="text-muted-foreground text-lg">
+          Sistema profissional de análise de vínculos e relacionamentos investigativos
         </p>
       </div>
 
-      {!currentCase ? (
-        <Card className="border-warning bg-warning-light">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-warning" />
-              <p className="text-warning-foreground">
-                Selecione um caso antes de prosseguir com a análise de vínculo.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-6">
-            <LinkAnalysisUploader onDataUploaded={handleDataUploaded} />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="upload">📤 Upload</TabsTrigger>
+          <TabsTrigger value="visualization" disabled={!parsedData}>📊 Visualização</TabsTrigger>
+          <TabsTrigger value="analysis" disabled={!parsedData}>🤖 Análise IA</TabsTrigger>
+        </TabsList>
 
-            {uploadedData.length > 0 && (
+        {/* Tab: Upload */}
+        <TabsContent value="upload" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                Upload de Arquivo
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
+                <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <div className="space-y-2">
+                  <p className="text-lg font-medium">Arraste e solte seu arquivo aqui</p>
+                  <p className="text-sm text-muted-foreground">
+                    Ou clique para selecionar um arquivo
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Formatos suportados: CSV, Excel (XLS/XLSX), JSON, TXT
+                  </p>
+                </div>
+                <Input
+                  type="file"
+                  accept=".csv,.xls,.xlsx,.json,.txt"
+                  onChange={handleFileUpload}
+                  className="mt-4"
+                  disabled={isProcessing}
+                />
+              </div>
+
+              {isProcessing && (
+                <div className="flex items-center justify-center gap-2 text-blue-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processando arquivo...
+                </div>
+              )}
+
+              {parsedData && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle className="h-4 w-4" />
+                    <span className="font-medium">Arquivo processado com sucesso!</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">{parsedData.totalRows}</div>
+                      <div className="text-sm text-muted-foreground">Linhas</div>
+                    </div>
+                    <div className="text-center p-3 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">{parsedData.columns.length}</div>
+                      <div className="text-sm text-muted-foreground">Colunas</div>
+                    </div>
+                    <div className="text-center p-3 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">{(parsedData.fileInfo.size / 1024).toFixed(1)}</div>
+                      <div className="text-sm text-muted-foreground">KB</div>
+                    </div>
+                    <div className="text-center p-3 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">{parsedData.fileInfo.type || 'N/A'}</div>
+                      <div className="text-sm text-muted-foreground">Tipo</div>
+                    </div>
+                  </div>
+
+                  {/* Botão de Configurações */}
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => setShowConfigPanel(!showConfigPanel)} 
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      {showConfigPanel ? 'Ocultar' : 'Mostrar'} Configurações
+                    </Button>
+                    
+                    <Button onClick={() => setShowPreview(!showPreview)} variant="outline">
+                      {showPreview ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                      {showPreview ? 'Ocultar' : 'Mostrar'} Preview
+                    </Button>
+                  </div>
+
+                  {/* Painel de Configurações */}
+                  {showConfigPanel && (
+                    <Card className="border-2 border-blue-200 bg-blue-50">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg text-blue-800">
+                            ⚙️ Configuração do Grafo
+                          </CardTitle>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowConfigPanel(false)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Configuração Automática */}
+                        <div className="p-3 bg-white rounded-lg border border-blue-200">
+                          <div className="flex items-center gap-2 text-blue-800 mb-2">
+                            <Brain className="h-4 w-4" />
+                            <span className="font-medium">Configuração Automática</span>
+                          </div>
+                          <p className="text-sm text-blue-700 mb-3">
+                            Detecte automaticamente as melhores colunas para análise de vínculos.
+                          </p>
+                          <Button 
+                            onClick={detectBestColumns}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                            disabled={isProcessing}
+                          >
+                            <Brain className="h-4 w-4 mr-2" />
+                            Detectar Configuração Automaticamente
+                          </Button>
+                        </div>
+
+                        {/* Seleção Manual de Colunas */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="sourceColumn" className="text-sm font-medium">
+                              Coluna de Origem *
+                            </Label>
+                            <Select value={sourceColumn} onValueChange={setSourceColumn}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione a coluna de origem" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {parsedData.columns.map((column, index) => (
+                                  <SelectItem key={index} value={column}>
+                                    {column}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="targetColumn" className="text-sm font-medium">
+                              Coluna de Destino *
+                            </Label>
+                            <Select value={targetColumn} onValueChange={setTargetColumn}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione a coluna de destino" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {parsedData.columns.map((column, index) => (
+                                  <SelectItem key={index} value={column}>
+                                    {column}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="relationshipColumn" className="text-sm font-medium">
+                              Coluna de Relacionamento
+                            </Label>
+                            <Select value={relationshipColumn} onValueChange={setRelationshipColumn}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione a coluna de relacionamento" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {parsedData.columns.map((column, index) => (
+                                  <SelectItem key={index} value={column}>
+                                    {column}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="weightColumn" className="text-sm font-medium">
+                              Coluna de Peso/Valor
+                            </Label>
+                            <Select value={weightColumn} onValueChange={setWeightColumn}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione a coluna de peso" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {parsedData.columns.map((column, index) => (
+                                  <SelectItem key={index} value={column}>
+                                    {column}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        {/* Status da Configuração */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className={`p-3 rounded-lg border ${
+                            sourceColumn ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                          }`}>
+                            <div className="text-sm font-medium">Origem</div>
+                            <div className={`text-xs ${sourceColumn ? 'text-green-700' : 'text-red-700'}`}>
+                              {sourceColumn || 'Não configurada'}
+                            </div>
+                          </div>
+
+                          <div className={`p-3 rounded-lg border ${
+                            targetColumn ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                          }`}>
+                            <div className="text-sm font-medium">Destino</div>
+                            <div className={`text-xs ${targetColumn ? 'text-green-700' : 'text-red-700'}`}>
+                              {targetColumn || 'Não configurada'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Validação */}
+                        {sourceColumn && targetColumn && sourceColumn === targetColumn && (
+                          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <div className="flex items-center gap-2 text-yellow-800">
+                              <AlertCircle className="h-4 w-4" />
+                              <span className="text-sm">⚠️ Origem e destino são a mesma coluna</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Botão de Geração */}
+                        <Button 
+                          onClick={generateCustomGraph} 
+                          disabled={!isConfigurationValid || isProcessing}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          size="lg"
+                        >
+                          {isProcessing ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Gerando Grafo...
+                            </>
+                          ) : (
+                            <>
+                              <Network className="h-4 w-4 mr-2" />
+                              Processar Análise de Vínculos
+                            </>
+                          )}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Status da configuração automática */}
+                  {parsedData && !showConfigPanel && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-blue-800 mb-2">
+                        <Info className="h-4 w-4" />
+                        <span className="font-medium">Status da Configuração</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="font-medium">Origem:</span> 
+                          <span className={`ml-2 ${sourceColumn ? 'text-green-600' : 'text-red-600'}`}>
+                            {sourceColumn || 'Não detectada'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium">Destino:</span> 
+                          <span className={`ml-2 ${targetColumn ? 'text-green-600' : 'text-red-600'}`}>
+                            {targetColumn || 'Não detectada'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium">Relacionamento:</span> 
+                          <span className={`ml-2 ${relationshipColumn ? 'text-green-600' : 'text-gray-600'}`}>
+                            {relationshipColumn || 'Não detectado'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium">Peso:</span> 
+                          <span className={`ml-2 ${weightColumn ? 'text-green-600' : 'text-gray-600'}`}>
+                            {weightColumn || 'Não detectado'}
+                          </span>
+                        </div>
+                      </div>
+                      {!isConfigurationValid && (
+                        <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-yellow-800 text-sm">
+                          ⚠️ Configure as colunas para gerar o grafo
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Botão de Processar Análise de Vínculos */}
+                  {parsedData && (
+                    <div className="mt-4">
+                      <Button 
+                        onClick={generateCustomGraph} 
+                        disabled={!isConfigurationValid || isProcessing}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white"
+                        size="lg"
+                      >
+                        {isProcessing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Processando...
+                          </>
+                        ) : (
+                          <>
+                            <Network className="h-4 w-4 mr-2" />
+                            Processar Análise de Vínculos
+                          </>
+                        )}
+                      </Button>
+                      {!isConfigurationValid && (
+                        <p className="text-sm text-muted-foreground mt-2 text-center">
+                          Configure as colunas de origem e destino para processar a análise
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {showPreview && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium">Preview dos Dados:</h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse border border-border">
+                          <thead>
+                            <tr className="bg-muted">
+                              {parsedData.columns.map((column, index) => (
+                                <th key={index} className="border border-border p-2 text-left">
+                                  {column}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {parsedData.preview.map((row, rowIndex) => (
+                              <tr key={rowIndex}>
+                                {parsedData.columns.map((column, colIndex) => (
+                                  <td key={colIndex} className="border border-border p-2">
+                                    {String(row[column] || '')}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab: Visualização */}
+        <TabsContent value="visualization" className="space-y-4">
+          {!graph ? (
+            <Card>
+              <CardContent className="text-center p-8 text-muted-foreground">
+                <Network className="h-12 w-12 mx-auto mb-4" />
+                <p>Configure e gere um grafo primeiro para visualizá-lo</p>
+                {parsedData && (
+                  <Button 
+                    onClick={() => setActiveTab('upload')} 
+                    className="mt-4"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Ir para Configurações
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Estatísticas do Grafo */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    Processamento
+                    <BarChart3 className="h-5 w-5" />
+                    Estatísticas do Grafo
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <Button
-                    onClick={processData}
-                    disabled={isProcessing}
-                    className="w-full"
-                  >
-                    <Play className="mr-2 h-4 w-4" />
-                    {isProcessing ? 'Processando...' : 'Executar Análise de Vínculos'}
-                  </Button>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="text-center p-3 bg-blue-50 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">{graph.metadata.totalNodes}</div>
+                      <div className="text-sm text-muted-foreground">Entidades</div>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">{graph.metadata.totalEdges}</div>
+                      <div className="text-sm text-muted-foreground">Relacionamentos</div>
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{graph.metadata.density.toFixed(3)}</div>
+                      <div className="text-sm text-muted-foreground">Densidade</div>
+                    </div>
+                    <div className="text-center p-3 bg-orange-50 rounded-lg">
+                      <div className="text-2xl font-bold text-orange-600">{graph.metadata.averageDegree.toFixed(1)}</div>
+                      <div className="text-sm text-muted-foreground">Grau Médio</div>
+                    </div>
+                  </div>
                   
-                  {networkData && (
-                    <Button
-                      onClick={generateInsights}
-                      disabled={isGeneratingInsights}
-                      variant="outline"
-                      className="w-full"
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Tipos de Entidades:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {graph.metadata.nodeTypes.map((type, index) => (
+                          <Badge key={index} variant="secondary">{type}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium mb-2">Tipos de Relacionamentos:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {graph.metadata.edgeTypes.map((type, index) => (
+                          <Badge key={index} variant="outline">{type}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Visualização do Grafo */}
+              <AdvancedLinkGraph
+                graph={graph}
+                onNodeClick={handleNodeClick}
+                onEdgeClick={handleEdgeClick}
+              />
+            </>
+          )}
+        </TabsContent>
+
+        {/* Tab: Análise IA */}
+        <TabsContent value="analysis" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5" />
+                Análise com Inteligência Artificial
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!graph ? (
+                <div className="text-center p-8 text-muted-foreground">
+                  <Network className="h-12 w-12 mx-auto mb-4" />
+                  <p>Gere um grafo primeiro para realizar a análise de IA</p>
+                  {parsedData && (
+                    <Button 
+                      onClick={() => setActiveTab('upload')} 
+                      className="mt-4"
                     >
-                      {isGeneratingInsights ? 'Gerando...' : 'Gerar Insights de Investigação'}
+                      <Settings className="h-4 w-4 mr-2" />
+                      Ir para Configurações
                     </Button>
                   )}
-                </CardContent>
-              </Card>
-            )}
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Como Funciona</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4 text-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full h-6 w-6 flex items-center justify-center flex-shrink-0">
-                      1
-                    </div>
-                    <p>
-                      Faça upload de um arquivo CSV, TXT, XLS ou XLSX contendo dados tabulares com informações relacionais.
-                      O sistema espera colunas identificando entidades e suas relações.
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-start gap-3">
-                    <div className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full h-6 w-6 flex items-center justify-center flex-shrink-0">
-                      2
-                    </div>
-                    <p>
-                      O sistema processará os dados para identificar conexões, calculando proximidade por grau (conexões diretas)
-                      e proximidade por frequência (número de interações).
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-start gap-3">
-                    <div className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full h-6 w-6 flex items-center justify-center flex-shrink-0">
-                      3
-                    </div>
-                    <p>
-                      Um grafo de vínculos será gerado visualmente, mostrando as entidades como nós e suas relações como conexões.
-                      O tamanho e cor dos nós e conexões representam sua importância na rede.
-                    </p>
-                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      onClick={analyzeWithAI} 
+                      disabled={isAnalyzingAI}
+                      className="flex-1"
+                    >
+                      {isAnalyzingAI ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Analisando...
+                        </>
+                      ) : (
+                        <>
+                          <Brain className="h-4 w-4 mr-2" />
+                          Analisar com IA
+                        </>
+                      )}
+                    </Button>
+                  </div>
 
-          <div>
-            <div className="space-y-6">
-              <Card className="h-96 flex flex-col">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <LinkIcon className="h-5 w-5" /> Visualização de Vínculos
-                  </CardTitle>
-                  <CardDescription>
-                    Gráfico de relacionamentos entre entidades encontradas nos dados
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  {isProcessing ? (
-                    <div className="flex flex-col items-center justify-center h-full p-8">
-                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 dark:border-gray-100" />
-                      <p className="mt-4 text-gray-600 dark:text-gray-400">
-                        Processando dados e gerando visualização de vínculos...
-                      </p>
-                    </div>
-                  ) : graphImage ? (
-                    <div className="h-full flex flex-col">
-                      <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-md flex-1 overflow-auto">
-                        <img 
-                          src={graphImage} 
-                          alt="Gráfico de vínculos" 
-                          className="max-w-full h-auto mx-auto"
+                  {aiAnalysis && (
+                    <div className="space-y-4">
+                      <Separator />
+                      <div className="prose prose-sm max-w-none">
+                        <div 
+                          className="whitespace-pre-wrap text-sm bg-muted p-4 rounded-lg"
+                          dangerouslySetInnerHTML={{ __html: aiAnalysis.replace(/\n/g, '<br/>') }}
                         />
                       </div>
-                      <div className="mt-4 flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-medium">Estatísticas dos Vínculos</h4>
-                          <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-2">
-                            <p className="text-xs">Entidades: <span className="font-semibold">{networkData?.nodes.length || 0}</span></p>
-                            <p className="text-xs">Conexões: <span className="font-semibold">{networkData?.links.length || 0}</span></p>
-                            {networkData && (
-                              <>
-                                <p className="text-xs">Grau Médio: <span className="font-semibold">
-                                  {(networkData.links.length * 2 / networkData.nodes.length).toFixed(1)}
-                                </span></p>
-                                <p className="text-xs">Densidade: <span className="font-semibold">
-                                  {((2 * networkData.links.length) / (networkData.nodes.length * (networkData.nodes.length - 1))).toFixed(3)}
-                                </span></p>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <Button 
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            if (graphImage) {
-                              const link = document.createElement('a');
-                              link.download = 'analise-vinculos.png';
-                              link.href = graphImage;
-                              link.click();
-                            }
-                          }}
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Salvar
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                      <LinkIcon className="h-16 w-16 opacity-20 mb-4" />
-                      <p>Carregue dados e execute a análise para visualizar os vínculos</p>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-
-              {insights && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      Insights de Investigação
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="prose dark:prose-invert max-w-none">
-                      <div className="whitespace-pre-wrap text-sm">{insights}</div>
-                    </div>
-                  </CardContent>
-                </Card>
+                </>
               )}
-            </div>
-          </div>
-        </div>
-      )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
-};
-
-export default LinkAnalysis;
+}

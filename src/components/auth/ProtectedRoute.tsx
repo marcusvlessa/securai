@@ -14,73 +14,47 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRole,
   requiredPermission 
 }) => {
-  const { user, profile, loading } = useAuth()
-  const location = useLocation()
+  const { user, profile, loading } = useAuth();
+  const location = useLocation();
 
+  console.log('ProtectedRoute: Render', { user, profile, loading, location: location.pathname });
+
+  // Se ainda está carregando, mostrar spinner
   if (loading) {
+    console.log('ProtectedRoute: Still loading, showing spinner');
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
       </div>
-    )
+    );
   }
 
+  // Se não há usuário, redirecionar para login
   if (!user) {
-    return <Navigate to="/auth/login" state={{ from: location }} replace />
+    console.log('ProtectedRoute: No user, redirecting to login');
+    return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-destructive">Perfil não encontrado</h2>
-          <p className="text-muted-foreground mt-2">
-            Entre em contato com o administrador do sistema.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  // Check role requirement
-  if (requiredRole) {
-    const roleHierarchy = {
-      'viewer': 0,
-      'analyst': 1,
-      'investigator': 2,
-      'admin': 3
-    }
-
-    const userRoleLevel = roleHierarchy[profile.role] || 0
-    const requiredRoleLevel = roleHierarchy[requiredRole] || 0
-
-    if (userRoleLevel < requiredRoleLevel) {
-      return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-destructive">Acesso Negado</h2>
-            <p className="text-muted-foreground mt-2">
-              Você não tem permissão para acessar esta página.
-            </p>
-          </div>
-        </div>
-      )
+  // Verificar role se especificado
+  if (requiredRole && profile && profile.role !== requiredRole) {
+    // Usuários admin têm acesso a todos os módulos
+    if (profile.role === 'admin') {
+      console.log('ProtectedRoute: Admin user, access granted to all modules');
+    } else {
+      console.log('ProtectedRoute: Role mismatch, redirecting to unauthorized');
+      return <Navigate to="/unauthorized" replace />;
     }
   }
 
-  // Check specific permission
-  if (requiredPermission && !profile.permissions.includes(requiredPermission) && profile.role !== 'admin') {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-destructive">Permissão Insuficiente</h2>
-          <p className="text-muted-foreground mt-2">
-            Você não tem a permissão necessária para acessar esta funcionalidade.
-          </p>
-        </div>
-      </div>
-    )
+  // Verificar permissão se especificada
+  if (requiredPermission && profile && !profile.permissions.includes(requiredPermission)) {
+    console.log('ProtectedRoute: Permission denied, redirecting to unauthorized');
+    return <Navigate to="/unauthorized" replace />;
   }
 
-  return <>{children}</>
-}
+  console.log('ProtectedRoute: Access granted, rendering children');
+  return <>{children}</>;
+};

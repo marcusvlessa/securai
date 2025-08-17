@@ -20,7 +20,16 @@ export interface AIModelSelection {
  */
 export class AIModelSelector {
   private static instance: AIModelSelector;
-  private getDefaultGroqModel = () => { try { const raw = localStorage.getItem('securai-api-settings'); if (raw) { const parsed = JSON.parse(raw); if (parsed.groqModel) return parsed.groqModel; } } catch (e) { /* noop */ } return 'llama3-8b-8192'; };
+  private getDefaultGroqModel = () => { 
+    try { 
+      const raw = localStorage.getItem('securai-api-settings'); 
+      if (raw) { 
+        const parsed = JSON.parse(raw); 
+        if (parsed.groqModel) return parsed.groqModel; 
+      } 
+    } catch (e) { /* noop */ } 
+    return 'meta-llama/llama-4-scout-17b-16e-instruct'; // Modelo correto
+  };
   private performanceMetrics: Map<string, any> = new Map();
 
   static getInstance(): AIModelSelector {
@@ -132,34 +141,34 @@ export class AIModelSelector {
     // Para investigações criminais, sempre usar o modelo mais preciso
     if (context?.includes('investigation') || context?.includes('criminal') || context?.includes('investigacao')) {
       return {
-        model: 'llama3-70b-8192',
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         reason: 'Investigação criminal requer máxima precisão',
-        fallbackModel: 'llama3-8b-8192'
+        fallbackModel: 'meta-llama/llama-4-scout-17b-16e-instruct'
       };
     }
 
     // Seleção baseada na prioridade e complexidade
     if (priority === 'speed' && complexity === 'low') {
       return {
-        model: 'llama3-8b-8192',
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         reason: 'Prioridade em velocidade para conteúdo simples',
-        fallbackModel: 'gemma-7b-it'
+        fallbackModel: 'meta-llama/llama-4-scout-17b-16e-instruct'
       };
     }
 
     if (priority === 'accuracy' || complexity === 'high') {
       return {
-        model: 'llama3-70b-8192',
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         reason: 'Máxima precisão necessária',
-        fallbackModel: 'llama3-8b-8192'
+        fallbackModel: 'meta-llama/llama-4-scout-17b-16e-instruct'
       };
     }
 
     // Modelo balanceado padrão
     return {
-      model: 'llama3-8b-8192',
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
       reason: 'Modelo balanceado para uso geral',
-      fallbackModel: 'gemma-7b-it'
+      fallbackModel: 'meta-llama/llama-4-scout-17b-16e-instruct'
     };
   }
 
@@ -218,9 +227,9 @@ export class AIModelSelector {
     // Planilhas e dados estruturados
     if (['xlsx', 'xls', 'csv', 'json'].includes(extension)) {
       return {
-        model: 'llama3-70b-8192',
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         reason: 'Dados estruturados requerem precisão na análise',
-        fallbackModel: 'llama3-8b-8192'
+        fallbackModel: 'meta-llama/llama-4-scout-17b-16e-instruct'
       };
     }
 
@@ -269,6 +278,7 @@ export class AIModelSelector {
   }> {
     // Métricas estimadas baseadas no modelo
     const metrics: Record<string, any> = {
+      'meta-llama/llama-4-scout-17b-16e-instruct': { avgResponseTime: 2500, accuracy: 0.96, costPerToken: 0.0006 },
       'llama3-70b-8192': { avgResponseTime: 3000, accuracy: 0.95, costPerToken: 0.0008 },
       'llama3-8b-8192': { avgResponseTime: 1500, accuracy: 0.88, costPerToken: 0.0002 },
       'gemma-7b-it': { avgResponseTime: 1200, accuracy: 0.85, costPerToken: 0.0001 },

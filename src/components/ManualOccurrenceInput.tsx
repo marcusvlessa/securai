@@ -99,7 +99,7 @@ const ManualOccurrenceInput = ({
       console.log('Sending manual text for AI analysis');
       
       // Call the AI service with a longer token limit for detailed analysis
-      const aiAnalysis = await makeGroqAIRequest(messages, 4096);
+      const aiAnalysis = await makeGroqAIRequest(messages, 2048); // Reduzido para evitar erro de max_tokens
       console.log('Analysis completed successfully, length:', aiAnalysis.length);
       
       // Pass analysis back to parent component

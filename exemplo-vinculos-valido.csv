@@ -1,0 +1,11 @@
+origem,destino,tipo_relacionamento,peso,data,observacoes
+João Silva,Maria Santos,amizade,5,2024-01-15,Amigos desde a infância
+João Silva,Pedro Costa,trabalho,8,2024-01-16,Colegas de trabalho
+Maria Santos,Ana Oliveira,familia,10,2024-01-17,Primas
+Pedro Costa,João Silva,negocio,7,2024-01-18,Parceiros comerciais
+Ana Oliveira,Maria Santos,estudo,6,2024-01-19,Companheiras de curso
+Carlos Lima,João Silva,esporte,4,2024-01-20,Companheiros de time
+Carlos Lima,Pedro Costa,musica,3,2024-01-21,Integrantes da banda
+Ana Oliveira,Carlos Lima,voluntariado,9,2024-01-22,Trabalho voluntário
+Maria Santos,Pedro Costa,evento,6,2024-01-23,Organizadores de evento
+João Silva,Carlos Lima,projeto,8,2024-01-24,Colaboradores em projeto

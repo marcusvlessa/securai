@@ -1,0 +1,44 @@
+origem,destino,tipo_relacionamento,peso,data,observacoes,status,prioridade
+João Silva,Maria Santos,conhece,5,2024-01-15,Amigos de longa data,ativo,alta
+João Silva,ABC-1234,possui,10,2024-01-20,Veículo registrado,ativo,alta
+Maria Santos,123.456.789-00,identifica,8,2024-01-15,CPF da pessoa,ativo,alta
+ABC-1234,Centro Comercial,estacionado_em,3,2024-01-25,Local frequente,ativo,media
+Maria Santos,Centro Comercial,frequenta,7,2024-01-25,Visita regular,ativo,alta
+João Silva,Centro Comercial,frequenta,6,2024-01-25,Visita ocasional,ativo,media
+123.456.789-00,Centro Comercial,identificado_em,4,2024-01-25,Registro de entrada,ativo,media
+Pedro Oliveira,João Silva,trabalha_com,9,2024-01-10,Colega de trabalho,ativo,alta
+Pedro Oliveira,Maria Santos,conhece,4,2024-01-12,Conhecido através de João,ativo,media
+Pedro Oliveira,XYZ-9876,possui,8,2024-01-18,Veículo próprio,ativo,alta
+XYZ-9876,Centro Comercial,estacionado_em,2,2024-01-26,Visita única,ativo,baixa
+Ana Costa,Pedro Oliveira,supervisiona,10,2024-01-05,Chefe direto,ativo,alta
+Ana Costa,Centro Comercial,gerencia,9,2024-01-01,Responsável pelo local,ativo,alta
+Ana Costa,João Silva,contrata,7,2024-01-08,Processo seletivo,ativo,alta
+Ana Costa,Maria Santos,contrata,6,2024-01-08,Processo seletivo,ativo,alta
+Centro Comercial,987.654.321-00,registra,5,2024-01-01,CNPJ da empresa,ativo,alta
+987.654.321-00,Ana Costa,representa,10,2024-01-01,Proprietária,ativo,alta
+Carlos Mendes,João Silva,investiga,8,2024-01-30,Investigador policial,ativo,alta
+Carlos Mendes,Maria Santos,investiga,7,2024-01-30,Investigador policial,ativo,alta
+Carlos Mendes,Centro Comercial,investiga,6,2024-01-30,Local de interesse,ativo,alta
+Carlos Mendes,Pedro Oliveira,investiga,5,2024-01-30,Investigador policial,ativo,alta
+Carlos Mendes,Ana Costa,investiga,4,2024-01-30,Investigador policial,ativo,alta
+DEF-4567,João Silva,emprestado_para,3,2024-01-22,Veículo emprestado,ativo,media
+DEF-4567,Maria Santos,emprestado_para,2,2024-01-22,Veículo emprestado,ativo,media
+GHI-7890,Pedro Oliveira,emprestado_para,4,2024-01-24,Veículo emprestado,ativo,media
+GHI-7890,Ana Costa,emprestado_para,3,2024-01-24,Veículo emprestado,ativo,media
+João Silva,111.222.333-44,identifica,6,2024-01-16,CPF do pai,ativo,alta
+Maria Santos,222.333.444-55,identifica,5,2024-01-16,CPF da mãe,ativo,alta
+Pedro Oliveira,333.444.555-66,identifica,4,2024-01-16,CPF do irmão,ativo,media
+Ana Costa,444.555.666-77,identifica,3,2024-01-16,CPF do cônjuge,ativo,media
+Centro Comercial,Rua das Flores 123,localizado_em,10,2024-01-01,Endereço físico,ativo,alta
+Centro Comercial,(11) 3333-4444,contato,8,2024-01-01,Telefone principal,ativo,alta
+Centro Comercial,centro@exemplo.com,contato,7,2024-01-01,Email corporativo,ativo,alta
+João Silva,(11) 99999-1111,contato,9,2024-01-15,Telefone pessoal,ativo,alta
+Maria Santos,(11) 99999-2222,contato,8,2024-01-15,Telefone pessoal,ativo,alta
+Pedro Oliveira,(11) 99999-3333,contato,7,2024-01-15,Telefone pessoal,ativo,alta
+Ana Costa,(11) 99999-4444,contato,6,2024-01-15,Telefone pessoal,ativo,alta
+Carlos Mendes,(11) 99999-5555,contato,5,2024-01-15,Telefone profissional,ativo,alta
+João Silva,joao.silva@email.com,contato,8,2024-01-15,Email pessoal,ativo,alta
+Maria Santos,maria.santos@email.com,contato,7,2024-01-15,Email pessoal,ativo,alta
+Pedro Oliveira,pedro.oliveira@email.com,contato,6,2024-01-15,Email pessoal,ativo,alta
+Ana Costa,ana.costa@email.com,contato,5,2024-01-15,Email pessoal,ativo,alta
+Carlos Mendes,carlos.mendes@policia.gov.br,contato,4,2024-01-15,Email profissional,ativo,alta

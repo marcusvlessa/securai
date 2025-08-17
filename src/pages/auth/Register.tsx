@@ -1,491 +1,373 @@
-import React, { useState, useEffect } from 'react'
-import { Link, Navigate } from 'react-router-dom'
-import { useAuth } from '../../contexts/AuthContext'
-import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
-import { Label } from '../../components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
-import { Alert, AlertDescription } from '../../components/ui/alert'
-import { LoadingSpinner } from '../../components/ui/loading-spinner'
-import { Shield, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react'
-import { supabase } from '../../integrations/supabase/client'
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Shield, Eye, EyeOff, User, Badge, Building } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface Organization {
-  id: string
-  name: string
-  type: string
+interface RegisterFormData {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  badgeNumber: string;
+  department: string;
+  role: 'investigator' | 'analyst' | 'delegado';
+  organizationId: string;
 }
 
-interface OrganizationsByType {
-  Federal: Organization[]
-  Estadual: Organization[]
-}
-
-export const Register: React.FC = () => {
-  const { signUp, user, loading: authLoading } = useAuth()
-  const [organizations, setOrganizations] = useState<Organization[]>([])
-  const [organizationsByType, setOrganizationsByType] = useState<OrganizationsByType>({ Federal: [], Estadual: [] })
-  const [searchTerm, setSearchTerm] = useState('')
-  const [organizationsLoading, setOrganizationsLoading] = useState(true)
-  const [organizationsError, setOrganizationsError] = useState('')
-  const [formData, setFormData] = useState({
+const Register: React.FC = () => {
+  const [formData, setFormData] = useState<RegisterFormData>({
+    name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    organization_id: '',
-    role: 'analyst' as 'admin' | 'investigator' | 'analyst' | 'delegado',
-    name: '',
-    badge_number: '',
-    department: ''
-  })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+    badgeNumber: '',
+    department: '',
+    role: 'analyst',
+    organizationId: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const { signUp } = useAuth();
+  const navigate = useNavigate();
 
-  // Redirect if already authenticated
-  if (user) {
-    return <Navigate to="/app" replace />
-  }
+  const handleChange = (field: keyof RegisterFormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setError(null);
+  };
 
-  // Fetch organizations
-  useEffect(() => {
-    const fetchOrganizations = async () => {
-      setOrganizationsLoading(true)
-      setOrganizationsError('')
-      
-      try {
-        console.log('Fetching organizations...')
-        const { data, error } = await supabase
-          .from('organizations')
-          .select('id, name, type')
-          .order('name')
-
-        if (error) {
-          console.error('Supabase error:', error)
-          throw error
-        }
-        
-        console.log('Organizations fetched:', data?.length || 0)
-        setOrganizations(data || [])
-        
-        // Group organizations by type
-        const grouped = (data || []).reduce((acc: OrganizationsByType, org) => {
-          if (org.type === 'Federal') {
-            acc.Federal.push(org)
-          } else {
-            acc.Estadual.push(org)
-          }
-          return acc
-        }, { Federal: [], Estadual: [] })
-        
-        setOrganizationsByType(grouped)
-        console.log('Organizations grouped:', { 
-          Federal: grouped.Federal.length, 
-          Estadual: grouped.Estadual.length 
-        })
-        
-      } catch (error: any) {
-        console.error('Error fetching organizations:', error)
-        setOrganizationsError(error.message || 'Erro ao carregar organizações')
-      } finally {
-        setOrganizationsLoading(false)
-      }
+  const validateForm = (): boolean => {
+    if (!formData.name.trim()) {
+      setError('Nome é obrigatório');
+      return false;
     }
 
-    fetchOrganizations()
-  }, [])
+    if (!formData.email.trim()) {
+      setError('Email é obrigatório');
+      return false;
+    }
+
+    if (!formData.password) {
+      setError('Senha é obrigatória');
+      return false;
+    }
+
+    if (formData.password.length < 8) {
+      setError('Senha deve ter pelo menos 8 caracteres');
+      return false;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Senhas não coincidem');
+      return false;
+    }
+
+    if (!formData.badgeNumber.trim()) {
+      setError('Número de identificação é obrigatório');
+      return false;
+    }
+
+    if (!formData.department.trim()) {
+      setError('Departamento é obrigatório');
+      return false;
+    }
+
+    if (!formData.organizationId.trim()) {
+      setError('Organização é obrigatória');
+      return false;
+    }
+
+    return true;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
-    // Validation
-    if (formData.password !== formData.confirmPassword) {
-      setError('As senhas não coincidem')
-      return
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
     }
 
-    if (formData.password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres')
-      return
-    }
-
-    if (!formData.organization_id) {
-      setError('Selecione uma organização')
-      return
-    }
-
-    setLoading(true)
+    setIsLoading(true);
+    setError(null);
 
     try {
       await signUp(formData.email, formData.password, {
         name: formData.name,
-        organization_id: formData.organization_id,
+        badge_number: formData.badgeNumber,
+        department: formData.department,
         role: formData.role,
-        badge_number: formData.badge_number,
-        department: formData.department
-      })
+        organization_id: formData.organizationId
+      });
       
-      setSuccess(true)
-    } catch (error: any) {
-      setError(error.message || 'Erro ao criar conta')
+      navigate('/dashboard');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      setError(errorMessage);
     } finally {
-      setLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }))
-  }
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    )
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <CardTitle className="text-2xl font-bold text-green-600">Conta Criada!</CardTitle>
-              <CardDescription className="text-base">
-                Verifique seu email para ativar a conta
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="text-center">
-            <p className="text-muted-foreground">
-              Enviamos um link de verificação para <strong>{formData.email}</strong>. 
-              Clique no link para ativar sua conta e fazer login.
-            </p>
-          </CardContent>
-          <CardFooter>
-            <Link to="/auth/login" className="w-full">
-              <Button className="w-full">
-                Ir para Login
-              </Button>
-            </Link>
-          </CardFooter>
-        </Card>
-      </div>
-    )
-  }
+  const mockOrganizations = [
+    { id: 'org-1', name: 'Polícia Civil - SP', type: 'police' },
+    { id: 'org-2', name: 'Polícia Federal', type: 'federal' },
+    { id: 'org-3', name: 'Polícia Militar - SP', type: 'military' },
+    { id: 'org-4', name: 'Ministério Público - SP', type: 'prosecutor' },
+    { id: 'org-5', name: 'Delegacia de Polícia - Centro', type: 'police' }
+  ];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <Shield className="h-6 w-6 text-primary" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-secondary/10 p-4">
+      <div className="w-full max-w-2xl">
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <div className="bg-primary/10 p-3 rounded-full">
+              <Shield className="h-8 w-8 text-primary" />
+            </div>
           </div>
-          <div>
-            <CardTitle className="text-2xl font-bold">Registrar no Secur:AI</CardTitle>
-            <CardDescription className="text-base">
-              Solicitar acesso ao sistema de análise forense
+          <h1 className="text-2xl font-bold text-foreground">Secur:AI</h1>
+          <p className="text-muted-foreground mt-2">
+            Sistema de Inteligência Artificial para Investigação Criminal
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle>Solicitar Acesso ao Sistema</CardTitle>
+            <CardDescription>
+              Preencha os dados para solicitar acesso ao Secur:AI
             </CardDescription>
-            <Alert className="mt-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Importante:</strong> Sua solicitação de registro será analisada por um administrador antes da aprovação. 
-                Certifique-se de usar seu email corporativo oficial.
-              </AlertDescription>
-            </Alert>
-          </div>
-        </CardHeader>
-
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome Completo</Label>
-              <Input
-                id="name"
-                name="name"
-                type="text"
-                placeholder="Seu nome completo"
-                value={formData.name}
-                onChange={handleChange}
-                required
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Corporativo</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="seu.email@organizacao.gov.br"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="organization_id">Organização</Label>
-              {organizationsError && (
-                <Alert variant="destructive" className="mb-2">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{organizationsError}</AlertDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              <Select 
-                value={formData.organization_id} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, organization_id: value }))}
-                disabled={loading || organizationsLoading}
-              >
-                <SelectTrigger>
-                  <SelectValue 
-                    placeholder={
-                      organizationsLoading 
-                        ? "Carregando organizações..." 
-                        : organizationsError 
-                        ? "Erro ao carregar" 
-                        : "Selecione sua organização"
-                    } 
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">
+                    <User className="inline w-4 h-4 mr-2" />
+                    Nome Completo *
+                  </Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder="Seu nome completo"
+                    value={formData.name}
+                    onChange={(e) => handleChange('name', e.target.value)}
+                    required
+                    disabled={isLoading}
                   />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px] z-50 bg-popover border border-border shadow-lg">
-                  {organizationsLoading ? (
-                    <div className="px-2 py-4 text-center">
-                      <LoadingSpinner size="sm" className="mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Carregando organizações...</p>
-                    </div>
-                  ) : organizationsError ? (
-                    <div className="px-2 py-4 text-center text-sm text-destructive">
-                      Erro ao carregar organizações
-                    </div>
-                  ) : (
-                    <>
-                      <div className="px-2 py-1 sticky top-0 bg-popover border-b">
-                        <Input
-                          placeholder="Buscar organização..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="h-8"
-                        />
-                      </div>
-                      
-                      {/* Órgãos Federais */}
-                      {organizationsByType.Federal.filter(org => 
-                        org.name.toLowerCase().includes(searchTerm.toLowerCase())
-                      ).length > 0 && (
-                        <>
-                          <div className="px-2 py-1 text-sm font-semibold text-muted-foreground border-t bg-muted/50">
-                            Órgãos Federais ({organizationsByType.Federal.filter(org => 
-                              org.name.toLowerCase().includes(searchTerm.toLowerCase())
-                            ).length})
-                          </div>
-                          {organizationsByType.Federal
-                            .filter(org => org.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                            .map((org) => (
-                              <SelectItem key={org.id} value={org.id}>
-                                {org.name}
-                              </SelectItem>
-                            ))}
-                        </>
-                      )}
-                      
-                      {/* Órgãos Estaduais */}
-                      {organizationsByType.Estadual.filter(org => 
-                        org.name.toLowerCase().includes(searchTerm.toLowerCase())
-                      ).length > 0 && (
-                        <>
-                          <div className="px-2 py-1 text-sm font-semibold text-muted-foreground border-t bg-muted/50">
-                            Órgãos Estaduais ({organizationsByType.Estadual.filter(org => 
-                              org.name.toLowerCase().includes(searchTerm.toLowerCase())
-                            ).length})
-                          </div>
-                          {organizationsByType.Estadual
-                            .filter(org => org.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                            .map((org) => (
-                              <SelectItem key={org.id} value={org.id}>
-                                {org.name}
-                              </SelectItem>
-                            ))}
-                        </>
-                      )}
-                      
-                      {/* No results */}
-                      {organizations.filter(org => 
-                        org.name.toLowerCase().includes(searchTerm.toLowerCase())
-                      ).length === 0 && searchTerm && !organizationsLoading && (
-                        <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                          Nenhuma organização encontrada para "{searchTerm}"
-                        </div>
-                      )}
-                      
-                      {/* Show total when no search */}
-                      {!searchTerm && organizations.length > 0 && (
-                        <div className="px-2 py-1 text-xs text-muted-foreground border-t bg-muted/30 text-center">
-                          {organizations.length} organizações disponíveis
-                        </div>
-                      )}
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="badge_number">Matrícula/Badge</Label>
-                <Input
-                  id="badge_number"
-                  name="badge_number"
-                  placeholder="12345"
-                  value={formData.badge_number}
-                  onChange={handleChange}
-                  required
-                  disabled={loading}
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="email">
+                    <User className="inline w-4 h-4 mr-2" />
+                    Email *
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={formData.email}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="role">Função</Label>
-                <Select 
-                  value={formData.role} 
-                  onValueChange={(value: any) => setFormData(prev => ({ ...prev, role: value }))}
-                  disabled={loading}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="analyst">Analista</SelectItem>
-                    <SelectItem value="investigator">Investigador</SelectItem>
-                    <SelectItem value="delegado">Delegado</SelectItem>
-                    <SelectItem value="admin">Administrador</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="badgeNumber">
+                    <Badge className="inline w-4 h-4 mr-2" />
+                    Número de Identificação *
+                  </Label>
+                  <Input
+                    id="badgeNumber"
+                    type="text"
+                    placeholder="Ex: 12345"
+                    value={formData.badgeNumber}
+                    onChange={(e) => handleChange('badgeNumber', e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="department">
+                    <Building className="inline w-4 h-4 mr-2" />
+                    Departamento *
+                  </Label>
+                  <Input
+                    id="department"
+                    type="text"
+                    placeholder="Ex: Homicídios"
+                    value={formData.department}
+                    onChange={(e) => handleChange('department', e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="department">Departamento</Label>
-              <Input
-                id="department"
-                name="department"
-                placeholder="Ex: Investigação Criminal, Perícia, etc."
-                value={formData.department}
-                onChange={handleChange}
-                required
-                disabled={loading}
-              />
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="role">Função</Label>
+                  <Select 
+                    value={formData.role} 
+                    onValueChange={(value: 'investigator' | 'analyst' | 'delegado') => 
+                      handleChange('role', value)
+                    }
+                  >
+                    <SelectTrigger disabled={isLoading}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="investigator">Investigador</SelectItem>
+                      <SelectItem value="analyst">Analista</SelectItem>
+                      <SelectItem value="delegado">Delegado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Mínimo 6 caracteres"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  disabled={loading}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="organization">Organização *</Label>
+                  <Select 
+                    value={formData.organizationId} 
+                    onValueChange={(value) => handleChange('organizationId', value)}
+                  >
+                    <SelectTrigger disabled={isLoading}>
+                      <SelectValue placeholder="Selecione sua organização" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mockOrganizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-              <div className="relative">
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
-                  placeholder="Digite a senha novamente"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required
-                  disabled={loading}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={loading}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha *</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={formData.password}
+                      onChange={(e) => handleChange('password', e.target.value)}
+                      required
+                      disabled={isLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Mínimo 8 caracteres
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirmar Senha *</Label>
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={formData.confirmPassword}
+                      onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                      required
+                      disabled={isLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      disabled={isLoading}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </CardContent>
 
-          <CardFooter className="flex flex-col space-y-4">
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <LoadingSpinner size="sm" className="mr-2" />
-                  Criando conta...
-                </>
-              ) : (
-                'Criar Conta'
-              )}
-            </Button>
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Importante:</strong> Sua solicitação será analisada pelos administradores do sistema. 
+                  Você receberá uma confirmação por email assim que o acesso for aprovado.
+                </p>
+              </div>
 
-            <div className="text-center text-sm text-muted-foreground">
-              Já tem uma conta?{' '}
-              <Link
-                to="/auth/login"
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enviando solicitação...
+                  </>
+                ) : (
+                  'Solicitar Acesso'
+                )}
+              </Button>
+            </form>
+
+            <div className="mt-6 text-center text-sm">
+              <span className="text-muted-foreground">
+                Já tem uma conta?{' '}
+              </span>
+              <Link 
+                to="/auth/login" 
                 className="text-primary hover:underline font-medium"
               >
                 Fazer login
               </Link>
             </div>
-          </CardFooter>
-        </form>
-      </Card>
+          </CardContent>
+        </Card>
+
+        <div className="mt-8 text-center text-xs text-muted-foreground">
+          <p>© 2024 Secur:AI. Sistema desenvolvido para órgãos de segurança pública.</p>
+        </div>
+      </div>
     </div>
-  )
-}
+  );
+};
+
+export default Register;

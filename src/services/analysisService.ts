@@ -231,9 +231,9 @@ export class AnalysisService {
           session_name: `Análise de Vínculos - ${new Date().toLocaleDateString()}`,
           file_type: fileType,
           column_mapping: mapping,
-          graph_data: graphData,
-          nodes_count: graphData.nodes?.length || 0,
-          links_count: graphData.links?.length || 0,
+          graph_data: typeof graphData === 'string' ? JSON.parse(graphData) : graphData,
+          nodes_count: (typeof graphData === 'string' ? JSON.parse(graphData) : graphData).nodes?.length || 0,
+          links_count: (typeof graphData === 'string' ? JSON.parse(graphData) : graphData).edges?.length || 0,
           status: 'completed'
         })
         .select()
@@ -249,11 +249,11 @@ export class AnalysisService {
         analysisType: 'link_analysis',
         modelUsed: 'llama3-70b-8192',
         resultData: {
-          graphData,
+          graphData: typeof graphData === 'string' ? JSON.parse(graphData) : graphData,
           sessionId: sessionData.id,
           fileType,
           mapping,
-          summary: `Análise de vínculos processada com ${graphData.nodes?.length || 0} nós e ${graphData.links?.length || 0} conexões`
+          summary: `Análise de vínculos processada com ${(typeof graphData === 'string' ? JSON.parse(graphData) : graphData).nodes?.length || 0} nós e ${(typeof graphData === 'string' ? JSON.parse(graphData) : graphData).edges?.length || 0} conexões`
         },
         confidenceScore: 0.9,
         processingTime,
@@ -362,15 +362,15 @@ export class AnalysisService {
     // Convert blob to File for GROQ
     const file = new File([blob], fileInfo.filename, { type: fileInfo.mime_type });
     
-    const analysis = await analyzeImageWithGroq(fileInfo.filename);
+    const analysis = await analyzeImageWithGroq(fileInfo.filename, 'comprehensive');
     
     return {
       type: 'image_analysis',
       filename: fileInfo.filename,
       analysis,
-      detectedText: analysis.ocrText || '',
-      faces: analysis.faces || [],
-      licensePlates: analysis.licensePlates || []
+      detectedText: typeof analysis === 'string' ? analysis : analysis.ocrText || '',
+      faces: typeof analysis === 'string' ? [] : analysis.faces || [],
+      licensePlates: typeof analysis === 'string' ? [] : analysis.licensePlates || []
     };
   }
 

@@ -115,7 +115,9 @@ const parseRIFFile = async (file: File): Promise<Partial<RIFTransaction>[]> => {
   const fileExtension = file.name.split('.').pop()?.toLowerCase();
   
   try {
-    if (fileExtension === 'csv') {
+    if (fileExtension === 'txt') {
+      return parseRIFTextFile(file);
+    } else if (fileExtension === 'csv') {
       return parseCSVFile(file);
     } else if (fileExtension === 'xlsx') {
       return parseExcelFile(file);
@@ -129,6 +131,59 @@ const parseRIFFile = async (file: File): Promise<Partial<RIFTransaction>[]> => {
   } catch (error) {
     console.error('Erro ao processar arquivo:', error);
     throw error;
+  }
+};
+
+const parseRIFTextFile = async (file: File): Promise<Partial<RIFTransaction>[]> => {
+  console.log('🔍 Parsing RIF text file:', file.name);
+  
+  const text = await file.text();
+  const { RIFParser } = await import('./rifParser');
+  
+  try {
+    const rifData = RIFParser.parseRIFText(text);
+    const transactions: Partial<RIFTransaction>[] = [];
+    
+    // Converter créditos para transações
+    rifData.creditos.forEach((credito, index) => {
+      transactions.push({
+        date: new Date().toISOString(),
+        description: `Crédito de ${credito.contraparte}`,
+        counterparty: credito.contraparte,
+        agency: credito.agencia,
+        account: credito.conta,
+        bank: credito.banco,
+        amount: credito.valor.toString(),
+        type: 'credit' as const,
+        method: 'PIX' as const,
+        holderDocument: rifData.informacoesBasicas.cpf,
+        counterpartyDocument: credito.documento
+      });
+    });
+    
+    // Converter débitos para transações
+    rifData.debitos.forEach((debito, index) => {
+      transactions.push({
+        date: new Date().toISOString(),
+        description: `Débito para ${debito.contraparte}`,
+        counterparty: debito.contraparte,
+        agency: debito.agencia,
+        account: debito.conta,
+        bank: debito.banco,
+        amount: debito.valor.toString(),
+        type: 'debit' as const,
+        method: 'PIX' as const,
+        holderDocument: rifData.informacoesBasicas.cpf,
+        counterpartyDocument: debito.documento
+      });
+    });
+    
+    console.log(`✅ RIF parseado com sucesso: ${transactions.length} transações`);
+    return transactions;
+    
+  } catch (error) {
+    console.error('❌ Erro ao parsear RIF:', error);
+    throw new Error('Falha ao processar arquivo RIF: ' + error.message);
   }
 };
 

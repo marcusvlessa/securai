@@ -100,12 +100,8 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
             'text-max-width': 80,
             'font-size': 10,
             'color': '#ffffff',
-            'width': 'data(degree)',
-            'height': 'data(degree)',
-            'min-width': 20,
-            'min-height': 20,
-            'max-width': 60,
-            'max-height': 60
+            'width': (node: any) => Math.max(20, Math.min(60, node.data('degree') * 3)),
+            'height': (node: any) => Math.max(20, Math.min(60, node.data('degree') * 3))
           }
         },
         // Estilo dos nós por tipo
@@ -231,13 +227,13 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
       cy.nodes().forEach(node => {
         const nodeType = node.data('type');
         if (filteredNodeTypes.includes(nodeType)) {
-          node.show();
+          node.style('display', 'element');
         } else {
-          node.hide();
+          node.style('display', 'none');
         }
       });
     } else {
-      cy.nodes().show();
+      cy.nodes().style('display', 'element');
     }
 
     // Filtrar arestas por tipo
@@ -245,13 +241,13 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
       cy.edges().forEach(edge => {
         const edgeType = edge.data('type');
         if (filteredEdgeTypes.includes(edgeType)) {
-          edge.show();
+          edge.style('display', 'element');
         } else {
-          edge.hide();
+          edge.style('display', 'none');
         }
       });
     } else {
-      cy.edges().show();
+      cy.edges().style('display', 'element');
     }
 
     // Aplicar busca
@@ -313,11 +309,23 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
     const cy = cyRef.current;
     const png = cy.png({
       scale: 2,
-      quality: 1,
-      output: 'blob'
+      full: true,
+      bg: '#ffffff'
     });
 
-    const url = URL.createObjectURL(png);
+    // Converter string para blob se necessário
+    const blob = typeof png === 'string' ? 
+      fetch(png).then(r => r.blob()) : 
+      Promise.resolve(png);
+    
+    blob.then(pngBlob => {
+      const url = URL.createObjectURL(pngBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `grafo-vinculos-${new Date().toISOString().split('T')[0]}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
     const a = document.createElement('a');
     a.href = url;
     a.download = `grafo-vinculos-${new Date().toISOString().split('T')[0]}.png`;

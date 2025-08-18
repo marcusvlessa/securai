@@ -31,6 +31,7 @@ interface CaseContextType {
   currentCase: Case | null;
   loading: boolean;
   error: string | null;
+  addCase: (caseData: Partial<Case>) => Promise<Case>;
   createCase: (caseData: Partial<Case>) => Promise<Case>;
   updateCase: (id: string, updates: Partial<Case>) => Promise<void>;
   deleteCase: (id: string) => Promise<void>;
@@ -344,6 +345,7 @@ export const CaseProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     currentCase,
     loading,
     error,
+    addCase: createCase, // Alias para compatibilidade
     createCase,
     updateCase,
     deleteCase,

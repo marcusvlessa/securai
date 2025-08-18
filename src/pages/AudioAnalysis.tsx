@@ -78,7 +78,7 @@ const AudioAnalysis = () => {
     // Process multiple files
     Array.from(files).forEach((file, index) => {
       const fileName = file.name.toLowerCase();
-      const validExtensions = ['.wav', '.mp3', '.mp4', '.opus', '.m4a', '.flac', '.aac', '.ogg'];
+      const validExtensions = ['.wav', '.mp3', '.mp4', '.opus', '.m4a', '.flac', '.aac', '.ogg', '.webm'];
       const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
       
       if (!file.type.startsWith('audio/') && !hasValidExtension) {

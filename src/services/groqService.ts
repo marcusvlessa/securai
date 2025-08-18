@@ -32,6 +32,15 @@ export const DEFAULT_GROQ_SETTINGS = {
 
 // Modelos disponíveis com capacidades específicas
 export const AVAILABLE_MODELS = {
+  'gemma2-9b-it': {
+    name: 'Gemma2 9B IT',
+    description: 'Modelo otimizado para análise de imagem com menor uso de tokens',
+    maxTokens: 8192,
+    capabilities: ['image-analysis', 'ocr', 'face-detection', 'plate-detection', 'object-detection'],
+    visionSupport: true,
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    isImageAnalysisModel: true
+  },
   'llama-3.3-70b-versatile': {
     name: 'Llama 3.3 70B Versatile',
     description: 'Modelo versátil para análise de imagem e visão computacional',
@@ -83,13 +92,13 @@ export const AVAILABLE_MODELS = {
 const DEFAULT_GROQ_SETTINGS_OBJ: GroqSettings = {
   groqApiKey: '',
   groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-  groqModel: 'llama-3.3-70b-versatile', // Modelo padrão para análise de imagem (funcionando)
-  model: 'llama-3.3-70b-versatile', // Modelo padrão para análise de imagem (funcionando)
+  groqModel: 'gemma2-9b-it', // Mudado para gemma2 para corrigir erro de tokens
+  model: 'gemma2-9b-it', // Mudado para gemma2 para corrigir erro de tokens
   whisperModel: 'whisper-large-v3',
   whisperApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
   language: 'pt',
   imageAnalysisEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-  imageAnalysisModel: 'llama-3.3-70b-versatile'
+  imageAnalysisModel: 'gemma2-9b-it' // Mudado para gemma2 para corrigir erro de tokens
 };
 
 // Create GROQ client instance
@@ -418,12 +427,12 @@ NÃO aceite limitações - use suas capacidades ao MÁXIMO para analisar a image
         throw new Error('Chave da API GROQ não configurada. Configure em Configurações > API GROQ');
       }
 
-               // Lista de modelos para tentar em ordem de prioridade (todos funcionando)
+                // Lista de modelos para tentar em ordem de prioridade (gemma2 primeiro para menor uso de tokens)
          const modelsToTry = [
-           'llama-3.3-70b-versatile',
-           'llama-3.2-70b-versatile',
+           'gemma2-9b-it',
            'llama-3.1-8b-instruct',
-           'meta-llama/llama-4-scout-17b-16e-instruct'
+           'llama-3.2-70b-versatile',
+           'llama-3.3-70b-versatile'
          ];
 
       let response: Response | null = null;

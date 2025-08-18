@@ -253,19 +253,22 @@ const FileUploader: React.FC<FileUploaderProps> = ({
   const saveFileMetadata = async (file: UploadedFile) => {
     try {
       const { error } = await supabase
-        .from('evidence_files')
-        .insert([{
+        .from('uploaded_files')
+        .insert({
           id: file.id,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          url: file.url,
-          case_id: file.metadata?.caseId,
-          category: file.metadata?.category,
-          description: file.metadata?.description,
-          tags: file.metadata?.tags,
-          uploaded_at: file.uploadedAt.toISOString()
-        }]);
+          filename: file.name,
+          file_size: file.size,
+          file_type: file.type,
+          mime_type: file.type,
+          file_path: file.url,
+          case_id: file.metadata?.caseId || '',
+          user_id: (await supabase.auth.getUser()).data.user?.id || '',
+          metadata: {
+            category: file.metadata?.category,
+            description: file.metadata?.description,
+            tags: file.metadata?.tags
+          }
+        });
 
       if (error) throw error;
     } catch (error) {

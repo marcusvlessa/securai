@@ -288,20 +288,20 @@ export class RIFParser {
   }
   
   /**
-   * Parse das transações
+   * Parse das transações (créditos e débitos)
    */
   private static parseTransacoes(lines: string[], tipo: 'credito' | 'debito'): RIFTransaction[] {
     const transacoes: RIFTransaction[] = [];
     
     for (const line of lines) {
-      // Regex para capturar transações
-      const match = line.match(/^\s*-\s*([\d.,]+)%\s*\(R\$\s*([\d.,]+)\s*em\s*(\d+)\s*transaç[õo]*es?\)\s*via\s*CPF\s*([\d./-]+)\s*\(([^)]+)\)/);
+      // Regex melhorada para capturar transações no formato do COAF
+      const match = line.match(/^\s*-\s*([\d.,]+)%\s*\(R\$\s*([\d.,]+)\s*em\s*(\d+)\s*transaç[õo]*es?\)\s*(?:via|para)\s*(?:CPF|CNPJ)\s*([\d./-]+)\s*\(([^)]+)\)/);
       
       if (match) {
         const [, percentual, valor, transacoesCount, documento, nome] = match;
         
         // Extrair informações bancárias se existirem
-        const bancoMatch = line.match(/banco\s*(\d+)\s*-\s*([^,]+),\s*agência\s*número\s*(\d+)\s*e\s*conta\s*número\s*([\d-]+)/);
+        const bancoMatch = line.match(/banco\s*(\d+)\s*(?:-\s*([^,]+))?,\s*agência\s*(?:número\s*)?(\d+)\s*e\s*conta\s*(?:número\s*)?([\d-]+)/i);
         
         const transacao: RIFTransaction = {
           contraparte: nome.trim(),
@@ -403,7 +403,15 @@ export class RIFParser {
    * Parse de valores monetários
    */
   private static parseValue(valueStr: string): number {
-    return parseFloat(valueStr.replace(/\./g, '').replace(',', '.'));
+    if (!valueStr) return 0;
+    
+    // Remove R$ e espaços, substitui vírgulas por pontos
+    const cleaned = valueStr
+      .replace(/R\$\s*/, '')
+      .replace(/\./g, '') // Remove pontos de milhar
+      .replace(',', '.'); // Troca vírgula decimal por ponto
+    
+    return parseFloat(cleaned) || 0;
   }
   
   /**

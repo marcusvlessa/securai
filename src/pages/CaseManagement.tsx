@@ -33,8 +33,11 @@ const CaseManagement = () => {
   };
 
   const handleSelectCase = (caseId: string) => {
-    setCurrentCase(caseId);
-    toast.success('Caso selecionado');
+    const selectedCase = cases.find(c => c.id === caseId);
+    if (selectedCase) {
+      setCurrentCase(selectedCase);
+      toast.success('Caso selecionado');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -105,11 +108,11 @@ const CaseManagement = () => {
               <div className="flex flex-col space-y-2 text-sm text-muted-foreground mb-4">
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 mr-2" />
-                  <span>Criado em: {formatDate(caseItem.dateCreated)}</span>
+                  <span>Criado em: {formatDate(caseItem.created_at)}</span>
                 </div>
                 <div className="flex items-center">
                   <Clock className="h-4 w-4 mr-2" />
-                  <span>Modificado em: {formatDate(caseItem.lastModified)}</span>
+                  <span>Modificado em: {formatDate(caseItem.updated_at)}</span>
                 </div>
               </div>
               <Button 

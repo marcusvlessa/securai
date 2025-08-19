@@ -368,9 +368,9 @@ export class AnalysisService {
       type: 'image_analysis',
       filename: fileInfo.filename,
       analysis,
-      detectedText: typeof analysis === 'string' ? analysis : analysis.ocrText || '',
-      faces: typeof analysis === 'string' ? [] : analysis.faces || [],
-      licensePlates: typeof analysis === 'string' ? [] : analysis.licensePlates || []
+      detectedText: typeof analysis === 'object' && analysis ? (analysis as any).ocrText || '' : String(analysis),
+      faces: typeof analysis === 'object' && analysis ? (analysis as any).faces || [] : [],
+      licensePlates: typeof analysis === 'object' && analysis ? (analysis as any).licensePlates || [] : []
     };
   }
 

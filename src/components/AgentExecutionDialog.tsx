@@ -25,6 +25,7 @@ interface AgentExecutionDialogProps {
   agentName: string;
   isOpen: boolean;
   onClose: () => void;
+  onExecutionComplete?: (result: any) => void;
 }
 
 interface ExecutionResult {

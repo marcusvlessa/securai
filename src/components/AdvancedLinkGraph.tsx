@@ -97,11 +97,11 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
             'text-valign': 'center',
             'text-halign': 'center',
             'text-wrap': 'wrap',
-            'text-max-width': 80,
-            'font-size': 10,
+            'text-max-width': '80px',
+            'font-size': '10px',
             'color': '#ffffff',
-            'width': (node: any) => Math.max(20, Math.min(60, node.data('degree') * 3)),
-            'height': (node: any) => Math.max(20, Math.min(60, node.data('degree') * 3))
+            'width': '60px',
+            'height': '60px'
           }
         },
         // Estilo dos nós por tipo
@@ -326,11 +326,6 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
       a.click();
       URL.revokeObjectURL(url);
     });
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `grafo-vinculos-${new Date().toISOString().split('T')[0]}.png`;
-    a.click();
-    URL.revokeObjectURL(url);
   }, []);
 
   const toggleNodeType = useCallback((nodeType: string) => {

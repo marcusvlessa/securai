@@ -436,11 +436,11 @@ export default function Dashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-background rounded-lg p-6 max-w-2xl w-full m-4">
             <FileUploader 
-              caseId={currentCase.id} 
-              onClose={() => setShowFileUploader(false)}
-              onUploadComplete={() => {
+              caseId={currentCase.id}
+              onFileUploaded={() => {
                 loadCaseStats();
                 loadRecentData();
+                setShowFileUploader(false);
               }}
             />
           </div>

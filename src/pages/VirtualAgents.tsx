@@ -441,12 +441,13 @@ const VirtualAgents = () => {
         agent={editingAgent}
       />
 
-      <AgentExecutionDialog
-        isOpen={isExecutionOpen}
-        onClose={() => setIsExecutionOpen(false)}
-        agent={selectedAgent}
-        onExecutionComplete={handleExecutionComplete}
-      />
+        <AgentExecutionDialog
+          isOpen={isExecutionOpen}
+          onClose={() => setIsExecutionOpen(false)}
+          agentId={selectedAgent?.id || ''}
+          agentName={selectedAgent?.name || ''}
+          onExecutionComplete={handleExecutionComplete}
+        />
     </div>
   );
 };

@@ -34,13 +34,15 @@ function App() {
     if (!localStorage.getItem('securai-api-settings')) {
       // Set default endpoints if not configured
       saveGroqSettings({
-        groqApiKey: '',  // Configurado pelo usuário na página de Configurações
+        groqApiKey: '',
         groqApiEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-        groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct', // Modelo correto
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct', // Modelo correto para análise
-        whisperModel: 'whisper-large-v3',  // Versão mais recente do modelo
+        groqModel: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        whisperModel: 'whisper-large-v3',
         whisperApiEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
-        language: 'pt'  // Configuração padrão para português
+        language: 'pt-BR',
+        imageAnalysisEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
+        imageAnalysisModel: 'gemma2-9b-it'
       });
       
       console.log('Configurações padrão da API GROQ inicializadas');

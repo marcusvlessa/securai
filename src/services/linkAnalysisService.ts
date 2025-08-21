@@ -467,7 +467,7 @@ export class LinkGraphGenerator {
       // Se passou por todas as validações, processar a linha
       processedRows++;
       
-      // Criar ou atualizar nós
+      // Criar ou atualizar nós com detecção automática de tipo
       const sourceNode = this.addOrUpdateNode(nodes, source, nodeTypes);
       const targetNode = this.addOrUpdateNode(nodes, target, nodeTypes);
       
@@ -541,46 +541,71 @@ export class LinkGraphGenerator {
     };
   }
   
-  // Adicionar ou atualizar nó
-  private static addOrUpdateNode(nodes: Map<string, LinkNode>, id: string, nodeTypes: Set<string>): LinkNode {
-    if (!nodes.has(id)) {
-      // Detectar tipo de entidade baseado no ID
-      const type = this.detectEntityType(id);
-      nodeTypes.add(type);
+  
+  // Detectar tipo de entidade automaticamente
+  private static detectEntityType(value: string): string {
+    const normalized = value.replace(/[^\w@.-]/g, '');
+    
+    // CPF: 11 dígitos
+    if (/^\d{11}$/.test(normalized)) {
+      return 'cpf';
+    }
+    
+    // CNPJ: 14 dígitos
+    if (/^\d{14}$/.test(normalized)) {
+      return 'cnpj';
+    }
+    
+    // Telefone: 10-11 dígitos começando com DDD
+    if (/^[1-9]\d{9,10}$/.test(normalized)) {
+      return 'telefone';
+    }
+    
+    // Email
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      return 'email';
+    }
+    
+    // Placa de veículo
+    if (/^[A-Z]{3}[\d][A-Z]\d{2}$/.test(normalized.toUpperCase()) || /^[A-Z]{3}\d{4}$/.test(normalized.toUpperCase())) {
+      return 'placa';
+    }
+    
+    // Endereço (contém palavras como rua, av, etc)
+    if (/(rua|avenida|av|alameda|travessa|praça|estrada|rodovia|r\.|av\.|al\.|tr\.|pr\.|est\.|rod\.)/i.test(value)) {
+      return 'endereco';
+    }
+    
+    // Padrão: entidade genérica
+    return 'entidade';
+  }
+
+  // Adicionar ou atualizar nó no Map
+  private static addOrUpdateNode(
+    nodes: Map<string, LinkNode>,
+    nodeId: string,
+    nodeTypes: Set<string>
+  ): LinkNode {
+    let node = nodes.get(nodeId);
+    
+    if (!node) {
+      // Detectar tipo automaticamente
+      const nodeType = this.detectEntityType(nodeId);
       
-      const node: LinkNode = {
-        id,
-        label: id,
-        type,
+      node = {
+        id: nodeId,
+        label: nodeId,
+        type: nodeType,
         properties: {},
         degree: 0,
         centrality: 0
       };
       
-      nodes.set(id, node);
-      console.log(`✅ Nó criado: ${id} (${type})`);
+      nodes.set(nodeId, node);
+      nodeTypes.add(nodeType);
     }
-    return nodes.get(id)!; // Ensure it's not undefined
-  }
-  
-  // Detectar tipo de entidade baseado no padrão do ID
-  private static detectEntityType(id: string): string {
-    // Padrões para diferentes tipos de entidade
-    if (/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(id)) return 'CPF';
-    if (/^[A-Z]{3}-\d{4}$/.test(id)) return 'Placa';
-    if (/^\(\d{2}\)\s?\d{4,5}-\d{4}$/.test(id)) return 'Telefone';
-    if (/^\d{5}-\d{3}$/.test(id)) return 'CEP';
-    if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(id)) return 'Email';
-    if (/^[A-Z]{2}\d{9}$/.test(id)) return 'CNPJ';
-    if (/^\d{1,2}\.\d{3}\.\d{3}\.\d{1}$/.test(id)) return 'RG';
     
-    // Se parece ser um nome próprio
-    if (/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/.test(id)) return 'Pessoa';
-    
-    // Se parece ser um endereço
-    if (/\d+/.test(id) && /[A-Za-z]+/.test(id)) return 'Endereço';
-    
-    return 'Entidade';
+    return node;
   }
 }
 

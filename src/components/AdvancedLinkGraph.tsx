@@ -48,6 +48,69 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
   const [filteredEdgeTypes, setFilteredEdgeTypes] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Função para truncar labels longos
+  const truncateLabel = (label: string, maxLength: number = 20): string => {
+    if (label.length <= maxLength) return label;
+    return label.substring(0, maxLength) + '...';
+  };
+
+  // Função para determinar cor do nó baseado no tipo
+  const getNodeColor = (type: string): string => {
+    const colorMap: Record<string, string> = {
+      'cpf': '#ef4444',
+      'cnpj': '#3b82f6', 
+      'telefone': '#f59e0b',
+      'email': '#8b5cf6',
+      'pessoa': '#06b6d4',
+      'endereco': '#84cc16',
+      'placa': '#10b981',
+      'banco': '#f97316',
+      'conta': '#14b8a6',
+      'empresa': '#6366f1',
+      'default': '#6b7280'
+    };
+    return colorMap[type.toLowerCase()] || colorMap.default;
+  };
+
+  // Função para determinar cor da borda do nó
+  const getNodeBorderColor = (type: string): string => {
+    const color = getNodeColor(type);
+    // Retorna uma versão mais escura da cor do nó
+    return color.replace('4', '6').replace('5', '7');
+  };
+
+  // Função para determinar forma do nó baseado no tipo
+  const getNodeShape = (type: string): string => {
+    const shapeMap: Record<string, string> = {
+      'cpf': 'round-rectangle',
+      'cnpj': 'rectangle',
+      'telefone': 'round-tag',
+      'email': 'round-diamond',
+      'pessoa': 'ellipse',
+      'endereco': 'round-hexagon',
+      'placa': 'round-octagon',
+      'banco': 'diamond',
+      'conta': 'hexagon',
+      'empresa': 'rectangle',
+      'default': 'ellipse'
+    };
+    return shapeMap[type.toLowerCase()] || shapeMap.default;
+  };
+
+  // Função para determinar cor da aresta baseado no tipo
+  const getEdgeColor = (type: string): string => {
+    const colorMap: Record<string, string> = {
+      'relacionamento': '#6b7280',
+      'transacao': '#10b981',
+      'comunicacao': '#f59e0b',
+      'vinculo': '#8b5cf6',
+      'propriedade': '#06b6d4',
+      'parentesco': '#ef4444',
+      'default': '#6b7280'
+    };
+    return colorMap[type.toLowerCase()] || colorMap.default;
+  };
+
   // Inicializar grafo
   useEffect(() => {
     if (!containerRef.current || !graph) return;
@@ -64,11 +127,14 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
         nodes: graph.nodes.map(node => ({
           data: {
             id: node.id,
-            label: node.label,
+            label: truncateLabel(node.label),
+            fullLabel: node.label,
             type: node.type,
             degree: node.degree,
             centrality: node.centrality,
-            properties: node.properties
+            properties: node.properties,
+            nodeColor: getNodeColor(node.type),
+            borderColor: getNodeBorderColor(node.type)
           },
           classes: [`node-${node.type.toLowerCase()}`, `degree-${Math.min(Math.floor(node.degree / 2), 5)}`]
         })),
@@ -79,8 +145,9 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
             target: edge.target,
             label: edge.label,
             type: edge.type,
-            weight: edge.weight,
-            properties: edge.properties
+            weight: Math.min(Math.max(edge.weight, 1), 10),
+            properties: edge.properties,
+            edgeColor: getEdgeColor(edge.type)
           },
           classes: [`edge-${edge.type.toLowerCase()}`]
         }))
@@ -90,86 +157,128 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
         {
           selector: 'node',
           style: {
-            'background-color': '#3b82f6',
-            'border-color': '#1e40af',
+            'background-color': 'data(nodeColor)',
+            'border-color': 'data(borderColor)',
             'border-width': 2,
             'label': showLabels ? 'data(label)' : '',
             'text-valign': 'center',
             'text-halign': 'center',
             'text-wrap': 'wrap',
-            'text-max-width': '80px',
-            'font-size': '10px',
+            'text-max-width': '120px',
+            'font-size': '11px',
             'color': '#ffffff',
-            'width': '60px',
-            'height': '60px'
+            'text-outline-color': '#000000',
+            'text-outline-width': 1,
+            'width': 'mapData(degree, 0, 20, 40, 100)',
+            'height': 'mapData(degree, 0, 20, 40, 100)',
+            'shape': 'ellipse'
           }
         },
-        // Estilo dos nós por tipo
+        // Estilos específicos por tipo de nó
         {
           selector: 'node.node-cpf',
-          style: { 'background-color': '#ef4444' }
+          style: { 'shape': 'round-rectangle' }
         },
         {
-          selector: 'node.node-placa',
-          style: { 'background-color': '#10b981' }
+          selector: 'node.node-cnpj',
+          style: { 'shape': 'rectangle' }
         },
         {
           selector: 'node.node-telefone',
-          style: { 'background-color': '#f59e0b' }
+          style: { 'shape': 'round-tag' }
         },
         {
           selector: 'node.node-email',
-          style: { 'background-color': '#8b5cf6' }
-        },
-        {
-          selector: 'node.node-pessoa',
-          style: { 'background-color': '#06b6d4' }
+          style: { 'shape': 'round-diamond' }
         },
         {
           selector: 'node.node-endereco',
-          style: { 'background-color': '#84cc16' }
+          style: { 'shape': 'round-hexagon' }
+        },
+        {
+          selector: 'node.node-placa',
+          style: { 'shape': 'round-octagon' }
+        },
+        {
+          selector: 'node.node-banco',
+          style: { 'shape': 'diamond' }
+        },
+        {
+          selector: 'node.node-conta',
+          style: { 'shape': 'hexagon' }
+        },
+        {
+          selector: 'node.node-empresa',
+          style: { 'shape': 'rectangle' }
         },
         // Estilo das arestas
         {
           selector: 'edge',
           style: {
-            'width': 'data(weight)',
-            'line-color': '#6b7280',
-            'target-arrow-color': '#6b7280',
+            'width': 'mapData(weight, 1, 10, 2, 8)',
+            'line-color': 'data(edgeColor)',
+            'target-arrow-color': 'data(edgeColor)',
             'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
+            'curve-style': 'unbundled-bezier',
+            'control-point-distances': [20, -20],
+            'control-point-weights': [0.25, 0.75],
             'label': showLabels ? 'data(label)' : '',
-            'font-size': 8,
+            'font-size': '9px',
             'text-rotation': 'autorotate',
-            'text-margin-y': -10
+            'text-margin-y': -8,
+            'text-background-color': '#ffffff',
+            'text-background-opacity': 0.8,
+            'text-background-padding': '2px',
+            'opacity': 0.8
           }
         },
-        // Estilo das arestas por tipo
+        // Nós selecionados
         {
-          selector: 'edge.edge-relacionamento',
-          style: { 'line-color': '#6b7280' }
+          selector: 'node:selected',
+          style: {
+            'border-color': '#fbbf24',
+            'border-width': 4,
+            'overlay-color': '#fbbf24',
+            'overlay-opacity': 0.2,
+            'overlay-padding': '8px'
+          }
         },
+        // Arestas selecionadas
         {
-          selector: 'edge.edge-transação',
-          style: { 'line-color': '#10b981' }
-        },
-        {
-          selector: 'edge.edge-comunicação',
-          style: { 'line-color': '#f59e0b' }
+          selector: 'edge:selected',
+          style: {
+            'line-color': '#fbbf24',
+            'target-arrow-color': '#fbbf24',
+            'width': 6,
+            'opacity': 1
+          }
         }
       ],
       layout: {
         name: layout,
         ...(layout === 'dagre' ? {
           rankDir: 'TB',
-          rankSep: 100,
-          nodeSep: 50
+          rankSep: 150,
+          nodeSep: 80,
+          edgeSep: 20,
+          ranker: 'longest-path'
         } : layout === 'cose' ? {
           animate: true,
-          animationDuration: 1000,
-          nodeRepulsion: 4500,
-          nodeOverlap: 20
-        } : {})
+          animationDuration: 2000,
+          nodeRepulsion: 8000,
+          nodeOverlap: 30,
+          idealEdgeLength: 150,
+          edgeElasticity: 0.45,
+          nestingFactor: 0.1,
+          gravity: 0.25,
+          numIter: 2000,
+          initialTemp: 200,
+          coolingFactor: 0.95,
+          minTemp: 1.0
+        } : {
+          animate: true,
+          animationDuration: 1000
+        })
       }
     });
 
@@ -205,6 +314,17 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
         setSelectedNode(null);
         setSelectedEdge(null);
       }
+    });
+
+    // Tooltip para nós
+    cy.on('mouseover', 'node', (evt) => {
+      const node = evt.target;
+      const fullLabel = node.data('fullLabel');
+      node.qtip({
+        content: fullLabel,
+        show: { event: evt.type, ready: true },
+        hide: { event: 'mouseout unfocus' }
+      });
     });
 
     cyRef.current = cy;
@@ -253,21 +373,23 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
     // Aplicar busca
     if (searchTerm) {
       cy.nodes().forEach(node => {
-        const label = node.data('label').toLowerCase();
+        const label = node.data('fullLabel').toLowerCase();
         if (label.includes(searchTerm.toLowerCase())) {
           node.style('background-color', '#fbbf24');
           node.style('border-color', '#d97706');
           node.style('border-width', 4);
         } else {
-          node.style('background-color', '');
-          node.style('border-color', '');
+          // Resetar estilo para cor original
+          node.style('background-color', node.data('nodeColor'));
+          node.style('border-color', node.data('borderColor'));
           node.style('border-width', 2);
         }
       });
     } else {
       cy.nodes().forEach(node => {
-        node.style('background-color', '');
-        node.style('border-color', '');
+        // Resetar estilo para cor original
+        node.style('background-color', node.data('nodeColor'));
+        node.style('border-color', node.data('borderColor'));
         node.style('border-width', 2);
       });
     }
@@ -386,7 +508,7 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
                   size="sm"
                   onClick={() => changeLayout(layoutType)}
                 >
-                  {layoutType.charAt(0).toUpperCase() + layoutType.slice(1)}
+                  {layoutType === 'dagre' ? 'Hierárquico' : layoutType === 'cose' ? 'Força' : 'Aleatório'}
                 </Button>
               ))}
             </div>
@@ -440,6 +562,10 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
                   variant={filteredNodeTypes.includes(nodeType) ? 'default' : 'outline'}
                   className="cursor-pointer"
                   onClick={() => toggleNodeType(nodeType)}
+                  style={{ 
+                    backgroundColor: filteredNodeTypes.includes(nodeType) ? getNodeColor(nodeType) : undefined,
+                    borderColor: getNodeColor(nodeType)
+                  }}
                 >
                   {nodeType}
                 </Badge>
@@ -460,6 +586,10 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
                   variant={filteredEdgeTypes.includes(edgeType) ? 'default' : 'outline'}
                   className="cursor-pointer"
                   onClick={() => toggleEdgeType(edgeType)}
+                  style={{ 
+                    backgroundColor: filteredEdgeTypes.includes(edgeType) ? getEdgeColor(edgeType) : undefined,
+                    borderColor: getEdgeColor(edgeType)
+                  }}
                 >
                   {edgeType}
                 </Badge>
@@ -499,10 +629,13 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
         </CardContent>
       </Card>
 
-      {/* Visualização do grafo */}
+      {/* Container do grafo */}
       <Card>
         <CardHeader>
-          <CardTitle>Visualização do Grafo</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Network className="h-5 w-5" />
+            Grafo de Vínculos
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div 
@@ -513,38 +646,30 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
         </CardContent>
       </Card>
 
-      {/* Painel de detalhes */}
+      {/* Detalhes da seleção */}
       {(selectedNode || selectedEdge) && (
         <Card>
           <CardHeader>
-            <CardTitle>
-              {selectedNode ? 'Detalhes da Entidade' : 'Detalhes do Relacionamento'}
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Detalhes da Seleção
             </CardTitle>
           </CardHeader>
           <CardContent>
             {selectedNode && (
-              <div className="space-y-3">
-                <div>
-                  <span className="font-medium">ID:</span> {selectedNode.id}
+              <div className="space-y-2">
+                <h4 className="font-medium">Nó: {selectedNode.label}</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><strong>Tipo:</strong> {selectedNode.type}</div>
+                  <div><strong>Grau:</strong> {selectedNode.degree}</div>
+                  <div><strong>Centralidade:</strong> {selectedNode.centrality.toFixed(3)}</div>
                 </div>
-                <div>
-                  <span className="font-medium">Tipo:</span> 
-                  <Badge variant="secondary" className="ml-2">{selectedNode.type}</Badge>
-                </div>
-                <div>
-                  <span className="font-medium">Grau:</span> {selectedNode.degree} conexões
-                </div>
-                <div>
-                  <span className="font-medium">Centralidade:</span> {(selectedNode.centrality * 100).toFixed(1)}%
-                </div>
-                {Object.keys(selectedNode.properties).length > 0 && (
-                  <div>
-                    <span className="font-medium">Propriedades:</span>
-                    <div className="mt-2 p-2 bg-muted rounded text-sm">
+                {selectedNode.properties && Object.keys(selectedNode.properties).length > 0 && (
+                  <div className="mt-2">
+                    <strong>Propriedades:</strong>
+                    <div className="text-sm text-muted-foreground">
                       {Object.entries(selectedNode.properties).map(([key, value]) => (
-                        <div key={key}>
-                          <span className="font-medium">{key}:</span> {String(value)}
-                        </div>
+                        <div key={key}>{key}: {String(value)}</div>
                       ))}
                     </div>
                   </div>
@@ -553,28 +678,20 @@ export const AdvancedLinkGraph: React.FC<AdvancedLinkGraphProps> = ({
             )}
 
             {selectedEdge && (
-              <div className="space-y-3">
-                <div>
-                  <span className="font-medium">Origem:</span> {selectedEdge.source}
+              <div className="space-y-2">
+                <h4 className="font-medium">Relacionamento: {selectedEdge.label}</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><strong>De:</strong> {selectedEdge.source}</div>
+                  <div><strong>Para:</strong> {selectedEdge.target}</div>
+                  <div><strong>Tipo:</strong> {selectedEdge.type}</div>
+                  <div><strong>Peso:</strong> {selectedEdge.weight}</div>
                 </div>
-                <div>
-                  <span className="font-medium">Destino:</span> {selectedEdge.target}
-                </div>
-                <div>
-                  <span className="font-medium">Tipo:</span> 
-                  <Badge variant="secondary" className="ml-2">{selectedEdge.type}</Badge>
-                </div>
-                <div>
-                  <span className="font-medium">Peso:</span> {selectedEdge.weight}
-                </div>
-                {Object.keys(selectedEdge.properties).length > 0 && (
-                  <div>
-                    <span className="font-medium">Propriedades:</span>
-                    <div className="mt-2 p-2 bg-muted rounded text-sm">
+                {selectedEdge.properties && Object.keys(selectedEdge.properties).length > 0 && (
+                  <div className="mt-2">
+                    <strong>Propriedades:</strong>
+                    <div className="text-sm text-muted-foreground">
                       {Object.entries(selectedEdge.properties).map(([key, value]) => (
-                        <div key={key}>
-                          <span className="font-medium">{key}:</span> {String(value)}
-                        </div>
+                        <div key={key}>{key}: {String(value)}</div>
                       ))}
                     </div>
                   </div>

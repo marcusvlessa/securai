@@ -87,14 +87,14 @@ const RIFUpload: React.FC<RIFUploadProps> = ({ onDataUploaded }) => {
             <div className="cursor-pointer">
               <span className="text-sm font-medium">Arraste arquivos RIF aqui ou clique para selecionar</span>
               <p className="text-xs text-muted-foreground mt-1">
-                Suporte: CSV, XLSX, JSON, PDF
+                Suporte: TXT, CSV, XLSX, JSON, PDF (RIF do COAF)
               </p>
             </div>
             <Input
               id="rif-upload"
               type="file"
               multiple
-              accept=".csv,.xlsx,.json,.pdf"
+              accept=".txt,.csv,.xlsx,.json,.pdf"
               className="hidden"
               onChange={(e) => handleFileUpload(e.target.files)}
               disabled={isUploading || !currentCase}
@@ -369,6 +369,7 @@ const FinancialAnalysis: React.FC = () => {
                     <option value="30d">Últimos 30 dias</option>
                     <option value="90d">Últimos 90 dias</option>
                     <option value="1y">Último ano</option>
+                    <option value="all">TODOS os períodos</option>
                   </select>
                 </div>
                 

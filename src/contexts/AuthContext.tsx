@@ -2,6 +2,17 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session, AuthError } from '@supabase/supabase-js'
 import { supabase } from '../integrations/supabase/client'
 import { toast } from 'sonner'
+import { z } from 'zod'
+import { 
+  sanitizeText, 
+  emailSchema, 
+  passwordSchema, 
+  nameSchema, 
+  badgeNumberSchema, 
+  departmentSchema,
+  checkRateLimit 
+} from '../lib/validation'
+import { handleAuthError } from '../lib/errorHandler'
 
 interface UserProfile {
   id: string
@@ -53,49 +64,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('AuthContext: fetchProfile called for userId:', userId);
       
-      // Criar perfil básico se não existir
-      const basicProfile = {
-        id: userId,
-        user_id: userId,
-        email: user?.email || '',
-        name: user?.user_metadata?.name || 'Usuário',
-        organization_id: 'default-org',
-        role: 'admin' as const,
-        badge_number: '001',
-        department: 'Geral',
-        permissions: ['read', 'write', 'admin', 'investigator', 'analyst', 'viewer'],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        last_login: new Date().toISOString(),
-        status: 'active' as const
-      };
-      
-      console.log('AuthContext: Setting basic profile:', basicProfile);
-      setProfile(basicProfile);
-      console.log('AuthContext: Profile set successfully');
+      // Try to fetch actual profile from database
+      const { data: profileData, error } = await supabase
+        .from('user_profiles')
+        .select(`
+          *,
+          organization:organizations(name, type)
+        `)
+        .eq('user_id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('AuthContext: Error fetching profile:', error);
+        throw error;
+      }
+
+      if (profileData) {
+        // Get user roles
+        const { data: rolesData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
+
+        const role = rolesData?.[0]?.role || 'analyst';
+        
+        // Set permissions based on role
+        const getPermissions = (userRole: string) => {
+          switch (userRole) {
+            case 'admin':
+              return ['read', 'write', 'delete', 'admin', 'investigator', 'analyst', 'viewer'];
+            case 'delegado':
+              return ['read', 'write', 'delete', 'investigator', 'analyst', 'viewer'];
+            case 'investigator':
+              return ['read', 'write', 'investigator', 'analyst', 'viewer'];
+            case 'analyst':
+              return ['read', 'write', 'analyst', 'viewer'];
+            default:
+              return ['read', 'viewer'];
+          }
+        };
+
+        const profile: UserProfile = {
+          ...profileData,
+          role: role as UserProfile['role'],
+          permissions: getPermissions(role),
+          organization: profileData.organization || undefined
+        };
+
+        console.log('AuthContext: Setting profile from database:', profile);
+        setProfile(profile);
+        
+        // Log security event
+        await supabase.rpc('log_security_event', {
+          p_event_type: 'profile_loaded',
+          p_event_data: { role, status: profileData.status }
+        });
+
+      } else {
+        // No profile exists - user needs approval
+        console.log('AuthContext: No profile found, user needs registration approval');
+        setProfile(null);
+        toast.error('Seu cadastro está pendente de aprovação. Entre em contato com o administrador.');
+      }
       
     } catch (error) {
       console.error('AuthContext: Error fetching profile:', error);
-      
-      // Criar perfil básico em caso de erro
-      const fallbackProfile = {
-        id: userId,
-        user_id: userId,
-        email: user?.email || '',
-        name: 'Usuário',
-        organization_id: 'default-org',
-        role: 'admin' as const,
-        badge_number: '001',
-        department: 'Geral',
-        permissions: ['read', 'write', 'admin', 'investigator', 'analyst', 'viewer'],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        last_login: new Date().toISOString(),
-        status: 'active' as const
-      };
-      
-      setProfile(fallbackProfile);
-      toast.error('Erro ao carregar perfil, usando perfil padrão');
+      setProfile(null);
+      toast.error('Erro ao carregar perfil do usuário');
     }
   }
 
@@ -116,16 +151,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Supabase não está configurado');
       }
       
+      // Rate limiting
+      const rateLimitKey = `login_${email}_${Date.now() - Date.now() % 60000}`; // 1 minute window
+      if (!checkRateLimit(rateLimitKey, 5, 60000)) {
+        throw new Error('Muitas tentativas de login. Aguarde 1 minuto.');
+      }
+      
       // Tentar login real com Supabase
       console.log('🔐 Tentando login real com Supabase...');
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: sanitizeText(email),
         password
       });
 
       if (error) {
         console.error('❌ Erro no login Supabase:', error);
-        throw error;
+        const secureError = await handleAuthError(error, { 
+          attemptType: 'login',
+          email: email.substring(0, 3) + '***' // Masked email for logging
+        });
+        throw new Error(secureError.userMessage);
       }
 
       if (data.user) {
@@ -133,7 +178,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(data.user);
         setSession(data.session);
         await fetchProfile(data.user.id);
-        await trackEvent('user_login', { email, userId: data.user.id });
+        
+        // Log successful login
+        await supabase.rpc('log_security_event', {
+          p_event_type: 'login_success',
+          p_event_data: { 
+            user_id: data.user.id,
+            email: email.substring(0, 3) + '***'
+          }
+        });
         
         toast.success('Login realizado com sucesso!');
         return;
@@ -144,72 +197,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('❌ Erro no login:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      toast.error(`Erro no login: ${errorMessage}`);
+      toast.error(errorMessage);
       throw error;
     }
   }
 
   const signUp = async (email: string, password: string, profileData: Partial<UserProfile>) => {
     try {
+      // Validate input data
+      const validatedEmail = emailSchema.parse(email);
+      const validatedPassword = passwordSchema.parse(password);
+      const validatedName = nameSchema.parse(profileData.name || '');
+      const validatedBadge = badgeNumberSchema.parse(profileData.badge_number || '');
+      const validatedDepartment = departmentSchema.parse(profileData.department || '');
+
       const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+        email: validatedEmail,
+        password: validatedPassword,
         options: {
           data: {
-            name: profileData.name,
-            organization_id: profileData.organization_id,
-            role: profileData.role,
-            badge_number: profileData.badge_number,
-            department: profileData.department
+            name: sanitizeText(validatedName),
+            badge_number: sanitizeText(validatedBadge),
+            department: sanitizeText(validatedDepartment)
           }
         }
-      })
+      });
 
-      if (error) throw error
+      if (error) {
+        const secureError = await handleAuthError(error, { 
+          attemptType: 'signup',
+          email: email.substring(0, 3) + '***'
+        });
+        throw new Error(secureError.userMessage);
+      }
 
       if (data.user) {
-        // Create user profile
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .insert([
-            {
-              user_id: data.user.id,
-              email: data.user.email,
-              name: profileData.name,
-              organization_id: profileData.organization_id,
-              role: profileData.role,
-              badge_number: profileData.badge_number,
-              department: profileData.department,
-              permissions: profileData.permissions || []
-            }
-          ])
-
-        if (profileError) throw profileError
-
-        // Create user role
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert([
-            {
-              user_id: data.user.id,
-              role: profileData.role || 'analyst'
-            }
-          ])
-
-        if (roleError) throw roleError
-
-        setUser(data.user)
-        setSession(data.session)
-        await fetchProfile(data.user.id)
-        await trackEvent('user_signup', { email, userId: data.user.id })
+        // Don't automatically create profile - wait for admin approval
+        console.log('User registered, awaiting approval');
         
-        toast.success('Conta criada com sucesso! Verifique seu email para confirmar.')
+        // Log registration attempt
+        await supabase.rpc('log_security_event', {
+          p_event_type: 'registration_attempt',
+          p_event_data: { 
+            user_id: data.user.id,
+            email: email.substring(0, 3) + '***',
+            department: sanitizeText(validatedDepartment)
+          }
+        });
+        
+        toast.success('Conta criada com sucesso! Aguarde aprovação do administrador.');
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
-      console.error('Sign up error:', error)
-      toast.error(`Erro no cadastro: ${errorMessage}`)
-      throw error
+      if (error instanceof z.ZodError) {
+        const firstError = error.errors[0];
+        toast.error(firstError.message);
+      } else {
+        const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+        console.error('Sign up error:', error);
+        toast.error(errorMessage);
+      }
+      throw error;
     }
   }
 

@@ -26,6 +26,13 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { 
+  validateFileType, 
+  validateFileSize, 
+  sanitizeFileName,
+  sanitizeText 
+} from '../lib/validation';
+import { createSecureError } from '../lib/errorHandler';
 
 interface UploadedFile {
   id: string;
@@ -109,21 +116,30 @@ const FileUploader: React.FC<FileUploaderProps> = ({
   };
 
   const validateFile = (file: File): string | null => {
-    // Check file size
-    if (file.size > maxFileSize * 1024 * 1024) {
+    // Security validations using our validation library
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'application/pdf', 'text/plain', 'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'audio/mpeg', 'audio/wav', 'audio/mp3',
+      'video/mp4', 'video/avi', 'video/mov'
+    ];
+    
+    // Validate file type using secure validation
+    if (!validateFileType(file, allowedTypes)) {
+      return `Tipo de arquivo não permitido: ${file.type}. Use apenas: imagens, PDF, CSV, Excel, TXT ou áudio.`;
+    }
+    
+    // Validate file size using secure validation  
+    if (!validateFileSize(file, maxFileSize)) {
       return `Arquivo muito grande. Tamanho máximo: ${maxFileSize}MB`;
     }
 
-    // Check file type
-    const isAccepted = acceptedTypes.some(type => {
-      if (type.endsWith('/*')) {
-        return file.type.startsWith(type.slice(0, -1));
-      }
-      return file.type === type;
-    });
-
-    if (!isAccepted) {
-      return `Tipo de arquivo não suportado: ${file.type}`;
+    // Additional security checks
+    const sanitizedName = sanitizeFileName(file.name);
+    if (sanitizedName !== file.name.toLowerCase().replace(/[^a-zA-Z0-9.-]/g, '_')) {
+      console.warn('File name contains potentially unsafe characters:', file.name);
     }
 
     return null;

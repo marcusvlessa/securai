@@ -22,6 +22,7 @@ import NotFound from './pages/NotFound';
 import Unauthorized from './pages/Unauthorized';
 import VirtualAgents from './pages/VirtualAgents';
 import FinancialAnalysis from './pages/FinancialAnalysis';
+import InstagramAnalysis from './pages/InstagramAnalysis';
 import { CaseProvider } from './contexts/CaseContext';
 import { getGroqSettings, saveGroqSettings } from './services/groqService';
 import TestPage from './pages/TestPage';
@@ -176,6 +177,14 @@ function App() {
                 <ProtectedRoute>
                   <ProtectedLayout>
                     <VirtualAgents />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/instagram-analysis" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <InstagramAnalysis />
                   </ProtectedLayout>
                 </ProtectedRoute>
               } />

@@ -82,6 +82,12 @@ const navItems = [
     icon: Folder, 
     description: 'CRUD de casos'
   },
+  { 
+    name: 'Análise Instagram', 
+    path: '/instagram-analysis', 
+    icon: Image, 
+    description: 'Dados exportados do Instagram'
+  },
 ];
 
 const settingsItems = [

@@ -478,22 +478,68 @@ export class InstagramParserService {
   }
 
   private async processMediaFiles(media: InstagramMedia[]): Promise<void> {
-    // Aqui podemos implementar processamento adicional:
-    // - Transcrição de áudios
-    // - Classificação de imagens
-    // - Análise de metadados
+    const { getGroqSettings } = await import('./groqService');
+    const settings = getGroqSettings();
     
-    for (const item of media) {
+    if (!settings.groqApiKey) {
+      console.warn('GROQ API key not configured - skipping media processing');
+      return;
+    }
+
+    const audioFiles = media.filter(m => m.type === 'audio');
+    const imageFiles = media.filter(m => m.type === 'image');
+
+    console.log(`Processing ${audioFiles.length} audio files and ${imageFiles.length} images`);
+
+    // Process audio files for transcription using GROQ
+    for (const audio of audioFiles) {
       try {
-        if (item.type === 'audio') {
-          // TODO: Implementar transcrição de áudio
-          // item.transcript = await this.transcribeAudio(item.blob);
-        } else if (item.type === 'image') {
-          // TODO: Implementar classificação de imagens
-          // item.classification = await this.classifyImage(item.blob);
+        // Convert blob to base64
+        const arrayBuffer = await audio.blob.arrayBuffer();
+        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        
+        const { supabase } = await import('@/integrations/supabase/client');
+        const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+          body: {
+            audioData: base64Audio,
+            groqApiKey: settings.groqApiKey
+          }
+        });
+        
+        if (!error && data?.success) {
+          audio.transcript = data.text;
+          console.log(`Transcribed audio: ${audio.filename}`);
+        } else {
+          console.error(`Failed to transcribe ${audio.filename}:`, error);
         }
       } catch (error) {
-        console.warn(`Erro ao processar mídia ${item.filename}:`, error);
+        console.error(`Error processing audio ${audio.filename}:`, error);
+      }
+    }
+
+    // Process images for classification using GROQ
+    for (const image of imageFiles) {
+      try {
+        // Convert blob to base64
+        const arrayBuffer = await image.blob.arrayBuffer();
+        const base64Image = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        
+        const { supabase } = await import('@/integrations/supabase/client');
+        const { data, error } = await supabase.functions.invoke('classify-image', {
+          body: {
+            imageBase64: base64Image,
+            groqApiKey: settings.groqApiKey
+          }
+        });
+        
+        if (!error && data?.success) {
+          image.classification = data.classification;
+          console.log(`Classified image: ${image.filename}`);
+        } else {
+          console.error(`Failed to classify ${image.filename}:`, error);
+        }
+      } catch (error) {
+        console.error(`Error processing image ${image.filename}:`, error);
       }
     }
   }

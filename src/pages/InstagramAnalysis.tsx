@@ -3,12 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, Users, MessageSquare, Search, Image, Volume2, Download } from 'lucide-react';
+import { Upload, Users, MessageSquare, Search, Image, Volume2, Download, Settings } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { InstagramUploader } from '@/components/InstagramUploader';
 import { InstagramViewer } from '@/components/InstagramViewer';
 import { InstagramSearch } from '@/components/InstagramSearch';
 import { InstagramMedia } from '@/components/InstagramMedia';
+import { ApiKeyInput } from '@/components/ui/api-key-input';
 
 interface ProcessedData {
   id: string;
@@ -167,12 +168,13 @@ const InstagramAnalysis = () => {
           <CardContent>
             {selectedFile ? (
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-5">
+                <TabsList className="grid w-full grid-cols-6">
                   <TabsTrigger value="overview">Visão Geral</TabsTrigger>
                   <TabsTrigger value="users">Usuários</TabsTrigger>
                   <TabsTrigger value="search">Buscar</TabsTrigger>
                   <TabsTrigger value="media">Mídia</TabsTrigger>
                   <TabsTrigger value="export">Exportar</TabsTrigger>
+                  <TabsTrigger value="settings">Config</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="overview">
@@ -209,6 +211,19 @@ const InstagramAnalysis = () => {
                       <Button variant="outline">JSON</Button>
                       <Button variant="outline">Relatório PDF</Button>
                     </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="settings">
+                  <div className="space-y-4">
+                    <div className="text-center mb-6">
+                      <Settings className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                      <h3 className="text-lg font-semibold">Configurações GROQ</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Configure a API GROQ para transcrição de áudio e classificação de imagem
+                      </p>
+                    </div>
+                    <ApiKeyInput />
                   </div>
                 </TabsContent>
               </Tabs>

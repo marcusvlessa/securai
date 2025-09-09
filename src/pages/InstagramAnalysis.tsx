@@ -9,9 +9,12 @@ import { InstagramUploader } from '@/components/InstagramUploader';
 import { InstagramViewer } from '@/components/InstagramViewer';
 import { InstagramSearch } from '@/components/InstagramSearch';
 import { InstagramMedia } from '@/components/InstagramMedia';
+import { InstagramChats } from '@/components/InstagramChats';
+import { ConexoesInstagram } from '@/components/ConexoesInstagram';
 import { ApiKeyInput } from '@/components/ui/api-key-input';
+import { ProcessedInstagramData } from '@/services/instagramParserService';
 
-interface ProcessedData {
+interface ProcessedSummary {
   id: string;
   filename: string;
   users: number;
@@ -23,20 +26,38 @@ interface ProcessedData {
 
 const InstagramAnalysis = () => {
   const { toast } = useToast();
-  const [processedFiles, setProcessedFiles] = useState<ProcessedData[]>([]);
-  const [selectedFile, setSelectedFile] = useState<ProcessedData | null>(null);
+  const [processedFiles, setProcessedFiles] = useState<Map<string, ProcessedInstagramData>>(new Map());
+  const [processedSummaries, setProcessedSummaries] = useState<ProcessedSummary[]>([]);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
-  const handleFileProcessed = (data: ProcessedData) => {
-    setProcessedFiles(prev => [...prev, data]);
-    setSelectedFile(data);
+  const selectedFile = selectedFileId ? processedFiles.get(selectedFileId) : null;
+
+  const handleFileProcessed = (data: ProcessedInstagramData) => {
+    // Armazenar dados completos
+    setProcessedFiles(prev => new Map(prev).set(data.id, data));
+    
+    // Criar resumo para lista
+    const summary: ProcessedSummary = {
+      id: data.id,
+      filename: data.metadata.originalFilename,
+      users: data.users.length,
+      conversations: data.conversations.length,
+      media: data.media.length,
+      processedAt: data.metadata.processedAt.toISOString(),
+      status: 'completed'
+    };
+    
+    setProcessedSummaries(prev => [...prev, summary]);
+    setSelectedFileId(data.id);
+    
     toast({
       title: "Arquivo processado",
-      description: `${data.filename} foi processado com sucesso`,
+      description: `${summary.filename} foi processado com sucesso`,
     });
   };
 
-  const handleFileSelect = (file: ProcessedData) => {
-    setSelectedFile(file);
+  const handleFileSelect = (summary: ProcessedSummary) => {
+    setSelectedFileId(summary.id);
   };
 
   return (
@@ -57,9 +78,9 @@ const InstagramAnalysis = () => {
             <Upload className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{processedFiles.length}</div>
+            <div className="text-2xl font-bold">{processedSummaries.length}</div>
             <p className="text-xs text-muted-foreground">
-              +{processedFiles.filter(f => f.status === 'completed').length} completos
+              +{processedSummaries.filter(f => f.status === 'completed').length} completos
             </p>
           </CardContent>
         </Card>
@@ -71,7 +92,7 @@ const InstagramAnalysis = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {processedFiles.reduce((sum, f) => sum + f.users, 0)}
+              {processedSummaries.reduce((sum, f) => sum + f.users, 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               Identificados nos dados
@@ -86,7 +107,7 @@ const InstagramAnalysis = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {processedFiles.reduce((sum, f) => sum + f.conversations, 0)}
+              {processedSummaries.reduce((sum, f) => sum + f.conversations, 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               Threads analisados
@@ -101,7 +122,7 @@ const InstagramAnalysis = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {processedFiles.reduce((sum, f) => sum + f.media, 0)}
+              {processedSummaries.reduce((sum, f) => sum + f.media, 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               Imagens e vídeos
@@ -121,15 +142,15 @@ const InstagramAnalysis = () => {
           <CardContent>
             <InstagramUploader onFileProcessed={handleFileProcessed} />
             
-            {processedFiles.length > 0 && (
+            {processedSummaries.length > 0 && (
               <div className="mt-6">
                 <h4 className="text-sm font-medium mb-3">Arquivos Processados:</h4>
                 <div className="space-y-2">
-                  {processedFiles.map((file) => (
+                  {processedSummaries.map((file) => (
                     <div
                       key={file.id}
                       className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                        selectedFile?.id === file.id 
+                        selectedFileId === file.id 
                           ? 'border-primary bg-primary/5' 
                           : 'border-border hover:bg-accent'
                       }`}
@@ -168,17 +189,30 @@ const InstagramAnalysis = () => {
           <CardContent>
             {selectedFile ? (
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-6">
+                <TabsList className="grid w-full grid-cols-7">
                   <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+                  <TabsTrigger value="chats">Conversas</TabsTrigger>
                   <TabsTrigger value="users">Usuários</TabsTrigger>
                   <TabsTrigger value="search">Buscar</TabsTrigger>
                   <TabsTrigger value="media">Mídia</TabsTrigger>
-                  <TabsTrigger value="export">Exportar</TabsTrigger>
+                  <TabsTrigger value="connections">Conexões</TabsTrigger>
                   <TabsTrigger value="settings">Config</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="overview">
-                  <InstagramViewer fileData={selectedFile} />
+                  <InstagramViewer fileData={{
+                    id: selectedFile.id,
+                    filename: selectedFile.metadata.originalFilename,
+                    users: selectedFile.users.length,
+                    conversations: selectedFile.conversations.length,
+                    media: selectedFile.media.length,
+                    processedAt: selectedFile.metadata.processedAt.toISOString(),
+                    status: 'completed' as const
+                  }} />
+                </TabsContent>
+                
+                <TabsContent value="chats">
+                  <InstagramChats data={selectedFile} />
                 </TabsContent>
                 
                 <TabsContent value="users">
@@ -186,32 +220,29 @@ const InstagramAnalysis = () => {
                     <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">Lista de Usuários</h3>
                     <p className="text-muted-foreground">
-                      Visualize todos os usuários identificados no arquivo
+                      Visualize todos os usuários identificados no arquivo: {selectedFile.users.length} usuários
                     </p>
                   </div>
                 </TabsContent>
                 
                 <TabsContent value="search">
-                  <InstagramSearch fileData={selectedFile} />
+                  <InstagramSearch fileData={{
+                    id: selectedFile.id,
+                    filename: selectedFile.metadata.originalFilename,
+                    users: selectedFile.users.length,
+                    conversations: selectedFile.conversations.length,
+                    media: selectedFile.media.length,
+                    processedAt: selectedFile.metadata.processedAt.toISOString(),
+                    status: 'completed' as const
+                  }} />
                 </TabsContent>
                 
                 <TabsContent value="media">
-                  <InstagramMedia fileData={selectedFile} />
+                  <InstagramMedia data={selectedFile} />
                 </TabsContent>
                 
-                <TabsContent value="export">
-                  <div className="text-center py-8">
-                    <Download className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Exportar Dados</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Exporte os dados analisados em diferentes formatos
-                    </p>
-                    <div className="flex gap-2 justify-center">
-                      <Button variant="outline">CSV</Button>
-                      <Button variant="outline">JSON</Button>
-                      <Button variant="outline">Relatório PDF</Button>
-                    </div>
-                  </div>
+                <TabsContent value="connections">
+                  <ConexoesInstagram data={selectedFile} />
                 </TabsContent>
 
                 <TabsContent value="settings">

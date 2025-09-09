@@ -7,8 +7,10 @@ import { Upload, Archive, AlertCircle, CheckCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { instagramParserService } from '@/services/instagramParserService';
 
+import { ProcessedInstagramData } from '@/services/instagramParserService';
+
 interface InstagramUploaderProps {
-  onFileProcessed: (data: any) => void;
+  onFileProcessed: (data: ProcessedInstagramData) => void;
 }
 
 export const InstagramUploader: React.FC<InstagramUploaderProps> = ({ onFileProcessed }) => {
@@ -52,16 +54,8 @@ export const InstagramUploader: React.FC<InstagramUploaderProps> = ({ onFileProc
       setProgress(100);
       setCurrentStep('Processamento concluído!');
 
-      // Notificar o componente pai
-      onFileProcessed({
-        id: result.id,
-        filename: file.name,
-        users: result.users.length,
-        conversations: result.conversations.length,
-        media: result.media.length,
-        processedAt: new Date().toISOString(),
-        status: 'completed'
-      });
+      // Notificar o componente pai com dados completos
+      onFileProcessed(result);
 
       toast({
         title: "Arquivo processado com sucesso",

@@ -121,21 +121,37 @@ export class InstagramParserService {
   }
 
   private findMainHtmlFile(zipContent: JSZip): JSZip.JSZipObject | null {
-    // Procurar por records.html ou index.html
-    const possibleNames = ['records.html', 'index.html', 'instagram_data.html'];
+    // Priorizar records.html (Meta Business Record padrão)
+    const priorityNames = ['records.html'];
+    const fallbackNames = ['index.html', 'instagram_data.html'];
     
-    for (const name of possibleNames) {
+    // Primeiro tentar nomes prioritários
+    for (const name of priorityNames) {
       const file = zipContent.file(name);
-      if (file) return file;
-    }
-    
-    // Procurar por qualquer arquivo HTML na raiz
-    for (const [filename, file] of Object.entries(zipContent.files)) {
-      if (filename.endsWith('.html') && !filename.includes('/')) {
+      if (file) {
+        console.log(`Found priority HTML file: ${name}`);
         return file;
       }
     }
     
+    // Depois tentar fallbacks
+    for (const name of fallbackNames) {
+      const file = zipContent.file(name);
+      if (file) {
+        console.log(`Found fallback HTML file: ${name}`);
+        return file;
+      }
+    }
+    
+    // Por último, procurar por qualquer arquivo HTML na raiz
+    for (const [filename, file] of Object.entries(zipContent.files)) {
+      if (filename.endsWith('.html') && !filename.includes('/')) {
+        console.log(`Found generic HTML file: ${filename}`);
+        return file;
+      }
+    }
+    
+    console.error('No HTML file found in ZIP');
     return null;
   }
 
@@ -149,16 +165,30 @@ export class InstagramParserService {
       if (this.isMediaFile(filename)) {
         try {
           const blob = await file.async('blob');
-          // Usar o caminho relativo como chave
-          const key = filename.replace(/^.*\//, ''); // Remove diretórios do caminho
-          mediaFiles.set(key, blob);
-          mediaFiles.set(filename, blob); // Também indexar pelo caminho completo
+          
+          // Indexar de múltiplas formas para facilitar busca
+          const basename = filename.replace(/^.*\//, ''); // Nome sem caminho
+          const fullPath = filename; // Caminho completo
+          
+          // Indexar por basename (para referências como unified_message_123.mp3)
+          mediaFiles.set(basename, blob);
+          // Indexar por caminho completo
+          mediaFiles.set(fullPath, blob);
+          
+          // Para arquivos em linked_media/, também indexar sem o prefixo
+          if (filename.startsWith('linked_media/')) {
+            const withoutPrefix = filename.replace('linked_media/', '');
+            mediaFiles.set(withoutPrefix, blob);
+          }
+          
+          console.log(`Indexed media file: ${basename} (${fullPath})`);
         } catch (error) {
           console.warn(`Erro ao extrair mídia ${filename}:`, error);
         }
       }
     }
     
+    console.log(`Total media files indexed: ${mediaFiles.size / 3}`); // Dividir por 3 porque indexamos cada arquivo 3 vezes
     return mediaFiles;
   }
 
@@ -181,37 +211,340 @@ export class InstagramParserService {
     const parser = new DOMParser();
     const doc = parser.parseFromString(cleanHtml, 'text/html');
     
-    // Extrair dados do HTML
-    const conversations = this.extractConversations(doc, mediaFiles);
+    // Extrair dados específicos do Meta Business Record
+    const conversations = this.extractMetaConversations(doc, mediaFiles);
     const users = this.extractUsers(doc, conversations);
+    const metadata = this.extractMetadata(doc);
     
-    return { conversations, users };
+    console.log(`Parsed ${conversations.length} conversations, ${users.length} users`);
+    return { conversations, users, metadata };
   }
 
-  private extractConversations(doc: Document, mediaFiles: Map<string, Blob>): InstagramConversation[] {
+  private extractMetaConversations(doc: Document, mediaFiles: Map<string, Blob>): InstagramConversation[] {
     const conversations: InstagramConversation[] = [];
     
-    // Procurar por seções de conversas - o formato pode variar
-    const conversationSections = doc.querySelectorAll('[data-testid="conversation"], .conversation, .thread');
+    // Método 1: Procurar por seção "Unified Messages" do Meta Business Record
+    const unifiedMessagesSection = this.findSectionByHeader(doc, ['Unified Messages', 'Messages', 'Mensagens']);
+    if (unifiedMessagesSection) {
+      console.log('Found Unified Messages section');
+      const unifiedConversations = this.parseUnifiedMessagesSection(unifiedMessagesSection, mediaFiles);
+      conversations.push(...unifiedConversations);
+    }
     
-    conversationSections.forEach((section, index) => {
-      try {
-        const conversation = this.parseConversationSection(section, mediaFiles, index);
-        if (conversation) {
-          conversations.push(conversation);
-        }
-      } catch (error) {
-        console.warn(`Erro ao processar conversa ${index}:`, error);
-      }
+    // Método 2: Procurar por tabelas com estrutura conhecida
+    const messageTables = doc.querySelectorAll('table');
+    messageTables.forEach((table, index) => {
+      const tableConversations = this.parseMessageTable(table, mediaFiles, index);
+      conversations.push(...tableConversations);
     });
     
-    // Se não encontrou conversas com seletores específicos, tentar método genérico
+    // Método 3: Procurar por divs com padrões de mensagem
     if (conversations.length === 0) {
       const genericConversations = this.extractConversationsGeneric(doc, mediaFiles);
       conversations.push(...genericConversations);
     }
     
     return conversations;
+  }
+
+  private findSectionByHeader(doc: Document, headerTexts: string[]): Element | null {
+    const headers = doc.querySelectorAll('h1, h2, h3, h4, .section-header');
+    
+    for (const header of headers) {
+      const text = header.textContent?.trim();
+      if (text && headerTexts.some(headerText => text.includes(headerText))) {
+        // Encontrar a seção que contém este header
+        let current = header.parentElement;
+        while (current) {
+          if (current.querySelector('table, .message, .conversation')) {
+            return current;
+          }
+          current = current.parentElement;
+        }
+        // Se não encontrou uma seção, usar o próximo elemento
+        return header.nextElementSibling;
+      }
+    }
+    
+    return null;
+  }
+
+  private parseUnifiedMessagesSection(section: Element, mediaFiles: Map<string, Blob>): InstagramConversation[] {
+    const conversations: InstagramConversation[] = [];
+    
+    // Procurar por sub-seções de thread
+    const threadSections = section.querySelectorAll('.thread, .conversation');
+    
+    threadSections.forEach((threadSection, index) => {
+      const conversation = this.parseThreadSection(threadSection, mediaFiles, `unified_${index}`);
+      if (conversation) {
+        conversations.push(conversation);
+      }
+    });
+    
+    // Se não encontrou thread sections, procurar por tabelas ou listas
+    if (conversations.length === 0) {
+      const tables = section.querySelectorAll('table');
+      tables.forEach((table, index) => {
+        const tableConversations = this.parseMessageTable(table, mediaFiles, `table_${index}`);
+        conversations.push(...tableConversations);
+      });
+    }
+    
+    return conversations;
+  }
+
+  private parseThreadSection(section: Element, mediaFiles: Map<string, Blob>, threadId: string): InstagramConversation | null {
+    const messages: InstagramMessage[] = [];
+    const participants = new Set<string>();
+    
+    // Procurar por linhas de mensagem na seção
+    const messageRows = section.querySelectorAll('tr, .message-row, .message');
+    
+    messageRows.forEach((row, index) => {
+      const message = this.parseMessageRow(row, mediaFiles, `${threadId}_msg_${index}`);
+      if (message) {
+        messages.push(message);
+        participants.add(message.sender);
+      }
+    });
+    
+    if (messages.length === 0) return null;
+    
+    return {
+      id: threadId,
+      participants: Array.from(participants),
+      title: this.extractThreadTitle(section),
+      messages,
+      createdAt: messages[0]?.timestamp || new Date(),
+      lastActivity: messages[messages.length - 1]?.timestamp || new Date()
+    };
+  }
+
+  private parseMessageTable(table: Element, mediaFiles: Map<string, Blob>, tableIndex: number): InstagramConversation[] {
+    const conversations: InstagramConversation[] = [];
+    const messages: InstagramMessage[] = [];
+    const participants = new Set<string>();
+    
+    // Analisar cabeçalhos para entender a estrutura
+    const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent?.trim().toLowerCase() || '');
+    
+    const rows = table.querySelectorAll('tbody tr, tr');
+    
+    rows.forEach((row, index) => {
+      if (row.querySelector('th')) return; // Pular linhas de cabeçalho
+      
+      const message = this.parseTableRow(row, headers, mediaFiles, `table_${tableIndex}_msg_${index}`);
+      if (message) {
+        messages.push(message);
+        participants.add(message.sender);
+      }
+    });
+    
+    if (messages.length > 0) {
+      conversations.push({
+        id: `table_conversation_${tableIndex}`,
+        participants: Array.from(participants),
+        title: `Conversa ${tableIndex + 1}`,
+        messages,
+        createdAt: messages[0]?.timestamp || new Date(),
+        lastActivity: messages[messages.length - 1]?.timestamp || new Date()
+      });
+    }
+    
+    return conversations;
+  }
+
+  private parseMessageRow(row: Element, mediaFiles: Map<string, Blob>, messageId: string): InstagramMessage | null {
+    const cells = row.querySelectorAll('td, .cell');
+    
+    if (cells.length < 2) return null;
+    
+    // Tentar extrair sender, content, timestamp
+    let sender = 'Unknown';
+    let content = '';
+    let timestamp = new Date();
+    let mediaPath: string | undefined;
+    let messageType: 'text' | 'image' | 'video' | 'audio' | 'link' = 'text';
+    
+    // Primeira célula geralmente é timestamp
+    const timestampText = cells[0]?.textContent?.trim() || '';
+    if (timestampText) {
+      timestamp = this.parseTimestamp(timestampText);
+    }
+    
+    // Segunda célula geralmente é sender ou content
+    if (cells.length >= 2) {
+      sender = cells[1]?.textContent?.trim() || 'Unknown';
+    }
+    
+    // Terceira célula geralmente é content
+    if (cells.length >= 3) {
+      content = cells[2]?.textContent?.trim() || '';
+    } else if (cells.length === 2) {
+      // Se só há 2 células, a segunda deve ser content
+      content = cells[1]?.textContent?.trim() || '';
+      sender = 'User';
+    }
+    
+    // Verificar se há referência de mídia
+    const mediaLinks = row.querySelectorAll('a[href*="unified_message"], img[src*="unified_message"]');
+    if (mediaLinks.length > 0) {
+      const href = mediaLinks[0].getAttribute('href') || mediaLinks[0].getAttribute('src');
+      if (href) {
+        const mediaId = href.match(/unified_message_(\d+)/)?.[0];
+        if (mediaId) {
+          mediaPath = mediaId;
+          const extension = href.split('.').pop()?.toLowerCase();
+          if (extension && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension)) {
+            messageType = 'image';
+          } else if (extension && ['mp4', 'mov', 'avi', 'webm'].includes(extension)) {
+            messageType = 'video';
+          } else if (extension && ['mp3', 'm4a', 'wav', 'ogg'].includes(extension)) {
+            messageType = 'audio';
+          }
+        }
+      }
+    }
+    
+    return {
+      id: messageId,
+      conversationId: '', // Será preenchido pelo caller
+      sender,
+      content,
+      timestamp,
+      type: messageType,
+      mediaPath
+    };
+  }
+
+  private parseTableRow(row: Element, headers: string[], mediaFiles: Map<string, Blob>, messageId: string): InstagramMessage | null {
+    const cells = Array.from(row.querySelectorAll('td'));
+    
+    if (cells.length === 0) return null;
+    
+    let sender = 'Unknown';
+    let content = '';
+    let timestamp = new Date();
+    let mediaPath: string | undefined;
+    let messageType: 'text' | 'image' | 'video' | 'audio' | 'link' = 'text';
+    
+    // Mapear cells baseado nos headers
+    cells.forEach((cell, index) => {
+      const cellText = cell.textContent?.trim() || '';
+      const header = headers[index] || '';
+      
+      if (header.includes('timestamp') || header.includes('time') || header.includes('date')) {
+        timestamp = this.parseTimestamp(cellText);
+      } else if (header.includes('sender') || header.includes('from') || header.includes('user')) {
+        sender = cellText;
+      } else if (header.includes('content') || header.includes('message') || header.includes('text')) {
+        content = cellText;
+      } else if (index === 0 && !header) {
+        // Primeira coluna sem header, provavelmente timestamp
+        timestamp = this.parseTimestamp(cellText);
+      } else if (index === 1 && !header) {
+        // Segunda coluna sem header, provavelmente sender
+        sender = cellText;
+      } else if (index === 2 && !header) {
+        // Terceira coluna sem header, provavelmente content
+        content = cellText;
+      }
+      
+      // Verificar links de mídia na célula
+      const links = cell.querySelectorAll('a[href*="unified_message"], img[src*="unified_message"]');
+      if (links.length > 0) {
+        const href = links[0].getAttribute('href') || links[0].getAttribute('src');
+        if (href) {
+          mediaPath = href;
+          messageType = this.determineMediaType(href);
+        }
+      }
+    });
+    
+    return {
+      id: messageId,
+      conversationId: '',
+      sender,
+      content,
+      timestamp,
+      type: messageType,
+      mediaPath
+    };
+  }
+
+  private extractThreadTitle(section: Element): string | undefined {
+    const titleSelectors = [
+      '.thread-title', 
+      '.conversation-title', 
+      'h1', 'h2', 'h3', 'h4', 
+      '.title'
+    ];
+    
+    for (const selector of titleSelectors) {
+      const titleEl = section.querySelector(selector);
+      if (titleEl?.textContent?.trim()) {
+        return titleEl.textContent.trim();
+      }
+    }
+    
+    return undefined;
+  }
+
+  private determineMediaType(href: string): 'text' | 'image' | 'video' | 'audio' | 'link' {
+    const extension = href.split('.').pop()?.toLowerCase();
+    
+    if (extension) {
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
+        return 'image';
+      } else if (['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(extension)) {
+        return 'video';
+      } else if (['mp3', 'm4a', 'wav', 'ogg', 'aac'].includes(extension)) {
+        return 'audio';
+      }
+    }
+    
+    return 'link';
+  }
+
+  private extractMetadata(doc: Document): any {
+    const metadata: any = {};
+    
+    // Procurar por informações de metadados típicas do Meta Business Record
+    const titleEl = doc.querySelector('title, h1');
+    if (titleEl) {
+      metadata.reportTitle = titleEl.textContent?.trim();
+    }
+    
+    // Procurar por informações do usuário alvo
+    const targetInfo = this.findSectionByHeader(doc, ['Target User', 'User Information', 'Account Information']);
+    if (targetInfo) {
+      metadata.targetUser = this.extractTargetUserInfo(targetInfo);
+    }
+    
+    return metadata;
+  }
+
+  private extractTargetUserInfo(section: Element): any {
+    const info: any = {};
+    
+    const rows = section.querySelectorAll('tr');
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('td, th');
+      if (cells.length >= 2) {
+        const key = cells[0].textContent?.trim().toLowerCase();
+        const value = cells[1].textContent?.trim();
+        
+        if (key && value) {
+          if (key.includes('username')) info.username = value;
+          else if (key.includes('email')) info.email = value;
+          else if (key.includes('name')) info.name = value;
+          else if (key.includes('phone')) info.phone = value;
+        }
+      }
+    });
+    
+    return info;
   }
 
   private parseConversationSection(

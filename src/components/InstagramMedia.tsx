@@ -20,111 +20,79 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
-interface ProcessedData {
-  id: string;
-  filename: string;
-  users: number;
-  conversations: number;
-  media: number;
-  processedAt: string;
-  status: 'processing' | 'completed' | 'error';
-}
+import { ProcessedInstagramData, InstagramMedia as MediaFile } from '@/services/instagramParserService';
+import { supabase } from '@/integrations/supabase/client';
 
-interface MediaItem {
-  id: string;
-  type: 'image' | 'video' | 'audio';
-  filename: string;
-  size: number;
-  timestamp: string;
-  messageId?: string;
+interface MediaItem extends MediaFile {
+  size?: number;
+  timestamp?: string;  
   transcript?: string;
   classification?: string;
   processingStatus: 'pending' | 'processing' | 'completed' | 'error';
 }
 
 interface InstagramMediaProps {
-  fileData: ProcessedData;
+  data: ProcessedInstagramData;
 }
 
-export const InstagramMedia: React.FC<InstagramMediaProps> = ({ fileData }) => {
+export const InstagramMedia: React.FC<InstagramMediaProps> = ({ data }) => {
   const { toast } = useToast();
   const [selectedTab, setSelectedTab] = useState('all');
   const [processingItem, setProcessingItem] = useState<string | null>(null);
   const [transcriptionProgress, setTranscriptionProgress] = useState(0);
   const [classificationProgress, setClassificationProgress] = useState(0);
 
-  // Dados simulados de mídia
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([
-    {
-      id: '1',
-      type: 'image',
-      filename: 'foto_perfil_001.jpg',
-      size: 245760,
-      timestamp: '2024-01-15T10:30:00Z',
-      messageId: 'msg_001',
-      classification: 'Selfie, pessoa sorrindo',
-      processingStatus: 'completed'
-    },
-    {
-      id: '2',
-      type: 'video',
-      filename: 'video_story_002.mp4',
-      size: 2457600,
-      timestamp: '2024-01-14T15:20:00Z',
-      messageId: 'msg_002',
-      processingStatus: 'pending'
-    },
-    {
-      id: '3',
-      type: 'audio',
-      filename: 'voice_message_003.m4a',
-      size: 156800,
-      timestamp: '2024-01-13T09:15:00Z',
-      messageId: 'msg_003',
-      transcript: 'Oi, tudo bem? Vamos nos encontrar hoje às 18h no shopping.',
-      processingStatus: 'completed'
-    },
-    {
-      id: '4',
-      type: 'image',
-      filename: 'documento_004.jpg',
-      size: 892160,
-      timestamp: '2024-01-12T14:45:00Z',
-      messageId: 'msg_004',
-      processingStatus: 'pending'
-    },
-    {
-      id: '5',
-      type: 'audio',
-      filename: 'voice_note_005.m4a',
-      size: 98304,
-      timestamp: '2024-01-11T11:30:00Z',
-      messageId: 'msg_005',
-      processingStatus: 'pending'
-    }
-  ]);
+  // Converter dados reais para formato local com status de processamento
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>(() => {
+    return data.media.map((mediaFile): MediaItem => ({
+      ...mediaFile,
+      size: mediaFile.blob?.size || 0,
+      timestamp: new Date().toISOString(),
+      transcript: mediaFile.transcript,
+      classification: mediaFile.classification,
+      processingStatus: (mediaFile.transcript || mediaFile.classification) ? 'completed' : 'pending'
+    }));
+  });
 
   const handleTranscribeAudio = async (itemId: string) => {
+    const item = mediaItems.find(m => m.id === itemId);
+    if (!item || item.type !== 'audio') return;
+
     setProcessingItem(itemId);
     setTranscriptionProgress(0);
     
     try {
-      // Simular processo de transcrição
-      for (let i = 0; i <= 100; i += 10) {
-        setTranscriptionProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      
+      // Converter blob para base64
+      const arrayBuffer = await item.blob.arrayBuffer();
+      const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+      // Simular progresso
+      const progressInterval = setInterval(() => {
+        setTranscriptionProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
+
+      const { data: result, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: {
+          audioData: base64Audio,
+          groqApiKey: localStorage.getItem('groq_api_key') || ''
+        }
+      });
+
+      clearInterval(progressInterval);
+      setTranscriptionProgress(100);
+
+      if (error) throw error;
+
       // Atualizar item com transcrição
       setMediaItems(prev => 
-        prev.map(item => 
-          item.id === itemId 
+        prev.map(mediaItem => 
+          mediaItem.id === itemId 
             ? { 
-                ...item, 
-                transcript: 'Transcrição automática: Esta é uma mensagem de voz exemplo transcrita automaticamente.',
-                processingStatus: 'completed' 
+                ...mediaItem, 
+                transcript: result.transcript || 'Transcrição não disponível',
+                processingStatus: 'completed' as const
               }
-            : item
+            : mediaItem
         )
       );
       
@@ -134,9 +102,18 @@ export const InstagramMedia: React.FC<InstagramMediaProps> = ({ fileData }) => {
       });
       
     } catch (error) {
+      console.error('Transcription error:', error);
+      setMediaItems(prev => 
+        prev.map(mediaItem => 
+          mediaItem.id === itemId 
+            ? { ...mediaItem, processingStatus: 'error' as const }
+            : mediaItem
+        )
+      );
+      
       toast({
         title: "Erro na transcrição",
-        description: "Não foi possível transcrever o áudio",
+        description: "Não foi possível transcrever o áudio. Verifique a configuração da API GROQ.",
         variant: "destructive",
       });
     } finally {
@@ -146,26 +123,44 @@ export const InstagramMedia: React.FC<InstagramMediaProps> = ({ fileData }) => {
   };
 
   const handleClassifyImage = async (itemId: string) => {
+    const item = mediaItems.find(m => m.id === itemId);
+    if (!item || item.type !== 'image') return;
+
     setProcessingItem(itemId);
     setClassificationProgress(0);
     
     try {
-      // Simular processo de classificação
-      for (let i = 0; i <= 100; i += 15) {
-        setClassificationProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 150));
-      }
+      // Converter blob para base64
+      const arrayBuffer = await item.blob.arrayBuffer();
+      const base64Image = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+      // Simular progresso
+      const progressInterval = setInterval(() => {
+        setClassificationProgress(prev => Math.min(prev + 15, 90));
+      }, 150);
+
+      const { data: result, error } = await supabase.functions.invoke('classify-image', {
+        body: {
+          imageBase64: base64Image,
+          groqApiKey: localStorage.getItem('groq_api_key') || ''
+        }
+      });
+
+      clearInterval(progressInterval);
+      setClassificationProgress(100);
+
+      if (error) throw error;
       
       // Atualizar item com classificação
       setMediaItems(prev => 
-        prev.map(item => 
-          item.id === itemId 
+        prev.map(mediaItem => 
+          mediaItem.id === itemId 
             ? { 
-                ...item, 
-                classification: 'Documento de identidade, texto legível, pessoa visível',
-                processingStatus: 'completed' 
+                ...mediaItem, 
+                classification: result.classification || 'Classificação não disponível',
+                processingStatus: 'completed' as const
               }
-            : item
+            : mediaItem
         )
       );
       
@@ -175,9 +170,18 @@ export const InstagramMedia: React.FC<InstagramMediaProps> = ({ fileData }) => {
       });
       
     } catch (error) {
+      console.error('Classification error:', error);
+      setMediaItems(prev => 
+        prev.map(mediaItem => 
+          mediaItem.id === itemId 
+            ? { ...mediaItem, processingStatus: 'error' as const }
+            : mediaItem
+        )
+      );
+      
       toast({
         title: "Erro na classificação",
-        description: "Não foi possível classificar a imagem",
+        description: "Não foi possível classificar a imagem. Verifique a configuração da API GROQ.",
         variant: "destructive",
       });
     } finally {
@@ -427,7 +431,7 @@ const MediaItemCard: React.FC<MediaItemCardProps> = ({
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-medium truncate">{item.filename}</h4>
             <p className="text-xs text-muted-foreground mt-1">
-              {formatFileSize(item.size)} • {new Date(item.timestamp).toLocaleString('pt-BR')}
+              {formatFileSize(item.size || 0)} • {item.timestamp ? new Date(item.timestamp).toLocaleString('pt-BR') : 'N/A'}
             </p>
             
             {/* Conteúdo processado */}

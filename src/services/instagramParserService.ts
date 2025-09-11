@@ -286,7 +286,7 @@ export class InstagramParserService {
     if (conversations.length === 0) {
       const tables = section.querySelectorAll('table');
       tables.forEach((table, index) => {
-        const tableConversations = this.parseMessageTable(table, mediaFiles, `table_${index}`);
+        const tableConversations = this.parseMessageTable(table, mediaFiles, index);
         conversations.push(...tableConversations);
       });
     }

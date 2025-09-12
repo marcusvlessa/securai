@@ -10,6 +10,8 @@ import { InstagramViewer } from '@/components/InstagramViewer';
 import { InstagramSearch } from '@/components/InstagramSearch';
 import { InstagramMedia } from '@/components/InstagramMedia';
 import { InstagramChats } from '@/components/InstagramChats';
+import { InstagramProfile } from '@/components/InstagramProfile';
+import { InstagramDevices } from '@/components/InstagramDevices';
 import { ConexoesInstagram } from '@/components/ConexoesInstagram';
 import { ApiKeyInput } from '@/components/ui/api-key-input';
 import { ProcessedInstagramData } from '@/services/instagramParserService';
@@ -189,10 +191,11 @@ const InstagramAnalysis = () => {
           <CardContent>
             {selectedFile ? (
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-7">
+                <TabsList className="grid w-full grid-cols-8">
                   <TabsTrigger value="overview">Visão Geral</TabsTrigger>
                   <TabsTrigger value="chats">Conversas</TabsTrigger>
-                  <TabsTrigger value="users">Usuários</TabsTrigger>
+                  <TabsTrigger value="profile">Perfil</TabsTrigger>
+                  <TabsTrigger value="devices">Dispositivos</TabsTrigger>
                   <TabsTrigger value="search">Buscar</TabsTrigger>
                   <TabsTrigger value="media">Mídia</TabsTrigger>
                   <TabsTrigger value="connections">Conexões</TabsTrigger>
@@ -215,14 +218,12 @@ const InstagramAnalysis = () => {
                   <InstagramChats data={selectedFile} />
                 </TabsContent>
                 
-                <TabsContent value="users">
-                  <div className="text-center py-8">
-                    <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Lista de Usuários</h3>
-                    <p className="text-muted-foreground">
-                      Visualize todos os usuários identificados no arquivo: {selectedFile.users.length} usuários
-                    </p>
-                  </div>
+                <TabsContent value="profile">
+                  <InstagramProfile data={selectedFile} />
+                </TabsContent>
+                
+                <TabsContent value="devices">
+                  <InstagramDevices data={selectedFile} />
                 </TabsContent>
                 
                 <TabsContent value="search">

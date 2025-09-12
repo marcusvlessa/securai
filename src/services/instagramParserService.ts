@@ -1,6 +1,78 @@
 import JSZip from 'jszip';
 import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
+import { InstagramParserMethods } from './instagramParserMethods';
+
+// Expanded interfaces for Meta Business Record sections
+export interface InstagramProfile {
+  username: string;
+  displayName?: string;
+  email: string[];
+  phone: string[];
+  registrationDate?: Date;
+  registrationIP?: string;
+  profilePicture?: string;
+  accountStatus: 'active' | 'disabled' | 'deactivated';
+  verificationStatus: 'verified' | 'unverified';
+  businessAccount?: boolean;
+  privacySettings?: any;
+}
+
+export interface InstagramDevice {
+  uuid: string;
+  type: string;
+  deviceModel?: string;
+  os?: string;
+  appVersion?: string;
+  status: 'active' | 'inactive' | 'removed';
+  firstSeen?: Date;
+  lastSeen: Date;
+  ipAddresses?: string[];
+}
+
+export interface InstagramLogin {
+  timestamp: Date;
+  ip: string;
+  location?: string;
+  device?: string;
+  deviceId?: string;
+  success: boolean;
+  method?: string;
+}
+
+export interface InstagramFollowing {
+  username: string;
+  instagramId?: string;
+  displayName?: string;
+  followDate: Date;
+  followType: 'following' | 'follower' | 'blocked' | 'restricted';
+}
+
+export interface ThreadsPost {
+  id: string;
+  content: string;
+  timestamp: Date;
+  reactions?: number;
+  replies?: number;
+  shares?: number;
+  mediaAttached?: boolean;
+  visibility: 'public' | 'private' | 'followers';
+}
+
+export interface NCMECReport {
+  id: string;
+  reportDate: Date;
+  contentType: string;
+  status: string;
+  description?: string;
+}
+
+export interface RequestParameter {
+  parameterName: string;
+  value: string;
+  category: string;
+  timestamp?: Date;
+}
 
 export interface InstagramUser {
   id: string;
@@ -11,6 +83,7 @@ export interface InstagramUser {
   posts: number;
   followers?: number;
   following?: number;
+  isMainUser?: boolean;
 }
 
 export interface InstagramMessage {
@@ -21,7 +94,9 @@ export interface InstagramMessage {
   timestamp: Date;
   type: 'text' | 'image' | 'video' | 'audio' | 'link';
   mediaPath?: string;
+  mediaId?: string;
   reactions?: any[];
+  isDisappearing?: boolean;
 }
 
 export interface InstagramConversation {
@@ -31,6 +106,8 @@ export interface InstagramConversation {
   messages: InstagramMessage[];
   createdAt: Date;
   lastActivity: Date;
+  messageCount: number;
+  mediaCount: number;
 }
 
 export interface InstagramMedia {
@@ -41,8 +118,23 @@ export interface InstagramMedia {
   blob: Blob;
   metadata?: any;
   associatedMessageId?: string;
-  transcript?: string; // Para áudios transcritos
-  classification?: string; // Para imagens classificadas
+  associatedConversationId?: string;
+  transcript?: string;
+  classification?: string;
+  uploadDate?: Date;
+  fileSize: number;
+}
+
+export interface CaseMetadata {
+  dateRange: {
+    start: Date;
+    end: Date;
+  };
+  generationDate: Date;
+  ticketNumber?: string;
+  targetAccount?: string;
+  preservationId?: string;
+  reportType: string;
 }
 
 export interface ProcessedInstagramData {
@@ -50,11 +142,20 @@ export interface ProcessedInstagramData {
   users: InstagramUser[];
   conversations: InstagramConversation[];
   media: InstagramMedia[];
+  profile?: InstagramProfile;
+  devices: InstagramDevice[];
+  logins: InstagramLogin[];
+  following: InstagramFollowing[];
+  threadsPosts: ThreadsPost[];
+  ncmecReports: NCMECReport[];
+  requestParameters: RequestParameter[];
+  caseMetadata?: CaseMetadata;
   metadata: {
     processedAt: Date;
     originalFilename: string;
     totalFiles: number;
     htmlContent?: string;
+    sectionsFound: string[];
   };
 }
 
@@ -105,12 +206,23 @@ export class InstagramParserService {
       
       return {
         id: uuidv4(),
-        ...organizedData,
+        users: organizedData.users,
+        conversations: organizedData.conversations,
+        media: organizedData.media,
+        profile: organizedData.profile,
+        devices: organizedData.devices,
+        logins: organizedData.logins,
+        following: organizedData.following,
+        threadsPosts: organizedData.threadsPosts,
+        ncmecReports: organizedData.ncmecReports,
+        requestParameters: organizedData.requestParameters,
+        caseMetadata: organizedData.caseMetadata,
         metadata: {
           processedAt: new Date(),
           originalFilename: file.name,
           totalFiles: Object.keys(zipContent.files).length,
-          htmlContent: htmlContent.substring(0, 1000) // Primeiros 1000 chars para preview
+          htmlContent: htmlContent.substring(0, 1000),
+          sectionsFound: parsedData.sectionsFound || []
         }
       };
       
@@ -211,13 +323,72 @@ export class InstagramParserService {
     const parser = new DOMParser();
     const doc = parser.parseFromString(cleanHtml, 'text/html');
     
-    // Extrair dados específicos do Meta Business Record
+    console.log('Starting comprehensive Meta Business Record parsing...');
+    
+    // Parse all Meta Business Record sections
+    const sectionsFound: string[] = [];
+    
+    // Extract Request Parameters
+    const requestParameters = InstagramParserMethods.parseRequestParameters(doc);
+    if (requestParameters.length > 0) sectionsFound.push('Request Parameters');
+    
+    // Extract NCMEC Reports
+    const ncmecReports = InstagramParserMethods.parseNCMECReports(doc);
+    if (ncmecReports.length > 0) sectionsFound.push('NCMEC Reports');
+    
+    // Extract Profile Information
+    const profile = InstagramParserMethods.parseProfileSection(doc);
+    if (profile) sectionsFound.push('Profile');
+    
+    // Extract Photos section
+    const photosData = InstagramParserMethods.parsePhotosSection(doc, mediaFiles);
+    if (photosData.length > 0) sectionsFound.push('Photos');
+    
+    // Extract Unified Messages (main conversation data)
     const conversations = this.extractMetaConversations(doc, mediaFiles);
+    if (conversations.length > 0) sectionsFound.push('Unified Messages');
+    
+    // Extract Disappearing Messages
+    const disappearingMessages = InstagramParserMethods.parseDisappearingMessages(doc, mediaFiles);
+    if (disappearingMessages.length > 0) sectionsFound.push('Disappearing Messages');
+    
+    // Extract Threads Posts
+    const threadsPosts = InstagramParserMethods.parseThreadsPosts(doc);
+    if (threadsPosts.length > 0) sectionsFound.push('Threads Posts');
+    
+    // Extract device and login information
+    const devices = InstagramParserMethods.parseDevices(doc);
+    if (devices.length > 0) sectionsFound.push('Devices');
+    
+    const logins = InstagramParserMethods.parseLogins(doc);
+    if (logins.length > 0) sectionsFound.push('Logins');
+    
+    // Extract following/followers data
+    const following = InstagramParserMethods.parseFollowing(doc);
+    if (following.length > 0) sectionsFound.push('Following');
+    
+    // Extract users from all parsed data
     const users = this.extractUsers(doc, conversations);
-    const metadata = this.extractMetadata(doc);
+    
+    // Extract case metadata
+    const caseMetadata = InstagramParserMethods.extractCaseMetadata(doc);
     
     console.log(`Parsed ${conversations.length} conversations, ${users.length} users`);
-    return { conversations, users, metadata };
+    console.log(`Sections found: ${sectionsFound.join(', ')}`);
+    
+    return { 
+      conversations, 
+      users, 
+      profile,
+      devices,
+      logins,
+      following,
+      threadsPosts,
+      ncmecReports,
+      requestParameters,
+      caseMetadata,
+      sectionsFound
+    };
   }
 
   private extractMetaConversations(doc: Document, mediaFiles: Map<string, Blob>): InstagramConversation[] {
@@ -317,7 +488,9 @@ export class InstagramParserService {
       title: this.extractThreadTitle(section),
       messages,
       createdAt: messages[0]?.timestamp || new Date(),
-      lastActivity: messages[messages.length - 1]?.timestamp || new Date()
+      lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
+      messageCount: messages.length,
+      mediaCount: messages.filter(m => m.type !== 'text').length
     };
   }
 
@@ -342,14 +515,16 @@ export class InstagramParserService {
     });
     
     if (messages.length > 0) {
-      conversations.push({
-        id: `table_conversation_${tableIndex}`,
-        participants: Array.from(participants),
-        title: `Conversa ${tableIndex + 1}`,
-        messages,
-        createdAt: messages[0]?.timestamp || new Date(),
-        lastActivity: messages[messages.length - 1]?.timestamp || new Date()
-      });
+        conversations.push({
+          id: `table_conversation_${tableIndex}`,
+          participants: Array.from(participants),
+          title: `Conversa ${tableIndex + 1}`,
+          messages,
+          createdAt: messages[0]?.timestamp || new Date(),
+          lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
+          messageCount: messages.length,
+          mediaCount: messages.filter(m => m.type !== 'text').length
+        });
     }
     
     return conversations;
@@ -585,7 +760,9 @@ export class InstagramParserService {
       title: this.extractConversationTitle(section),
       messages,
       createdAt: messages[0]?.timestamp || new Date(),
-      lastActivity: messages[messages.length - 1]?.timestamp || new Date()
+      lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
+      messageCount: messages.length,
+      mediaCount: messages.filter(m => m.type !== 'text').length
     };
   }
 
@@ -701,7 +878,9 @@ export class InstagramParserService {
       participants: Array.from(participants),
       messages,
       createdAt: messages[0]?.timestamp || new Date(),
-      lastActivity: messages[messages.length - 1]?.timestamp || new Date()
+      lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
+      messageCount: messages.length,
+      mediaCount: messages.filter(m => m.type !== 'text').length
     };
   }
 
@@ -773,13 +952,10 @@ export class InstagramParserService {
     return isNaN(parsed) ? new Date() : new Date(parsed);
   }
 
-  private organizeData(
-    parsedData: any, 
-    mediaFiles: Map<string, Blob>
-  ): { users: InstagramUser[]; conversations: InstagramConversation[]; media: InstagramMedia[] } {
+  private organizeData(parsedData: any, mediaFiles: Map<string, Blob>): { users: InstagramUser[]; conversations: InstagramConversation[]; media: InstagramMedia[]; profile?: InstagramProfile; devices: InstagramDevice[]; logins: InstagramLogin[]; following: InstagramFollowing[]; threadsPosts: ThreadsPost[]; ncmecReports: NCMECReport[]; requestParameters: RequestParameter[]; caseMetadata?: CaseMetadata } {
     const media: InstagramMedia[] = [];
     
-    // Converter Map de mídia para array
+    // Process media files with proper typing
     mediaFiles.forEach((blob, filename) => {
       const type = this.getMediaType(filename);
       media.push({
@@ -787,14 +963,23 @@ export class InstagramParserService {
         type,
         filename,
         path: filename,
-        blob
+        blob,
+        fileSize: blob.size
       });
     });
     
     return {
-      users: parsedData.users,
-      conversations: parsedData.conversations,
-      media
+      users: parsedData.users || [],
+      conversations: parsedData.conversations || [],
+      media,
+      profile: parsedData.profile,
+      devices: parsedData.devices || [],
+      logins: parsedData.logins || [],
+      following: parsedData.following || [],
+      threadsPosts: parsedData.threadsPosts || [],
+      ncmecReports: parsedData.ncmecReports || [],
+      requestParameters: parsedData.requestParameters || [],
+      caseMetadata: parsedData.caseMetadata
     };
   }
 

@@ -1087,55 +1087,117 @@ export class InstagramParserService {
 
     console.log(`Processing ${audioFiles.length} audio files and ${imageFiles.length} images`);
 
-    // Process audio files for transcription using GROQ
-    for (const audio of audioFiles) {
-      try {
-        // Convert blob to base64
-        const arrayBuffer = await audio.blob.arrayBuffer();
-        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-        
-        const { supabase } = await import('@/integrations/supabase/client');
-        const { data, error } = await supabase.functions.invoke('transcribe-audio', {
-          body: {
-            audioData: base64Audio,
-            groqApiKey: settings.groqApiKey
+    // Process audio files for transcription using GROQ with rate limiting
+    const AUDIO_BATCH_SIZE = 2;
+    const AUDIO_BATCH_DELAY = 3000; // 3 seconds between batches (audio takes longer)
+    
+    for (let i = 0; i < audioFiles.length; i += AUDIO_BATCH_SIZE) {
+      const batch = audioFiles.slice(i, i + AUDIO_BATCH_SIZE);
+      
+      await Promise.allSettled(batch.map(async (audio) => {
+        try {
+          // Convert blob to base64 safely
+          const arrayBuffer = await audio.blob.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          const chunkSize = 8192;
+          
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
           }
-        });
-        
-        if (!error && data?.success) {
-          audio.transcript = data.text;
-          console.log(`Transcribed audio: ${audio.filename}`);
-        } else {
-          console.error(`Failed to transcribe ${audio.filename}:`, error);
+          const base64Audio = btoa(binary);
+          
+          const { supabase } = await import('@/integrations/supabase/client');
+          
+          // Add timeout to prevent hanging requests
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for audio
+          
+          try {
+            const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+              body: {
+                audioData: base64Audio,
+                groqApiKey: settings.groqApiKey
+              }
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!error && data?.success) {
+              audio.transcript = data.text;
+              console.log(`Transcribed audio: ${audio.filename}`);
+            } else {
+              console.warn(`Failed to transcribe ${audio.filename}:`, error?.message || 'Unknown error');
+            }
+          } catch (error) {
+            clearTimeout(timeoutId);
+            console.warn(`Timeout or error processing audio ${audio.filename}:`, error.message);
+          }
+        } catch (error) {
+          console.warn(`Error processing audio ${audio.filename}:`, error.message);
         }
-      } catch (error) {
-        console.error(`Error processing audio ${audio.filename}:`, error);
+      }));
+      
+      // Wait between batches to avoid overwhelming the API
+      if (i + AUDIO_BATCH_SIZE < audioFiles.length) {
+        await new Promise(resolve => setTimeout(resolve, AUDIO_BATCH_DELAY));
       }
     }
 
-    // Process images for classification using GROQ
-    for (const image of imageFiles) {
-      try {
-        // Convert blob to base64
-        const arrayBuffer = await image.blob.arrayBuffer();
-        const base64Image = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-        
-        const { supabase } = await import('@/integrations/supabase/client');
-        const { data, error } = await supabase.functions.invoke('classify-image', {
-          body: {
-            imageBase64: base64Image,
-            groqApiKey: settings.groqApiKey
+    // Process images for classification using GROQ with rate limiting
+    const BATCH_SIZE = 3;
+    const BATCH_DELAY = 2000; // 2 seconds between batches
+    
+    for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
+      const batch = imageFiles.slice(i, i + BATCH_SIZE);
+      
+      await Promise.allSettled(batch.map(async (image) => {
+        try {
+          // Convert blob to base64 safely
+          const arrayBuffer = await image.blob.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          const chunkSize = 8192;
+          
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
           }
-        });
-        
-        if (!error && data?.success) {
-          image.classification = data.classification;
-          console.log(`Classified image: ${image.filename}`);
-        } else {
-          console.error(`Failed to classify ${image.filename}:`, error);
+          const base64Image = btoa(binary);
+          
+          const { supabase } = await import('@/integrations/supabase/client');
+          
+          // Add timeout to prevent hanging requests
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+          
+          try {
+            const { data, error } = await supabase.functions.invoke('classify-image', {
+              body: {
+                imageBase64: base64Image,
+                groqApiKey: settings.groqApiKey
+              }
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!error && data?.success) {
+              image.classification = data.classification;
+              console.log(`Classified image: ${image.filename}`);
+            } else {
+              console.warn(`Failed to classify ${image.filename}:`, error?.message || 'Unknown error');
+            }
+          } catch (error) {
+            clearTimeout(timeoutId);
+            console.warn(`Timeout or error processing image ${image.filename}:`, error.message);
+          }
+        } catch (error) {
+          console.warn(`Error processing image ${image.filename}:`, error.message);
         }
-      } catch (error) {
-        console.error(`Error processing image ${image.filename}:`, error);
+      }));
+      
+      // Wait between batches to avoid overwhelming the API
+      if (i + BATCH_SIZE < imageFiles.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
       }
     }
   }

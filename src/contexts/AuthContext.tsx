@@ -80,12 +80,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (profileData) {
+        console.log('AuthContext: Profile data found:', profileData);
+        
         // Get user roles
         const { data: rolesData } = await supabase
           .from('user_roles')
           .select('role')
           .eq('user_id', userId);
 
+        console.log('AuthContext: Roles data:', rolesData);
         const role = rolesData?.[0]?.role || 'analyst';
         
         // Set permissions based on role
@@ -114,8 +117,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('AuthContext: Setting profile from database:', profile);
         setProfile(profile);
         
-        // Log security event
-        await supabase.rpc('log_security_event', {
+        // Log security event (don't await to avoid blocking)
+        supabase.rpc('log_security_event', {
           p_event_type: 'profile_loaded',
           p_event_data: { role, status: profileData.status }
         });
@@ -366,10 +369,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await fetchProfile(session.user.id);
           } catch (profileError) {
             console.error('AuthContext: Error fetching profile on auth change:', profileError);
+            setProfile(null);
           }
         } else {
           setProfile(null);
         }
+        
+        // Always set loading to false after processing
+        setLoading(false);
       }
     );
 

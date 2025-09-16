@@ -25,14 +25,18 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.2-90b-vision-preview',
+        model: 'llama-3.2-11b-vision-preview',
         messages: [
+          {
+            role: 'system',
+            content: 'Você é um especialista em análise forense de imagens. Analise a imagem e forneça informações detalhadas sobre: 1) Descrição geral da cena, 2) Pessoas presentes e características, 3) Objetos importantes, 4) Localização/ambiente, 5) Relevância investigativa. Seja preciso e detalhado.'
+          },
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: 'Analyze this image and provide a detailed classification. Include: 1) Main objects/subjects, 2) Scene type, 3) Key visual elements, 4) Any text visible, 5) Potential forensic relevance. Be concise but thorough.'
+                text: 'Analise esta imagem para fins investigativos e forneça uma classificação detalhada:'
               },
               {
                 type: 'image_url',
@@ -43,8 +47,8 @@ serve(async (req) => {
             ]
           }
         ],
-        max_tokens: 500,
-        temperature: 0.3
+        max_tokens: 800,
+        temperature: 0.1
       }),
     });
 

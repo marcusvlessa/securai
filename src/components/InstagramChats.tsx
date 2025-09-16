@@ -71,20 +71,20 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
       const arrayBuffer = await mediaItem.blob.arrayBuffer();
       const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-      const { data: result, error } = await supabase.functions.invoke('transcribe-audio', {
-        body: {
-          audioData: base64Audio,
-          groqApiKey: localStorage.getItem('groq_api_key') || ''
-        }
-      });
+  // Enhanced transcription with response format
+  const { data: transcriptionResult, error: transcriptionError } = await supabase.functions.invoke('transcribe-audio', {
+    body: {
+      audioData: base64Audio,
+      groqApiKey: localStorage.getItem('groq_api_key') || ''
+    }
+  });
 
-      if (error) throw error;
+  if (transcriptionError) {
+    console.error('Transcription error:', transcriptionError);
+    return null;
+  }
 
-      // Atualizar a mensagem com a transcrição
-      toast({
-        title: "Transcrição concluída",
-        description: result.transcript || "Áudio transcrito com sucesso"
-      });
+  return transcriptionResult?.text || null;
 
     } catch (error) {
       console.error('Transcription error:', error);

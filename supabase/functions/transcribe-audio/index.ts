@@ -32,6 +32,10 @@ serve(async (req) => {
     formData.append('model', 'whisper-large-v3');
     formData.append('response_format', 'json');
 
+    // Use Portuguese language settings for better transcription
+    formData.append('language', 'pt');
+    formData.append('temperature', '0'); // More accurate transcription
+
     const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
@@ -47,7 +51,7 @@ serve(async (req) => {
     }
 
     const result = await response.json();
-    console.log('Transcription successful:', result.text.substring(0, 100) + '...');
+    console.log('Transcription successful:', result.text?.substring(0, 100) + '...');
 
     return new Response(
       JSON.stringify({ 

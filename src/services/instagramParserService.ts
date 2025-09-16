@@ -418,27 +418,105 @@ export class InstagramParserService {
     return conversations;
   }
 
+  // Parse Unified Messages section from Meta Business Record
+  private parseUnifiedMessages(section: Element): InstagramConversation[] {
+    const conversations: InstagramConversation[] = [];
+    
+    // Look for conversation groups or tables
+    const conversationElements = section.querySelectorAll('table, .conversation-group, .message-thread');
+    
+    conversationElements.forEach((convElement, index) => {
+      const messages: InstagramMessage[] = [];
+      const participants = new Set<string>();
+      
+      // Parse messages from tables or structured content
+      const messageRows = convElement.querySelectorAll('tr, .message-item');
+      
+      messageRows.forEach((row, msgIndex) => {
+        const cells = row.querySelectorAll('td, .message-cell, .message-content');
+        
+        if (cells.length >= 2) {
+          const timestamp = this.parseTimestamp(cells[0]?.textContent?.trim() || '');
+          const sender = cells[1]?.textContent?.trim() || 'Unknown';
+          const content = cells[2]?.textContent?.trim() || '';
+          const mediaRef = cells[3]?.textContent?.trim();
+          
+          participants.add(sender);
+          
+          // Detect media type from content or reference
+          let messageType: 'text' | 'image' | 'video' | 'audio' = 'text';
+          let mediaPath: string | undefined;
+          
+          if (mediaRef) {
+            if (mediaRef.includes('.jpg') || mediaRef.includes('.png') || mediaRef.includes('.jpeg')) {
+              messageType = 'image';
+              mediaPath = mediaRef;
+            } else if (mediaRef.includes('.mp4') || mediaRef.includes('.mov')) {
+              messageType = 'video';
+              mediaPath = mediaRef;
+            } else if (mediaRef.includes('.mp3') || mediaRef.includes('.wav') || mediaRef.includes('.m4a')) {
+              messageType = 'audio';
+              mediaPath = mediaRef;
+            }
+          }
+          
+          messages.push({
+            id: `msg_${index}_${msgIndex}`,
+            conversationId: `conv_unified_${index}`,
+            timestamp,
+            sender,
+            content,
+            type: messageType,
+            mediaPath,
+            reactions: []
+          });
+        }
+      });
+      
+      if (messages.length > 0) {
+        const participantsList = Array.from(participants);
+        conversations.push({
+          id: `conv_unified_${index}`,
+          participants: participantsList,
+          title: participantsList.length > 2 ? 
+            `Conversa em grupo (${participantsList.length} pessoas)` : 
+            participantsList.join(', '),
+          messages,
+          lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
+          messageCount: messages.length,
+          mediaCount: messages.filter(m => m.type !== 'text').length,
+          createdAt: messages[0]?.timestamp || new Date()
+        });
+      }
+    });
+    
+    console.log(`Parsed ${conversations.length} conversations from Unified Messages`);
+    return conversations;
+  }
+
+  // Enhanced section finder
   private findSectionByHeader(doc: Document, headerTexts: string[]): Element | null {
-    const headers = doc.querySelectorAll('h1, h2, h3, h4, .section-header');
+    const headers = doc.querySelectorAll('h1, h2, h3, h4, .section-header, strong, b, th');
     
     for (const header of headers) {
       const text = header.textContent?.trim();
       if (text && headerTexts.some(headerText => text.includes(headerText))) {
-        // Encontrar a seção que contém este header
+        // Find the section that contains this header
         let current = header.parentElement;
         while (current) {
-          if (current.querySelector('table, .message, .conversation')) {
+          if (current.querySelector('table, .message, .conversation, .content')) {
             return current;
           }
           current = current.parentElement;
         }
-        // Se não encontrou uma seção, usar o próximo elemento
+        // If no section found, use next element
         return header.nextElementSibling;
       }
     }
     
     return null;
   }
+
 
   private parseUnifiedMessagesSection(section: Element, mediaFiles: Map<string, Blob>): InstagramConversation[] {
     const conversations: InstagramConversation[] = [];

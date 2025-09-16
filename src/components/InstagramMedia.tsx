@@ -89,7 +89,7 @@ export const InstagramMedia: React.FC<InstagramMediaProps> = ({ data }) => {
           mediaItem.id === itemId 
             ? { 
                 ...mediaItem, 
-                transcript: result.transcript || 'Transcrição não disponível',
+                transcript: result.text || 'Transcrição não disponível',
                 processingStatus: 'completed' as const
               }
             : mediaItem

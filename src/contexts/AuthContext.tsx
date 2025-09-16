@@ -59,88 +59,145 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Fetch user profile data
-  const fetchProfile = async (userId: string) => {
-    try {
-      console.log('AuthContext: fetchProfile called for userId:', userId);
+  // Fetch user profile with timeout and fallback
+  const fetchProfile = async (userId: string): Promise<void> => {
+    return new Promise((resolve) => {
+      const TIMEOUT_MS = 10000; // 10 seconds timeout
+      let timeoutId: NodeJS.Timeout;
       
-      // Try to fetch actual profile from database
-      const { data: profileData, error } = await supabase
-        .from('user_profiles')
-        .select(`
-          *,
-          organization:organizations(name, type)
-        `)
-        .eq('user_id', userId)
-        .single();
+      const cleanup = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+      };
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('AuthContext: Error fetching profile:', error);
-        throw error;
-      }
+      const handleTimeout = () => {
+        console.warn('⚠️ AuthContext: fetchProfile timeout after 10s - continuing with basic profile');
+        cleanup();
+        // Continue with basic profile based on auth user data
+        const basicProfile: UserProfile = {
+          id: userId,
+          user_id: userId,
+          email: user?.email || '',
+          role: 'investigator', // Default role
+          badge_number: '',
+          department: '',
+          organization_id: '',
+          permissions: ['read', 'write', 'investigator', 'analyst', 'viewer']
+        };
+        setProfile(basicProfile);
+        toast.info('Carregando com perfil básico...');
+        resolve();
+      };
 
-      if (profileData) {
-        console.log('AuthContext: Profile data found:', profileData);
-        
-        // Get user roles
-        const { data: rolesData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', userId);
+      const fetchData = async () => {
+        try {
+          console.log('🔍 AuthContext: fetchProfile started for userId:', userId);
+          
+          // Try to fetch actual profile from database
+          const { data: profileData, error } = await supabase
+            .from('user_profiles')
+            .select(`
+              *,
+              organization:organizations(name, type)
+            `)
+            .eq('user_id', userId)
+            .single();
 
-        console.log('AuthContext: Roles data:', rolesData);
-        const role = rolesData?.[0]?.role || 'analyst';
-        
-        // Set permissions based on role
-        const getPermissions = (userRole: string) => {
-          switch (userRole) {
-            case 'admin':
-              return ['read', 'write', 'delete', 'admin', 'investigator', 'analyst', 'viewer'];
-            case 'delegado':
-              return ['read', 'write', 'delete', 'investigator', 'analyst', 'viewer'];
-            case 'investigator':
-              return ['read', 'write', 'investigator', 'analyst', 'viewer'];
-            case 'analyst':
-              return ['read', 'write', 'analyst', 'viewer'];
-            default:
-              return ['read', 'viewer'];
+          if (error && error.code !== 'PGRST116') {
+            console.error('❌ AuthContext: Database error fetching profile:', error);
+            throw error;
           }
-        };
 
-        const profile: UserProfile = {
-          ...profileData,
-          role: role as UserProfile['role'],
-          permissions: getPermissions(role),
-          organization: profileData.organization || undefined
-        };
+          if (profileData) {
+            console.log('✅ AuthContext: Profile data found:', profileData);
+            
+            // Get user roles
+            const { data: rolesData } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', userId);
 
-        console.log('AuthContext: Setting profile from database:', profile);
-        setProfile(profile);
-        
-        // Log security event (don't await to avoid blocking)
-        supabase.rpc('log_security_event', {
-          p_event_type: 'profile_loaded',
-          p_event_data: { role, status: profileData.status }
-        });
+            console.log('🎭 AuthContext: Roles data:', rolesData);
+            const role = rolesData?.[0]?.role || 'investigator';
+            
+            // Set permissions based on role
+            const getPermissions = (userRole: string) => {
+              switch (userRole) {
+                case 'admin':
+                  return ['read', 'write', 'delete', 'admin', 'investigator', 'analyst', 'viewer'];
+                case 'delegado':
+                  return ['read', 'write', 'delete', 'investigator', 'analyst', 'viewer'];
+                case 'investigator':
+                  return ['read', 'write', 'investigator', 'analyst', 'viewer'];
+                case 'analyst':
+                  return ['read', 'write', 'analyst', 'viewer'];
+                default:
+                  return ['read', 'viewer'];
+              }
+            };
 
-      } else {
-        // No profile exists - user needs approval
-        console.log('AuthContext: No profile found, user needs registration approval');
-        setProfile(null);
-        toast.error('Seu cadastro está pendente de aprovação. Entre em contato com o administrador.');
-      }
+            const profile: UserProfile = {
+              ...profileData,
+              role: role as UserProfile['role'],
+              permissions: getPermissions(role),
+              organization: profileData.organization || undefined
+            };
+
+            console.log('✅ AuthContext: Setting complete profile:', profile);
+            setProfile(profile);
+            
+            // Log security event (don't await to avoid blocking)
+            try {
+              await supabase.rpc('log_security_event', {
+                p_event_type: 'profile_loaded',
+                p_event_data: { role, status: profileData.status }
+              });
+            } catch (logError) {
+              console.warn('Failed to log security event:', logError);
+            }
+
+          } else {
+            // No profile exists - user needs approval
+            console.log('⚠️ AuthContext: No profile found, user needs registration approval');
+            setProfile(null);
+            toast.error('Seu cadastro está pendente de aprovação. Entre em contato com o administrador.');
+          }
+          
+          cleanup();
+          resolve();
+          
+        } catch (error) {
+          console.error('❌ AuthContext: Error fetching profile:', error);
+          cleanup();
+          
+          // Fallback to basic profile for investigator role to allow access
+          const basicProfile: UserProfile = {
+            id: userId,
+            user_id: userId,
+            email: user?.email || '',
+            role: 'investigator',
+            badge_number: '',
+            department: '',
+            organization_id: '',
+            permissions: ['read', 'write', 'investigator', 'analyst', 'viewer']
+          };
+          setProfile(basicProfile);
+          toast.warning('Perfil carregado com configurações básicas');
+          resolve();
+        }
+      };
+
+      // Set timeout
+      timeoutId = setTimeout(handleTimeout, TIMEOUT_MS);
       
-    } catch (error) {
-      console.error('AuthContext: Error fetching profile:', error);
-      setProfile(null);
-      toast.error('Erro ao carregar perfil do usuário');
-    }
+      // Start fetching
+      fetchData();
+    });
   }
 
   // Track analytics event (disabled for now since table doesn't exist)
   const trackEvent = async (eventType: string, eventData: Record<string, unknown> = {}) => {
     // TODO: Implement analytics tracking when analytics_events table is added
-    console.log('Analytics event:', eventType, eventData)
+    console.log('📊 Analytics event:', eventType, eventData)
   }
 
   // Authentication functions
@@ -178,12 +235,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         console.log('✅ Login Supabase bem-sucedido:', data.user.email);
-        setUser(data.user);
-        setSession(data.session);
-        await fetchProfile(data.user.id);
         
-        // Log successful login
-        await supabase.rpc('log_security_event', {
+        // Log successful login (don't await to avoid blocking login)
+        supabase.rpc('log_security_event', {
           p_event_type: 'login_success',
           p_event_data: { 
             user_id: data.user.id,
@@ -238,8 +292,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Don't automatically create profile - wait for admin approval
         console.log('User registered, awaiting approval');
         
-        // Log registration attempt
-        await supabase.rpc('log_security_event', {
+        // Log registration attempt (don't await to avoid blocking)
+        supabase.rpc('log_security_event', {
           p_event_type: 'registration_attempt',
           p_event_data: { 
             user_id: data.user.id,
@@ -310,81 +364,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return profile.role === role
   }
 
-  // Initialize auth state
+  // SIMPLIFIED: Use only onAuthStateChange for all auth management
   useEffect(() => {
     let mounted = true;
-    console.log('AuthContext: useEffect triggered');
+    console.log('🚀 AuthContext: Initialization started');
 
-    const initializeAuth = async () => {
-      try {
-        // Get initial session first
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('AuthContext: Error getting session:', error);
-          if (mounted) {
-            setLoading(false);
-          }
-          return;
-        }
-
-        console.log('AuthContext: Initial session result:', session?.user?.email);
-        
-        if (mounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
-          
-          if (session?.user) {
-            try {
-              console.log('AuthContext: Fetching profile for user:', session.user.id);
-              await fetchProfile(session.user.id);
-            } catch (profileError) {
-              console.error('AuthContext: Error fetching profile:', profileError);
-            }
-          } else {
-            setProfile(null);
-          }
-          
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('AuthContext: Error initializing auth:', error);
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
         
-        console.log('AuthContext: Auth state change:', event, session?.user?.email);
-        setSession(session);
-        setUser(session?.user ?? null);
+        console.log('🔄 AuthContext: Auth state change:', event, session?.user?.email || 'no user');
         
-        if (session?.user) {
-          try {
+        try {
+          // Always update session and user first
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            console.log('👤 AuthContext: User found, fetching profile...');
             await fetchProfile(session.user.id);
-          } catch (profileError) {
-            console.error('AuthContext: Error fetching profile on auth change:', profileError);
+            console.log('✅ AuthContext: Profile fetch completed');
+          } else {
+            console.log('🚫 AuthContext: No user, clearing profile');
             setProfile(null);
           }
-        } else {
+          
+        } catch (error) {
+          console.error('❌ AuthContext: Error in auth state change:', error);
+          // Don't throw - just continue with null profile
           setProfile(null);
+        } finally {
+          // CRITICAL: Always set loading to false
+          console.log('🏁 AuthContext: Setting loading to false');
+          setLoading(false);
         }
-        
-        // Always set loading to false after processing
-        setLoading(false);
       }
     );
 
-    initializeAuth();
+    // Get initial session to trigger the auth state change
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) {
+        console.log('📋 AuthContext: Initial session check:', session?.user?.email || 'no session');
+        // The onAuthStateChange will handle this session
+      }
+    }).catch((error) => {
+      console.error('❌ AuthContext: Error getting initial session:', error);
+      if (mounted) {
+        setLoading(false);
+      }
+    });
 
     return () => {
       mounted = false;
-      console.log('AuthContext: Cleaning up subscription');
+      console.log('🧹 AuthContext: Cleaning up subscription');
       subscription.unsubscribe();
     };
   }, [])

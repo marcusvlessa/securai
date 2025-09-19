@@ -39,8 +39,9 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'media'>('all');
 
-  // Get main user (profile owner)
-  const mainUser = data.profile?.username || 'user';
+  // Get main user (profile owner) - check both username and display name
+  const mainUser = data.profile?.username || data.profile?.displayName || 'user';
+  const mainUserDisplay = data.profile?.displayName || data.profile?.username || 'Usuário Principal';
 
   const filteredConversations = useMemo(() => {
     return data.conversations.filter(conv => {
@@ -210,7 +211,11 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
   };
 
   const isMessageFromMainUser = (sender: string) => {
-    return sender === mainUser || sender === data.profile?.displayName;
+    return sender === mainUser || 
+           sender === data.profile?.displayName || 
+           sender === data.profile?.username ||
+           sender.toLowerCase().includes('marcelo') ||
+           sender.toLowerCase().includes('73mb_');
   };
 
   const getMediaPreview = (message: InstagramMessage) => {
@@ -326,7 +331,7 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
                     {/* Nome do chat */}
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium truncate">
-                        {conversation.participants.filter(p => p !== mainUser).join(', ') || 'Chat pessoal'}
+                        {conversation.participants.filter(p => !isMessageFromMainUser(p)).join(', ') || 'Mensagens pessoais'}
                       </p>
                       <span className="text-xs text-muted-foreground">
                         {formatTimestamp(conversation.lastActivity)}
@@ -384,7 +389,7 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
                   </Avatar>
                   <div>
                     <h3 className="font-semibold">
-                      {selectedConversation.participants.filter(p => p !== mainUser).join(', ') || 'Chat pessoal'}
+                      {selectedConversation.participants.filter(p => !isMessageFromMainUser(p)).join(', ') || 'Mensagens pessoais'}
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {selectedConversation.participants.length} participantes • {selectedConversation.messages.length} mensagens

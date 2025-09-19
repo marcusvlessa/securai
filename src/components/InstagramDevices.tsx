@@ -158,7 +158,7 @@ export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
                           {getDeviceIcon(device.deviceType)}
                           <div>
                             <h4 className="font-semibold">
-                              {device.deviceModel || `${device.deviceType} Device`}
+                              {device.deviceName || device.deviceModel || `${device.deviceType} Device`}
                             </h4>
                             <p className="text-sm text-muted-foreground">
                               {device.uuid}

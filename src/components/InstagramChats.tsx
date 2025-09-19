@@ -198,13 +198,26 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
 
   const getUserInitials = (username: string) => {
     if (!username) return 'U';
+    
+    // For names with spaces, use first letter of each word
+    if (username.includes(' ')) {
+      return username.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+    }
+    
+    // For usernames, use first 2 characters
     return username.substring(0, 2).toUpperCase();
   };
 
   const getUserColor = (username: string) => {
     const colors = [
-      'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 
-      'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+      'bg-gradient-to-br from-red-500 to-red-600', 
+      'bg-gradient-to-br from-blue-500 to-blue-600', 
+      'bg-gradient-to-br from-green-500 to-green-600', 
+      'bg-gradient-to-br from-yellow-500 to-yellow-600', 
+      'bg-gradient-to-br from-purple-500 to-purple-600', 
+      'bg-gradient-to-br from-pink-500 to-pink-600', 
+      'bg-gradient-to-br from-indigo-500 to-indigo-600', 
+      'bg-gradient-to-br from-teal-500 to-teal-600'
     ];
     const index = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
     return colors[index];

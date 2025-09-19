@@ -67,6 +67,11 @@ export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
     return <Badge variant="outline">Não verificado</Badge>;
   };
 
+  const getUserInitials = (name: string) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header do Perfil */}
@@ -75,23 +80,27 @@ export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
           <div className="flex items-start gap-4">
             <Avatar className="h-16 w-16">
               {profile.profilePicture ? (
-                <AvatarImage src={profile.profilePicture} alt={profile.username} />
+                <AvatarImage src={profile.profilePicture} alt={profile.displayName || profile.username} />
               ) : (
-                <AvatarFallback className="text-lg">
-                  {profile.username.substring(0, 2).toUpperCase()}
+                <AvatarFallback className="text-lg bg-primary text-primary-foreground">
+                  {getUserInitials(profile.displayName || profile.username)}
                 </AvatarFallback>
               )}
             </Avatar>
             
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-2xl font-bold">@{profile.username}</h2>
+                {profile.displayName ? (
+                  <h2 className="text-2xl font-bold">{profile.displayName}</h2>
+                ) : (
+                  <h2 className="text-2xl font-bold">@{profile.username}</h2>
+                )}
                 {getVerificationBadge()}
                 {getStatusBadge(profile.accountStatus)}
               </div>
               
-              {profile.displayName && (
-                <p className="text-lg text-muted-foreground mb-2">{profile.displayName}</p>
+              {profile.displayName && profile.username && (
+                <p className="text-lg text-muted-foreground mb-2">@{profile.username}</p>
               )}
               
               <div className="flex flex-wrap gap-2">

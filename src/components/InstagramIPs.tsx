@@ -189,7 +189,11 @@ export const InstagramIPs: React.FC<InstagramIPsProps> = ({ data }) => {
 
   const getLocationFlag = (countryCode: string) => {
     if (!countryCode || countryCode === 'XX') return '🌐';
-    return String.fromCodePoint(...countryCode.toUpperCase().split('').map(char => 0x1F1E6 + char.charCodeAt(0) - 65));
+    try {
+      return String.fromCodePoint(...countryCode.toUpperCase().split('').map(char => 0x1F1E6 + char.charCodeAt(0) - 65));
+    } catch {
+      return '🌐';
+    }
   };
 
   const getSuspiciousReason = (ipInfo: IPActivityInfo): string => {

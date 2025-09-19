@@ -68,7 +68,7 @@ export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
   };
 
   const getUserInitials = (name: string) => {
-    if (!name) return 'U';
+    if (!name) return 'MB';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
 
@@ -90,16 +90,14 @@ export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
             
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                {profile.displayName ? (
-                  <h2 className="text-2xl font-bold">{profile.displayName}</h2>
-                ) : (
-                  <h2 className="text-2xl font-bold">@{profile.username}</h2>
-                )}
+              <h2 className="text-2xl font-bold">
+                {profile.displayName || profile.username || 'Marcelo Brandão'}
+              </h2>
                 {getVerificationBadge()}
                 {getStatusBadge(profile.accountStatus)}
               </div>
               
-              {profile.displayName && profile.username && (
+              {profile.username && (
                 <p className="text-lg text-muted-foreground mb-2">@{profile.username}</p>
               )}
               

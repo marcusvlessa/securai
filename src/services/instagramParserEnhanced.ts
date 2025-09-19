@@ -16,11 +16,11 @@ import type {
 
 export class InstagramParserEnhanced {
   /**
-   * Parse Instagram/Meta Business Record HTML content with robust strategies
+   * Parse Meta Business Record HTML content with specialized parser
    */
   static parseHtmlContentRobust(htmlContent: string, mediaFiles: Map<string, Blob>): ProcessedInstagramData {
     try {
-      console.log('🚀 Starting enhanced Meta Business Record parsing...');
+      console.log('🚀 Starting Meta Business Record parsing...');
       
       const cleanHtml = DOMPurify.sanitize(htmlContent);
       const parser = new DOMParser();
@@ -46,36 +46,30 @@ export class InstagramParserEnhanced {
         }
       };
 
-      // Extract different sections of Meta Business Record
+      // Extract different sections with Meta Business Record specific structure
       console.log('📋 Extracting profile information...');
-      processedData.profile = this.extractProfile(doc);
+      processedData.profile = this.extractMetaProfile(doc);
       
-      console.log('💬 Extracting conversations and messages...');
-      processedData.conversations = this.extractConversations(doc, mediaFiles);
+      console.log('💬 Extracting unified messages...');
+      processedData.conversations = this.extractUnifiedMessages(doc, mediaFiles);
       
       console.log('👥 Extracting users...');
-      processedData.users = this.extractUsers(doc, processedData.conversations);
+      processedData.users = this.extractUsersFromData(processedData);
       
       console.log('📱 Extracting devices...');
-      processedData.devices = this.extractDevices(doc);
+      processedData.devices = this.extractMetaDevices(doc);
       
       console.log('🔐 Extracting logins...');
-      processedData.logins = this.extractLogins(doc);
+      processedData.logins = this.extractMetaLogins(doc);
       
-      console.log('📸 Extracting media...');
-      processedData.media = this.extractMedia(doc, mediaFiles);
+      console.log('📸 Processing media files...');
+      processedData.media = this.processMediaFiles(mediaFiles);
       
       console.log('👥 Extracting following/followers...');
-      processedData.following = this.extractFollowing(doc);
+      processedData.following = this.extractMetaFollowing(doc);
       
-      console.log('🧵 Extracting Threads data...');
-      processedData.threadsPosts = this.extractThreadsData(doc);
-      
-      console.log('📊 Extracting reports and parameters...');
-      processedData.ncmecReports = this.extractNCMECReports(doc);
-      processedData.requestParameters = this.extractRequestParameters(doc);
-      
-      console.log('✅ Parsing completed successfully:', {
+      console.log('✅ Meta Business Record parsing completed:', {
+        profile: processedData.profile ? 'Found' : 'Not found',
         conversations: processedData.conversations.length,
         users: processedData.users.length,
         media: processedData.media.length,
@@ -86,125 +80,186 @@ export class InstagramParserEnhanced {
       return processedData;
       
     } catch (error) {
-      console.error('❌ Erro no parsing do HTML:', error);
+      console.error('❌ Erro no parsing Meta Business Record:', error);
       throw new Error(`Falha no parsing: ${error.message}`);
     }
   }
 
   /**
-   * Extract profile information from Meta Business Record
+   * Extract profile from Meta Business Record specific sections
    */
-  private static extractProfile(doc: Document): InstagramProfile | null {
+  private static extractMetaProfile(doc: Document): InstagramProfile | null {
     try {
-      // Look for profile section with different patterns
-      const profileSection = this.findSectionByKeywords(doc, [
-        'property-name', 'property-emails', 'property-phone_numbers',
-        'Profile', 'Account', 'User Information'
-      ]);
+      console.log('🔍 Looking for Meta profile sections...');
       
-      if (!profileSection) return null;
+      // Look for name property
+      const nameElement = doc.getElementById('property-name');
+      const emailsElement = doc.getElementById('property-emails');
+      const phoneElement = doc.getElementById('property-phone_numbers');
+      const profilePictureElement = doc.getElementById('property-profile_picture');
+      const registrationElement = doc.getElementById('property-registration_date');
+      const registrationIPElement = doc.getElementById('property-registration_ip');
+      
+      if (!nameElement && !emailsElement) {
+        console.warn('⚠️ No Meta profile sections found');
+        return null;
+      }
+      
+      let displayName = '';
+      let username = '';
+      let emails: string[] = [];
+      let phones: string[] = [];
+      let profilePicture = '';
+      let registrationDate: Date | undefined;
+      let registrationIP = '';
+      
+      // Extract name
+      if (nameElement) {
+        const nameText = this.extractTextContent(nameElement);
+        console.log('📝 Name found:', nameText);
+        displayName = nameText;
+        // Generate username from display name
+        username = nameText.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '') || 'user';
+      }
+      
+      // Extract emails
+      if (emailsElement) {
+        const emailTexts = this.extractAllTextContent(emailsElement);
+        emails = emailTexts.filter(text => text.includes('@'));
+        console.log('📧 Emails found:', emails);
+      }
+      
+      // Extract phones
+      if (phoneElement) {
+        const phoneTexts = this.extractAllTextContent(phoneElement);
+        phones = phoneTexts.filter(text => /[\d\s\-\(\)\+]+/.test(text));
+        console.log('📱 Phones found:', phones);
+      }
+      
+      // Extract profile picture
+      if (profilePictureElement) {
+        const img = profilePictureElement.querySelector('img');
+        if (img) {
+          profilePicture = img.src || '';
+        }
+      }
+      
+      // Extract registration date
+      if (registrationElement) {
+        const dateText = this.extractTextContent(registrationElement);
+        registrationDate = this.parseTimestamp(dateText);
+      }
+      
+      // Extract registration IP
+      if (registrationIPElement) {
+        registrationIP = this.extractTextContent(registrationIPElement);
+      }
       
       const profile: InstagramProfile = {
-        username: this.extractTextFromSection(profileSection, 'username', 'name'),
-        displayName: this.extractTextFromSection(profileSection, 'display_name', 'full_name'),
-        email: [this.extractTextFromSection(profileSection, 'email')],
-        phone: [this.extractTextFromSection(profileSection, 'phone', 'telephone')],
-        profilePicture: this.extractImageFromSection(profileSection),
+        username: username || 'unknown_user',
+        displayName: displayName || '',
+        email: emails,
+        phone: phones,
+        profilePicture: profilePicture || undefined,
         accountStatus: 'active',
-        verificationStatus: 'unverified'
+        verificationStatus: 'unverified',
+        registrationDate,
+        registrationIP: registrationIP || undefined
       };
       
+      console.log('✅ Meta profile extracted:', profile);
       return profile;
+      
     } catch (error) {
-      console.warn('⚠️ Error extracting profile:', error);
+      console.warn('⚠️ Error extracting Meta profile:', error);
       return null;
     }
   }
 
   /**
-   * Extract conversations from unified messages section
+   * Extract unified messages from Meta Business Record
    */
-  private static extractConversations(doc: Document, mediaFiles: Map<string, Blob>): InstagramConversation[] {
+  private static extractUnifiedMessages(doc: Document, mediaFiles: Map<string, Blob>): InstagramConversation[] {
     try {
-      const conversations: InstagramConversation[] = [];
+      console.log('🔍 Looking for unified messages section...');
       
-      // Look for unified messages section
-      const messagesSection = this.findSectionByKeywords(doc, [
-        'property-unified_messages', 'unified_messages', 'Messages', 'Conversations'
-      ]);
-      
-      if (!messagesSection) {
+      const unifiedMessagesElement = doc.getElementById('property-unified_messages');
+      if (!unifiedMessagesElement) {
         console.warn('⚠️ No unified messages section found');
-        return conversations;
+        return [];
       }
       
-      // Extract tables or structured message data
-      const tables = messagesSection.querySelectorAll('table');
-      const messageDivs = messagesSection.querySelectorAll('div.i, div.m');
+      const conversations: InstagramConversation[] = [];
       
-      if (tables.length > 0) {
-        // Process table-based messages
-        tables.forEach((table, index) => {
-          const conversation = this.parseTableAsConversation(table, mediaFiles, index);
+      // Look for table structures within the unified messages
+      const tables = unifiedMessagesElement.querySelectorAll('table');
+      console.log(`📊 Found ${tables.length} message tables`);
+      
+      if (tables.length === 0) {
+        // Try div-based structure
+        const conversations_divs = unifiedMessagesElement.querySelectorAll('div.o');
+        console.log(`📦 Found ${conversations_divs.length} conversation divs`);
+        
+        conversations_divs.forEach((div, index) => {
+          const conversation = this.parseMetaConversationDiv(div, mediaFiles, index);
           if (conversation) {
             conversations.push(conversation);
           }
         });
-      } else if (messageDivs.length > 0) {
-        // Process div-based messages
-        const conversation = this.parseDivAsConversation(messagesSection, mediaFiles);
-        if (conversation) {
-          conversations.push(conversation);
-        }
+      } else {
+        // Process each table as a potential conversation
+        tables.forEach((table, index) => {
+          const conversation = this.parseMetaConversationTable(table, mediaFiles, index);
+          if (conversation) {
+            conversations.push(conversation);
+          }
+        });
       }
       
+      console.log(`✅ Extracted ${conversations.length} conversations`);
       return conversations;
+      
     } catch (error) {
-      console.warn('⚠️ Error extracting conversations:', error);
+      console.warn('⚠️ Error extracting unified messages:', error);
       return [];
     }
   }
 
   /**
-   * Parse a table as a conversation
+   * Parse a Meta conversation table
    */
-  private static parseTableAsConversation(table: Element, mediaFiles: Map<string, Blob>, index: number): InstagramConversation | null {
+  private static parseMetaConversationTable(table: Element, mediaFiles: Map<string, Blob>, index: number): InstagramConversation | null {
     try {
       const rows = table.querySelectorAll('tr');
-      if (rows.length === 0) return null;
+      if (rows.length < 2) return null; // Need at least header + 1 message
       
       const messages: InstagramMessage[] = [];
-      let participants: string[] = [];
+      const participants: Set<string> = new Set();
       
-      // Extract header to understand column structure
-      const headerRow = rows[0];
-      const headers = Array.from(headerRow.querySelectorAll('th, td')).map(cell => 
-        cell.textContent?.trim().toLowerCase() || ''
-      );
-      
-      // Process each row as a message
+      // Skip header row and process message rows
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         const cells = Array.from(row.querySelectorAll('td'));
         
         if (cells.length === 0) continue;
         
-        const message = this.parseTableRowAsMessage(row, cells, headers, mediaFiles, `msg_${index}_${i}`);
+        const message = this.parseMetaMessageRow(cells, mediaFiles, `conv_${index}_msg_${i}`);
         if (message) {
           messages.push(message);
-          if (message.sender && !participants.includes(message.sender)) {
-            participants.push(message.sender);
-          }
+          participants.add(message.sender);
         }
       }
       
       if (messages.length === 0) return null;
       
+      const conversationId = `meta_conversation_${index}`;
+      const participantList = Array.from(participants);
+      
       const conversation: InstagramConversation = {
-        id: `conversation_${index}`,
-        participants,
-        messages,
-        title: participants.length > 1 ? `Chat with ${participants.join(', ')}` : 'Personal Chat',
+        id: conversationId,
+        participants: participantList,
+        messages: messages.map(msg => ({ ...msg, conversationId })),
+        title: participantList.length > 1 ? `Chat: ${participantList.join(', ')}` : `Chat pessoal`,
         createdAt: messages[0]?.timestamp || new Date(),
         lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
         messageCount: messages.length,
@@ -212,49 +267,84 @@ export class InstagramParserEnhanced {
       };
       
       return conversation;
+      
     } catch (error) {
-      console.warn('⚠️ Error parsing table as conversation:', error);
+      console.warn('⚠️ Error parsing Meta conversation table:', error);
       return null;
     }
   }
 
   /**
-   * Parse a table row as a message
+   * Parse a Meta conversation div
    */
-  private static parseTableRowAsMessage(
-    row: Element, 
-    cells: Element[], 
-    headers: string[], 
-    mediaFiles: Map<string, Blob>, 
-    messageId: string
-  ): InstagramMessage | null {
+  private static parseMetaConversationDiv(div: Element, mediaFiles: Map<string, Blob>, index: number): InstagramConversation | null {
+    try {
+      const messageDivs = div.querySelectorAll('div.i, div.m');
+      const messages: InstagramMessage[] = [];
+      const participants: Set<string> = new Set();
+      
+      messageDivs.forEach((messageDiv, msgIndex) => {
+        const message = this.parseMetaMessageDiv(messageDiv, mediaFiles, `conv_${index}_msg_${msgIndex}`);
+        if (message) {
+          messages.push(message);
+          participants.add(message.sender);
+        }
+      });
+      
+      if (messages.length === 0) return null;
+      
+      const conversationId = `meta_conversation_${index}`;
+      const participantList = Array.from(participants);
+      
+      const conversation: InstagramConversation = {
+        id: conversationId,
+        participants: participantList,
+        messages: messages.map(msg => ({ ...msg, conversationId })),
+        title: participantList.length > 1 ? `Chat: ${participantList.join(', ')}` : `Chat pessoal`,
+        createdAt: messages[0]?.timestamp || new Date(),
+        lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
+        messageCount: messages.length,
+        mediaCount: messages.filter(m => m.type !== 'text').length
+      };
+      
+      return conversation;
+      
+    } catch (error) {
+      console.warn('⚠️ Error parsing Meta conversation div:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Parse individual message row from Meta table
+   */
+  private static parseMetaMessageRow(cells: Element[], mediaFiles: Map<string, Blob>, messageId: string): InstagramMessage | null {
     try {
       if (cells.length === 0) return null;
       
       let timestamp = new Date();
-      let sender = '';
+      let sender = 'Usuário';
       let content = '';
       let mediaType: 'text' | 'image' | 'video' | 'audio' | 'link' = 'text';
-      let mediaUrl = '';
+      let mediaPath = '';
       
-      // Map cells to message properties based on headers or position
+      // Extract data from cells based on common patterns
       cells.forEach((cell, cellIndex) => {
-        const cellText = cell.textContent?.trim() || '';
-        const header = headers[cellIndex] || '';
+        const cellText = this.extractTextContent(cell);
         
-        // Try to identify timestamp
-        if (this.isTimestamp(cellText) || header.includes('time') || header.includes('date')) {
+        // Try to identify timestamp (usually first or last cell)
+        if (this.isTimestamp(cellText)) {
           const parsedTime = this.parseTimestamp(cellText);
           if (parsedTime) timestamp = parsedTime;
         }
         
-        // Try to identify sender
-        else if (header.includes('sender') || header.includes('from') || header.includes('author')) {
-          sender = cellText;
+        // Try to identify sender (usually contains names or usernames)
+        else if (cellIndex === 0 && cellText.length < 100 && !this.isTimestamp(cellText)) {
+          sender = cellText || 'Usuário';
         }
         
-        // Try to identify content
-        else if (header.includes('content') || header.includes('message') || header.includes('text')) {
+        // Content is usually the largest text cell
+        else if (cellText.length > content.length) {
           content = cellText;
         }
         
@@ -262,118 +352,126 @@ export class InstagramParserEnhanced {
         const links = cell.querySelectorAll('a[href]');
         links.forEach(link => {
           const href = link.getAttribute('href') || '';
-          if (href.includes('media') || href.includes('attachment')) {
+          if (href.includes('media') || href.includes('attachment') || href.includes('linked_media')) {
             mediaType = this.determineMediaTypeFromPath(href);
-            mediaUrl = this.processMediaUrl(href, mediaFiles);
+            mediaPath = this.findLinkedMedia(href, mediaFiles);
           }
         });
-        
-        // If no specific header match, try to infer from content
-        if (!sender && !content) {
-          if (cellIndex === 0 && cellText.length < 50) {
-            sender = cellText;
-          } else if (cellIndex === 1 || (cellIndex === 0 && !sender)) {
-            content = cellText;
-          }
-        }
       });
-      
-      // Fallback: if no sender identified, use a generic one
-      if (!sender) {
-        sender = 'User';
-      }
       
       const message: InstagramMessage = {
         id: messageId,
-        conversationId: `conversation_${Math.random()}`,
-        sender,
+        conversationId: '', // Will be set later
+        sender: sender || 'Usuário',
         content: content || '',
         timestamp,
         type: mediaType,
-        mediaPath: mediaUrl || undefined,
+        mediaPath: mediaPath || undefined,
         reactions: []
       };
       
       return message;
+      
     } catch (error) {
-      console.warn('⚠️ Error parsing table row as message:', error);
+      console.warn('⚠️ Error parsing Meta message row:', error);
       return null;
     }
   }
 
   /**
-   * Parse div-based conversation structure
+   * Parse individual message div from Meta structure
    */
-  private static parseDivAsConversation(section: Element, mediaFiles: Map<string, Blob>): InstagramConversation | null {
+  private static parseMetaMessageDiv(div: Element, mediaFiles: Map<string, Blob>, messageId: string): InstagramMessage | null {
     try {
-      const messageDivs = section.querySelectorAll('div.i, div.m');
-      const messages: InstagramMessage[] = [];
-      const participants: Set<string> = new Set();
+      const text = this.extractTextContent(div);
+      if (!text) return null;
       
-      messageDivs.forEach((div, index) => {
-        const text = div.textContent?.trim() || '';
-        if (text.length === 0) return;
-        
-        // Try to extract sender and content from text patterns
-        const timeMatch = text.match(/(\d{1,2}\/\d{1,2}\/\d{4}.*?\d{1,2}:\d{2})/);
-        const timestamp = timeMatch ? this.parseTimestamp(timeMatch[1]) : new Date();
-        
-        // Simple pattern: look for "Sender: Message" or similar
-        let sender = 'User';
-        let content = text;
-        
-        const colonIndex = text.indexOf(':');
-        if (colonIndex > 0 && colonIndex < 50) {
-          const potentialSender = text.substring(0, colonIndex).trim();
-          if (potentialSender.length > 0 && potentialSender.length < 30) {
-            sender = potentialSender;
-            content = text.substring(colonIndex + 1).trim();
+      // Parse patterns like "TIMESTAMP SENDER: MESSAGE"
+      const patterns = [
+        /(\d{1,2}\/\d{1,2}\/\d{4}.*?\d{1,2}:\d{2})\s+(.+?):\s+(.+)/,
+        /(.+?):\s+(.+)/,
+        /(\d{1,2}\/\d{1,2}\/\d{4}.*?\d{1,2}:\d{2})\s+(.+)/
+      ];
+      
+      let timestamp = new Date();
+      let sender = 'Usuário';
+      let content = text;
+      
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match) {
+          if (match.length === 4) {
+            // Full pattern with timestamp, sender, content
+            timestamp = this.parseTimestamp(match[1]) || new Date();
+            sender = match[2];
+            content = match[3];
+          } else if (match.length === 3) {
+            if (this.isTimestamp(match[1])) {
+              timestamp = this.parseTimestamp(match[1]) || new Date();
+              content = match[2];
+            } else {
+              sender = match[1];
+              content = match[2];
+            }
           }
+          break;
         }
-        
-        participants.add(sender);
-        
-        const message: InstagramMessage = {
-          id: `div_msg_${index}`,
-          conversationId: 'conversation_div',
-          sender,
-          content,
-          timestamp: timestamp || new Date(),
-          type: 'text',
-          reactions: []
-        };
-        
-        messages.push(message);
+      }
+      
+      // Check for media references
+      let mediaType: 'text' | 'image' | 'video' | 'audio' | 'link' = 'text';
+      let mediaPath = '';
+      
+      const links = div.querySelectorAll('a[href]');
+      links.forEach(link => {
+        const href = link.getAttribute('href') || '';
+        if (href.includes('media') || href.includes('attachment') || href.includes('linked_media')) {
+          mediaType = this.determineMediaTypeFromPath(href);
+          mediaPath = this.findLinkedMedia(href, mediaFiles);
+        }
       });
       
-      if (messages.length === 0) return null;
-      
-      const conversation: InstagramConversation = {
-        id: 'conversation_div',
-        participants: Array.from(participants),
-        messages,
-        title: `Chat with ${Array.from(participants).join(', ')}`,
-        createdAt: messages[0]?.timestamp || new Date(),
-        lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
-        messageCount: messages.length,
-        mediaCount: messages.filter(m => m.type !== 'text').length
+      const message: InstagramMessage = {
+        id: messageId,
+        conversationId: '', // Will be set later
+        sender: sender || 'Usuário',
+        content: content || '',
+        timestamp,
+        type: mediaType,
+        mediaPath: mediaPath || undefined,
+        reactions: []
       };
       
-      return conversation;
+      return message;
+      
     } catch (error) {
-      console.warn('⚠️ Error parsing div as conversation:', error);
+      console.warn('⚠️ Error parsing Meta message div:', error);
       return null;
     }
   }
 
   /**
-   * Extract users from conversations and other sections
+   * Extract users from processed data
    */
-  private static extractUsers(doc: Document, conversations: InstagramConversation[]): InstagramUser[] {
+  private static extractUsersFromData(data: ProcessedInstagramData): InstagramUser[] {
     const users: Map<string, InstagramUser> = new Map();
     
+    // Add main profile user
+    if (data.profile) {
+      users.set(data.profile.username, {
+        id: data.profile.username,
+        username: data.profile.username,
+        displayName: data.profile.displayName || data.profile.username,
+        profilePicture: data.profile.profilePicture,
+        conversations: [],
+        posts: 0,
+        followers: 0,
+        following: 0
+      });
+    }
+    
     // Extract users from conversations
-    conversations.forEach(conversation => {
+    data.conversations.forEach(conversation => {
       conversation.participants.forEach(participant => {
         if (!users.has(participant)) {
           users.set(participant, {
@@ -387,6 +485,10 @@ export class InstagramParserEnhanced {
             following: 0
           });
         }
+        
+        // Update user's conversation list
+        const user = users.get(participant)!;
+        user.conversations.push(conversation.id);
       });
     });
     
@@ -394,31 +496,29 @@ export class InstagramParserEnhanced {
   }
 
   /**
-   * Extract device information
+   * Extract devices from Meta Business Record
    */
-  private static extractDevices(doc: Document): InstagramDevice[] {
+  private static extractMetaDevices(doc: Document): InstagramDevice[] {
     try {
       const devices: InstagramDevice[] = [];
-      const deviceSection = this.findSectionByKeywords(doc, [
-        'property-devices', 'devices', 'Device Information'
-      ]);
+      const devicesElement = doc.getElementById('property-devices');
       
-      if (!deviceSection) return devices;
+      if (!devicesElement) return devices;
       
-      const tables = deviceSection.querySelectorAll('table');
+      const tables = devicesElement.querySelectorAll('table');
       tables.forEach(table => {
         const rows = table.querySelectorAll('tr');
         for (let i = 1; i < rows.length; i++) {
           const cells = Array.from(rows[i].querySelectorAll('td'));
           if (cells.length >= 2) {
             const device: InstagramDevice = {
-              uuid: `device_${i}`,
-              type: cells[0]?.textContent?.trim() || 'Unknown',
-              deviceModel: cells[1]?.textContent?.trim() || 'Unknown',
-              os: cells[2]?.textContent?.trim() || 'Unknown',
+              uuid: `meta_device_${i}`,
+              type: this.extractTextContent(cells[0]) || 'Unknown',
+              deviceModel: this.extractTextContent(cells[1]) || 'Unknown',
+              os: cells[2] ? this.extractTextContent(cells[2]) : 'Unknown',
               status: 'active',
-              lastSeen: cells[3] ? this.parseTimestamp(cells[3].textContent?.trim() || '') || new Date() : new Date(),
-              ipAddresses: cells[4] ? [cells[4].textContent?.trim() || ''] : []
+              lastSeen: cells[3] ? this.parseTimestamp(this.extractTextContent(cells[3])) || new Date() : new Date(),
+              ipAddresses: cells[4] ? [this.extractTextContent(cells[4])] : []
             };
             devices.push(device);
           }
@@ -427,35 +527,33 @@ export class InstagramParserEnhanced {
       
       return devices;
     } catch (error) {
-      console.warn('⚠️ Error extracting devices:', error);
+      console.warn('⚠️ Error extracting Meta devices:', error);
       return [];
     }
   }
 
   /**
-   * Extract login information
+   * Extract logins from Meta Business Record
    */
-  private static extractLogins(doc: Document): InstagramLogin[] {
+  private static extractMetaLogins(doc: Document): InstagramLogin[] {
     try {
       const logins: InstagramLogin[] = [];
-      const loginSection = this.findSectionByKeywords(doc, [
-        'property-logins', 'logins', 'Login History'
-      ]);
+      const loginsElement = doc.getElementById('property-logins');
       
-      if (!loginSection) return logins;
+      if (!loginsElement) return logins;
       
-      const tables = loginSection.querySelectorAll('table');
+      const tables = loginsElement.querySelectorAll('table');
       tables.forEach(table => {
         const rows = table.querySelectorAll('tr');
         for (let i = 1; i < rows.length; i++) {
           const cells = Array.from(rows[i].querySelectorAll('td'));
           if (cells.length >= 3) {
             const login: InstagramLogin = {
-              timestamp: this.parseTimestamp(cells[0]?.textContent?.trim() || '') || new Date(),
-              ip: cells[1]?.textContent?.trim() || '',
-              location: cells[2]?.textContent?.trim() || 'Unknown',
-              device: cells[3]?.textContent?.trim() || 'Unknown',
-              success: !cells[4]?.textContent?.toLowerCase().includes('failed')
+              timestamp: this.parseTimestamp(this.extractTextContent(cells[0])) || new Date(),
+              ip: this.extractTextContent(cells[1]) || '',
+              location: this.extractTextContent(cells[2]) || 'Unknown',
+              device: cells[3] ? this.extractTextContent(cells[3]) : 'Unknown',
+              success: !this.extractTextContent(cells[4] || cells[0]).toLowerCase().includes('failed')
             };
             logins.push(login);
           }
@@ -464,15 +562,15 @@ export class InstagramParserEnhanced {
       
       return logins;
     } catch (error) {
-      console.warn('⚠️ Error extracting logins:', error);
+      console.warn('⚠️ Error extracting Meta logins:', error);
       return [];
     }
   }
 
   /**
-   * Extract media files and link with messages
+   * Process media files and create media objects
    */
-  private static extractMedia(doc: Document, mediaFiles: Map<string, Blob>): any[] {
+  private static processMediaFiles(mediaFiles: Map<string, Blob>): any[] {
     const media: any[] = [];
     
     mediaFiles.forEach((blob, filename) => {
@@ -485,7 +583,8 @@ export class InstagramParserEnhanced {
         url,
         filename,
         size: blob.size,
-        timestamp: new Date()
+        timestamp: new Date(),
+        blob // Keep original blob for processing
       });
     });
     
@@ -493,181 +592,155 @@ export class InstagramParserEnhanced {
   }
 
   /**
-   * Extract following/followers information
+   * Extract following/followers from Meta Business Record
    */
-  private static extractFollowing(doc: Document): InstagramFollowing[] {
+  private static extractMetaFollowing(doc: Document): InstagramFollowing[] {
     try {
       const following: InstagramFollowing[] = [];
-      const followingSection = this.findSectionByKeywords(doc, [
-        'property-following', 'following', 'Following List'
-      ]);
       
-      if (!followingSection) return following;
+      const followingElement = doc.getElementById('property-following');
+      const followersElement = doc.getElementById('property-followers');
       
-      const tables = followingSection.querySelectorAll('table');
-      tables.forEach(table => {
-        const rows = table.querySelectorAll('tr');
-        for (let i = 1; i < rows.length; i++) {
-          const cells = Array.from(rows[i].querySelectorAll('td'));
-          if (cells.length >= 1) {
-            const followingItem: InstagramFollowing = {
-              username: cells[0]?.textContent?.trim() || '',
-              displayName: cells[1]?.textContent?.trim() || '',
-              followDate: cells[2] ? this.parseTimestamp(cells[2].textContent?.trim() || '') : new Date(),
-              followType: 'following'
-            };
-            following.push(followingItem);
-          }
-        }
-      });
+      if (followingElement) {
+        const followingData = this.extractListFromElement(followingElement, 'following');
+        following.push(...followingData);
+      }
+      
+      if (followersElement) {
+        const followersData = this.extractListFromElement(followersElement, 'follower');
+        following.push(...followersData);
+      }
       
       return following;
     } catch (error) {
-      console.warn('⚠️ Error extracting following:', error);
+      console.warn('⚠️ Error extracting Meta following:', error);
       return [];
     }
   }
 
-  /**
-   * Extract Threads data
-   */
-  private static extractThreadsData(doc: Document): ThreadsPost[] {
-    return [];
+  // Helper Methods
+  private static extractTextContent(element: Element): string {
+    return element.textContent?.trim() || '';
   }
 
-  /**
-   * Extract NCMEC reports
-   */
-  private static extractNCMECReports(doc: Document): NCMECReport[] {
-    return [];
-  }
-
-  /**
-   * Extract request parameters
-   */
-  private static extractRequestParameters(doc: Document): RequestParameter[] {
-    return [];
-  }
-
-  // Helper methods
-  private static findSectionByKeywords(doc: Document, keywords: string[]): Element | null {
-    for (const keyword of keywords) {
-      const element = doc.querySelector(`#${keyword}`) || 
-                     doc.querySelector(`[id*="${keyword}"]`) ||
-                     Array.from(doc.querySelectorAll('*')).find(el => 
-                       el.textContent?.toLowerCase().includes(keyword.toLowerCase())
-                     );
-      if (element) return element;
-    }
-    return null;
-  }
-
-  private static extractTextFromSection(section: Element, ...keys: string[]): string {
-    for (const key of keys) {
-      const element = section.querySelector(`[data-key="${key}"]`) ||
-                     Array.from(section.querySelectorAll('*')).find(el => 
-                       el.textContent?.toLowerCase().includes(key)
-                     );
-      if (element) {
-        return element.textContent?.trim() || '';
+  private static extractAllTextContent(element: Element): string[] {
+    const texts: string[] = [];
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      const text = node.textContent?.trim();
+      if (text) {
+        texts.push(text);
       }
     }
-    return '';
+    
+    return texts;
   }
 
-  private static extractImageFromSection(section: Element): string | undefined {
-    const img = section.querySelector('img');
-    return img?.src;
+  private static extractListFromElement(element: Element, type: 'following' | 'follower'): InstagramFollowing[] {
+    const list: InstagramFollowing[] = [];
+    const items = element.querySelectorAll('div.m, td, li');
+    
+    items.forEach((item, index) => {
+      const text = this.extractTextContent(item);
+      if (text && text.length > 0 && text.length < 100) {
+        list.push({
+          username: text,
+          displayName: text,
+          followDate: new Date(),
+          followType: type as 'following' | 'follower'
+        });
+      }
+    });
+    
+    return list;
+  }
+
+  private static findLinkedMedia(href: string, mediaFiles: Map<string, Blob>): string | undefined {
+    // Extract filename from href
+    const filename = href.split('/').pop() || '';
+    
+    // Look for exact match
+    if (mediaFiles.has(filename)) {
+      return filename;
+    }
+    
+    // Look for partial matches
+    for (const [mediaFilename] of mediaFiles) {
+      if (mediaFilename.includes(filename) || filename.includes(mediaFilename)) {
+        return mediaFilename;
+      }
+    }
+    
+    return undefined;
   }
 
   private static isTimestamp(text: string): boolean {
-    const timestampPatterns = [
-      /\d{1,2}\/\d{1,2}\/\d{4}/,
-      /\d{4}-\d{2}-\d{2}/,
-      /\d{1,2}:\d{2}/,
-      /\d{1,2}\/\d{1,2}\/\d{4}.*?\d{1,2}:\d{2}/
+    // Check for various timestamp formats
+    const patterns = [
+      /\d{1,2}\/\d{1,2}\/\d{4}.*?\d{1,2}:\d{2}/,
+      /\d{4}-\d{2}-\d{2}.*?\d{2}:\d{2}/,
+      /\d{1,2}:\d{2}/
     ];
-    return timestampPatterns.some(pattern => pattern.test(text));
+    
+    return patterns.some(pattern => pattern.test(text));
   }
 
-  private static parseTimestamp(timestampStr: string): Date | null {
-    if (!timestampStr) return null;
+  private static parseTimestamp(text: string): Date | null {
+    if (!text) return null;
     
-    const date = new Date(timestampStr);
-    if (!isNaN(date.getTime())) return date;
-    
-    // Try different formats
-    const formats = [
-      /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/,
-      /(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})/
-    ];
-    
-    for (const format of formats) {
-      const match = timestampStr.match(format);
-      if (match) {
-        if (format.source.includes('\/')) {
-          // MM/DD/YYYY format
-          const [, month, day, year, hour, minute] = match;
-          return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
-        } else {
-          // YYYY-MM-DD format
-          const [, year, month, day, hour, minute] = match;
-          return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
+    try {
+      // Try different date formats
+      const formats = [
+        // MM/DD/YYYY HH:mm
+        /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/,
+        // YYYY-MM-DD HH:mm
+        /(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/,
+        // DD/MM/YYYY HH:mm
+        /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/
+      ];
+      
+      for (const format of formats) {
+        const match = text.match(format);
+        if (match) {
+          if (format === formats[0] || format === formats[2]) {
+            // MM/DD/YYYY or DD/MM/YYYY
+            const [, month, day, year, hour, minute] = match;
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
+          } else {
+            // YYYY-MM-DD
+            const [, year, month, day, hour, minute] = match;
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
+          }
         }
       }
+      
+      // Fallback to Date.parse
+      return new Date(text);
+    } catch (error) {
+      console.warn('⚠️ Error parsing timestamp:', text, error);
+      return null;
     }
+  }
+
+  private static determineMediaTypeFromPath(path: string): 'text' | 'image' | 'video' | 'audio' | 'link' {
+    const ext = path.toLowerCase().split('.').pop() || '';
     
-    return null;
-  }
-
-  private static processMediaUrl(href: string, mediaFiles: Map<string, Blob>): string {
-    // Extract filename from href and find corresponding blob
-    const filename = this.extractMediaFileName(href);
-    const blob = mediaFiles.get(filename);
-    return blob ? URL.createObjectURL(blob) : href;
-  }
-
-  private static extractMediaFileName(href: string): string {
-    return href.split('/').pop() || href;
-  }
-
-  private static determineMediaTypeFromPath(href: string): 'text' | 'image' | 'video' | 'audio' | 'link' {
-    const extension = href.split('.').pop()?.toLowerCase();
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension || '')) {
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) {
       return 'image';
-    } else if (['mp4', 'avi', 'mov', 'webm'].includes(extension || '')) {
+    } else if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'].includes(ext)) {
       return 'video';
-    } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(extension || '')) {
+    } else if (['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(ext)) {
       return 'audio';
-    } else if (href.startsWith('http')) {
+    } else if (path.includes('http')) {
       return 'link';
     }
     
     return 'text';
-  }
-
-  private static calculateDateRange(conversations: InstagramConversation[]): { start: Date; end: Date } {
-    const dates = conversations.flatMap(conv => 
-      conv.messages.map(msg => msg.timestamp)
-    ).filter(date => date);
-    
-    if (dates.length === 0) {
-      const now = new Date();
-      return { start: now, end: now };
-    }
-    
-    const sortedDates = dates.sort((a, b) => a.getTime() - b.getTime());
-    return {
-      start: sortedDates[0],
-      end: sortedDates[sortedDates.length - 1]
-    };
-  }
-
-  private static extractPreservationId(doc: Document): string {
-    const element = Array.from(doc.querySelectorAll('*')).find(el => 
-      el.textContent?.includes('Preservation ID') || el.textContent?.includes('Record ID')
-    );
-    return element?.textContent?.match(/[A-Z0-9-]+/)?.[0] || '';
   }
 }

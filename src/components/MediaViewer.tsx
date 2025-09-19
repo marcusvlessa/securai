@@ -17,7 +17,7 @@ import {
 import { InstagramMedia } from '@/services/instagramParserService';
 
 interface MediaViewerProps {
-  media: InstagramMedia;
+  media: any; // More flexible to handle different media types
   trigger?: React.ReactNode;
 }
 
@@ -30,13 +30,24 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({ media, trigger }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const handleDownload = () => {
-    const url = URL.createObjectURL(media.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = media.filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadMedia = () => {
+    if (media.url) {
+      const link = document.createElement('a');
+      link.href = media.url;
+      link.download = media.filename || 'media';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (media.blob) {
+      const url = URL.createObjectURL(media.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = media.filename || 'media';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
   };
 
   const togglePlayPause = () => {
@@ -79,10 +90,11 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({ media, trigger }) => {
   const renderMediaContent = () => {
     switch (media.type) {
       case 'image':
+        const imageUrl = media.url || (media.blob ? URL.createObjectURL(media.blob) : '');
         return (
           <div className="relative flex items-center justify-center min-h-[400px]">
             <img
-              src={URL.createObjectURL(media.blob)}
+              src={imageUrl}
               alt={media.filename}
               className="max-w-full max-h-[70vh] object-contain transition-transform duration-300"
               style={{
@@ -95,11 +107,12 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({ media, trigger }) => {
         );
 
       case 'video':
+        const videoUrl = media.url || (media.blob ? URL.createObjectURL(media.blob) : '');
         return (
           <div className="relative">
             <video
               ref={videoRef}
-              src={URL.createObjectURL(media.blob)}
+              src={videoUrl}
               className="w-full max-h-[70vh] object-contain"
               controls={false}
               muted={isMuted}
@@ -119,6 +132,7 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({ media, trigger }) => {
         );
 
       case 'audio':
+        const audioUrl = media.url || (media.blob ? URL.createObjectURL(media.blob) : '');
         return (
           <div className="flex flex-col items-center justify-center min-h-[300px] space-y-6">
             <div className="text-center">
@@ -129,7 +143,7 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({ media, trigger }) => {
 
             <audio
               ref={audioRef}
-              src={URL.createObjectURL(media.blob)}
+              src={audioUrl}
               className="w-full max-w-md"
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
@@ -216,7 +230,7 @@ export const MediaViewer: React.FC<MediaViewerProps> = ({ media, trigger }) => {
                 </Button>
               </>
             )}
-            <Button size="sm" variant="outline" onClick={handleDownload}>
+            <Button size="sm" variant="outline" onClick={downloadMedia}>
               <Download className="h-4 w-4" />
             </Button>
           </div>

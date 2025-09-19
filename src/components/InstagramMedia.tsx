@@ -19,7 +19,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-
+import { MediaViewer } from '@/components/MediaViewer';
 import { ProcessedInstagramData, InstagramMedia as MediaFile } from '@/services/instagramParserService';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -460,9 +460,14 @@ const MediaItemCard: React.FC<MediaItemCardProps> = ({
             {getStatusBadge()}
             
             <div className="flex gap-1">
-              <Button variant="outline" size="sm">
-                <Eye className="h-3 w-3" />
-              </Button>
+              <MediaViewer 
+                media={item}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    <Eye className="h-3 w-3" />
+                  </Button>
+                }
+              />
               
               {item.type === 'audio' && !item.transcript && (
                 <Button 

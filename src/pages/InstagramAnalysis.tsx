@@ -13,6 +13,7 @@ import { InstagramChats } from '@/components/InstagramChats';
 import { InstagramProfile } from '@/components/InstagramProfile';
 import { InstagramDevices } from '@/components/InstagramDevices';
 import { ConexoesInstagram } from '@/components/ConexoesInstagram';
+import { InstagramReport } from '@/components/InstagramReport';
 import { ApiKeyInput } from '@/components/ui/api-key-input';
 import { ProcessedInstagramData } from '@/services/instagramParserService';
 
@@ -191,7 +192,7 @@ const InstagramAnalysis = () => {
           <CardContent>
             {selectedFile ? (
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-8">
+                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-9">
                   <TabsTrigger value="overview">Visão Geral</TabsTrigger>
                   <TabsTrigger value="chats">Conversas</TabsTrigger>
                   <TabsTrigger value="profile">Perfil</TabsTrigger>
@@ -199,6 +200,7 @@ const InstagramAnalysis = () => {
                   <TabsTrigger value="search">Buscar</TabsTrigger>
                   <TabsTrigger value="media">Mídia</TabsTrigger>
                   <TabsTrigger value="connections">Conexões</TabsTrigger>
+                  <TabsTrigger value="report">Relatório IA</TabsTrigger>
                   <TabsTrigger value="settings">Config</TabsTrigger>
                 </TabsList>
                 
@@ -244,6 +246,10 @@ const InstagramAnalysis = () => {
                 
                 <TabsContent value="connections">
                   <ConexoesInstagram data={selectedFile} />
+                </TabsContent>
+
+                <TabsContent value="report">
+                  <InstagramReport data={selectedFile} />
                 </TabsContent>
 
                 <TabsContent value="settings">

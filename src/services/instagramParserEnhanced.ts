@@ -18,7 +18,92 @@ export class InstagramParserEnhanced {
   /**
    * Enhanced HTML parsing with multiple fallback strategies
    */
-  static parseHtmlContentRobust(htmlContent: string, mediaFiles: Map<string, Blob>): any {
+  static parseHtmlContentRobust(htmlContent: string, mediaFiles: Map<string, Blob>): ProcessedInstagramData {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+      
+      console.log('🔍 [InstagramParserEnhanced] Iniciando parsing robusto do HTML');
+      console.log('📄 Tamanho do HTML:', htmlContent.length);
+      console.log('📁 Arquivos de mídia:', mediaFiles.size);
+      
+      // Estratégias múltiplas para encontrar conversas
+      let conversations: InstagramConversation[] = [];
+      let users: InstagramUser[] = [];
+      
+      // Estratégia 1: Buscar seções de mensagens
+      const unifiedSection = this.findSectionByKeywords(doc, [
+        'unified messages', 'mensagens unificadas', 'direct messages', 
+        'mensagens diretas', 'instagram messages', 'conversations',
+        'message', 'conversa', 'chat', 'dm'
+      ]);
+      
+      if (unifiedSection) {
+        console.log('✅ Encontrada seção de mensagens unificadas');
+        conversations = this.parseUnifiedMessagesEnhanced(unifiedSection, mediaFiles);
+      }
+      
+      // Estratégia 2: Buscar tabelas se não encontrou
+      if (conversations.length === 0) {
+        console.log('🔄 Estratégia 2: Analisando tabelas...');
+        const tables = doc.querySelectorAll('table');
+        for (let i = 0; i < tables.length; i++) {
+          const tableConversations = this.parseTableAsConversation(tables[i], mediaFiles, i);
+          conversations.push(...tableConversations);
+        }
+      }
+      
+      // Extrair usuários das conversas
+      users = this.extractUsersFromConversations(conversations);
+      
+      console.log(`✅ Parsing concluído: ${conversations.length} conversas, ${users.length} usuários`);
+      
+      // Dados processados
+      const processedData: ProcessedInstagramData = {
+        id: crypto.randomUUID(),
+        conversations,
+        users,
+        profile: {
+          username: 'unknown',
+          displayName: 'Usuario',
+          bio: '',
+          followersCount: 0,
+          followingCount: 0,
+          postsCount: 0,
+          isVerified: false,
+          isPrivate: false,
+          profilePictureUrl: '',
+          externalUrl: '',
+          category: '',
+        },
+        devices: [],
+        logins: [],
+        media: Array.from(mediaFiles.entries()).map(([filename, blob]) => ({
+          id: crypto.randomUUID(),
+          filename,
+          type: this.determineMediaTypeFromPath(filename),
+          blob,
+          conversations: [],
+        })),
+        following: [],
+        threads: [],
+        ncmecReports: [],
+        requestParams: [],
+        metadata: {
+          originalFilename: 'instagram_data.zip',
+          processedAt: new Date(),
+          totalSize: htmlContent.length,
+          fileCount: mediaFiles.size,
+        }
+      };
+      
+      return processedData;
+      
+    } catch (error) {
+      console.error('❌ Erro no parsing do HTML:', error);
+      throw new Error(`Falha no parsing: ${error.message}`);
+    }
+  }
     const cleanHtml = DOMPurify.sanitize(htmlContent);
     const parser = new DOMParser();
     const doc = parser.parseFromString(cleanHtml, 'text/html');

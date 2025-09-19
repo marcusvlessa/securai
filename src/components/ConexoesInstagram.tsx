@@ -14,7 +14,7 @@ import {
   Clock
 } from 'lucide-react';
 import { ProcessedInstagramData } from '@/services/instagramParserService';
-import { AdvancedLinkGraph } from './AdvancedLinkGraph';
+import { LinkGraph, LinkNode, LinkEdge } from '@/services/linkAnalysisService';
 
 interface ConexoesInstagramProps {
   data: ProcessedInstagramData;
@@ -382,9 +382,9 @@ export const ConexoesInstagram: React.FC<ConexoesInstagramProps> = ({ data }) =>
             <div>
               <h4 className="font-medium mb-3">Usuários Mais Conectados</h4>
               <div className="space-y-2">
-                {Array.from(data.users)
+                {data.users
                   .map(user => ({
-                    ...user,
+                    user: user.username,
                     connections: data.conversations.filter(conv => 
                       conv.participants.includes(user.username)
                     ).length

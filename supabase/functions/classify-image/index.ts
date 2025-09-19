@@ -25,7 +25,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'llama-3.2-90b-vision-preview',
         messages: [
           {
             role: 'system',

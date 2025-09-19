@@ -83,6 +83,7 @@ export class InstagramParserEnhanced {
         devices: [],
         logins: [],
         following: [],
+        followers: [],
         profile: null,
         threadsPosts: [],
         ncmecReports: [],

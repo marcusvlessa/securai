@@ -200,22 +200,39 @@ export const ConexoesInstagram: React.FC<ConexoesInstagramProps> = ({ data }) =>
 
     const mostActiveUser = userActivity[0];
     
-    // Calcular conexões por usuário
-    const connections = new Map<string, Set<string>>();
+    // Calcular conexões por usuário baseado em conversas
+    const userConnections = new Map<string, Set<string>>();
     data.conversations.forEach(conv => {
       conv.participants.forEach(participant => {
-        if (!connections.has(participant)) {
-          connections.set(participant, new Set());
+        if (!userConnections.has(participant)) {
+          userConnections.set(participant, new Set());
         }
         conv.participants.forEach(other => {
           if (other !== participant) {
-            connections.get(participant)!.add(other);
+            userConnections.get(participant)!.add(other);
           }
         });
       });
     });
 
-    const avgConnections = Array.from(connections.values()).reduce((sum, set) => sum + set.size, 0) / connections.size;
+    // Incluir conexões de seguidores/seguindo
+    const mainUser = data.profile.username;
+    data.following.forEach(follow => {
+      if (!userConnections.has(mainUser)) {
+        userConnections.set(mainUser, new Set());
+      }
+      userConnections.get(mainUser)!.add(follow.username);
+    });
+
+    data.followers.forEach(follower => {
+      if (!userConnections.has(follower.username)) {
+        userConnections.set(follower.username, new Set());
+      }
+      userConnections.get(follower.username)!.add(mainUser);
+    });
+
+    const avgConnections = userConnections.size > 0 ? 
+      Array.from(userConnections.values()).reduce((sum, set) => sum + set.size, 0) / userConnections.size : 0;
 
     return {
       totalUsers,
@@ -380,16 +397,25 @@ export const ConexoesInstagram: React.FC<ConexoesInstagramProps> = ({ data }) =>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <h4 className="font-medium mb-3">Usuários Mais Conectados</h4>
+              <h4 className="font-medium mb-3">Usuários com Mais Interações</h4>
               <div className="space-y-2">
                 {data.users
-                  .map(user => ({
-                    user: user.username,
-                    connections: data.conversations.filter(conv => 
+                  .map(user => {
+                    const messageCount = data.conversations.reduce((count, conv) => {
+                      return count + conv.messages.filter(msg => msg.sender === user.username).length;
+                    }, 0);
+                    const conversationCount = data.conversations.filter(conv => 
                       conv.participants.includes(user.username)
-                    ).length
-                  }))
-                  .sort((a, b) => b.connections - a.connections)
+                    ).length;
+                    
+                    return {
+                      user: user.username,
+                      messages: messageCount,
+                      conversations: conversationCount,
+                      score: messageCount + (conversationCount * 2)
+                    };
+                  })
+                  .sort((a, b) => b.score - a.score)
                   .slice(0, 5)
                   .map((user, index) => (
                      <div key={`user-${index}`} className="flex items-center justify-between p-2 bg-muted/50 rounded">
@@ -397,7 +423,10 @@ export const ConexoesInstagram: React.FC<ConexoesInstagramProps> = ({ data }) =>
                         <Badge variant="secondary">#{index + 1}</Badge>
                         <span className="text-sm font-medium">{user.user}</span>
                       </div>
-                      <span className="text-sm text-muted-foreground">{user.connections} conversas</span>
+                      <div className="text-right text-xs">
+                        <div className="text-sm font-medium">{user.messages} msgs</div>
+                        <div className="text-muted-foreground">{user.conversations} conversas</div>
+                      </div>
                     </div>
                   ))}
               </div>

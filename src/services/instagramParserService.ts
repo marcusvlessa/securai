@@ -19,20 +19,26 @@ export interface InstagramProfile {
 }
 
 export interface InstagramDevice {
+  id: string;
   uuid: string;
-  type: string;
+  deviceType: string;
+  deviceName: string;
   deviceModel?: string;
   os?: string;
   appVersion?: string;
   status: 'active' | 'inactive' | 'removed';
   firstSeen?: Date;
-  lastSeen: Date;
+  lastSeen?: Date;
+  lastUsed?: Date;
+  ipAddress?: string;
   ipAddresses?: string[];
 }
 
 export interface InstagramLogin {
-  timestamp: Date;
-  ip: string;
+  id: string;
+  timestamp?: Date;
+  ipAddress?: string;
+  ip?: string;
   location?: string;
   device?: string;
   deviceId?: string;
@@ -41,11 +47,12 @@ export interface InstagramLogin {
 }
 
 export interface InstagramFollowing {
+  id: string;
   username: string;
   instagramId?: string;
   displayName?: string;
-  followDate: Date;
-  followType: 'following' | 'follower' | 'blocked' | 'restricted';
+  timestamp?: Date;
+  type: 'following' | 'follower' | 'blocked' | 'restricted';
 }
 
 export interface ThreadsPost {
@@ -146,6 +153,7 @@ export interface ProcessedInstagramData {
   devices: InstagramDevice[];
   logins: InstagramLogin[];
   following: InstagramFollowing[];
+  followers: InstagramFollowing[];
   threadsPosts: ThreadsPost[];
   ncmecReports: NCMECReport[];
   requestParameters: RequestParameter[];
@@ -219,6 +227,7 @@ export class InstagramParserService {
         devices: organizedData.devices,
         logins: organizedData.logins,
         following: organizedData.following,
+        followers: organizedData.followers || [],
         threadsPosts: organizedData.threadsPosts,
         ncmecReports: organizedData.ncmecReports,
         requestParameters: organizedData.requestParameters,

@@ -12,6 +12,8 @@ import { InstagramMedia } from '@/components/InstagramMedia';
 import { InstagramChats } from '@/components/InstagramChats';
 import { InstagramProfile } from '@/components/InstagramProfile';
 import { InstagramDevices } from '@/components/InstagramDevices';
+import { InstagramIPs } from '@/components/InstagramIPs';
+import { InstagramFollowers } from '@/components/InstagramFollowers';
 import { ConexoesInstagram } from '@/components/ConexoesInstagram';
 import { InstagramReport } from '@/components/InstagramReport';
 import { ApiKeyInput } from '@/components/ui/api-key-input';
@@ -192,11 +194,13 @@ const InstagramAnalysis = () => {
           <CardContent>
             {selectedFile ? (
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-9">
+                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-11">
                   <TabsTrigger value="overview">Visão Geral</TabsTrigger>
                   <TabsTrigger value="chats">Conversas</TabsTrigger>
                   <TabsTrigger value="profile">Perfil</TabsTrigger>
                   <TabsTrigger value="devices">Dispositivos</TabsTrigger>
+                  <TabsTrigger value="ips">IPs</TabsTrigger>
+                  <TabsTrigger value="followers">Seguidores</TabsTrigger>
                   <TabsTrigger value="search">Buscar</TabsTrigger>
                   <TabsTrigger value="media">Mídia</TabsTrigger>
                   <TabsTrigger value="connections">Conexões</TabsTrigger>
@@ -226,6 +230,14 @@ const InstagramAnalysis = () => {
                 
                 <TabsContent value="devices">
                   <InstagramDevices data={selectedFile} />
+                </TabsContent>
+                
+                <TabsContent value="ips">
+                  <InstagramIPs data={selectedFile} />
+                </TabsContent>
+                
+                <TabsContent value="followers">
+                  <InstagramFollowers data={selectedFile} />
                 </TabsContent>
                 
                 <TabsContent value="search">

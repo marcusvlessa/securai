@@ -25,54 +25,72 @@ export const InstagramUploader: React.FC<InstagramUploaderProps> = ({ onFileProc
     if (!file || !file.name.endsWith('.zip')) {
       toast({
         title: "Arquivo inválido",
-        description: "Por favor, selecione um arquivo ZIP válido",
+        description: "Por favor, selecione um arquivo ZIP válido exportado do Instagram",
         variant: "destructive",
       });
       return;
     }
 
+    console.log('🚀 Iniciando upload do Instagram:', file.name, `(${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+
     setUploading(true);
     setProgress(0);
-    setCurrentStep('Fazendo upload do arquivo...');
+    setCurrentStep('Preparando para processar...');
 
     try {
-      // Simular progresso de upload
-      for (let i = 0; i <= 20; i++) {
-        setProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+      // Feedback inicial
+      toast({
+        title: "Processamento iniciado",
+        description: `Analisando ${file.name}...`,
+      });
 
-      setCurrentStep('Descompactando arquivo ZIP...');
-      setProgress(25);
-
-      // Processar o arquivo ZIP
+      // Processar o arquivo ZIP com callback de progresso detalhado
       const result = await instagramParserService.processZipFile(file, (step, progressValue) => {
+        console.log(`📊 Progresso: ${progressValue.toFixed(1)}% - ${step}`);
         setCurrentStep(step);
-        setProgress(25 + (progressValue * 0.75)); // 25% já foi do upload, resto é processamento
+        setProgress(Math.min(progressValue, 100));
       });
 
       setProgress(100);
-      setCurrentStep('Processamento concluído!');
+      setCurrentStep('✅ Processamento concluído com sucesso!');
+
+      console.log('✅ Processamento finalizado:', {
+        users: result.users.length,
+        conversations: result.conversations.length,
+        media: result.media.length,
+        sectionsFound: result.metadata.sectionsFound
+      });
+
+      // Aguardar um momento para mostrar o sucesso
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       // Notificar o componente pai com dados completos
       onFileProcessed(result);
 
       toast({
-        title: "Arquivo processado com sucesso",
-        description: `${result.users.length} usuários e ${result.conversations.length} conversas encontrados`,
+        title: "🎉 Instagram processado com sucesso!",
+        description: `✅ ${result.users.length} usuários • ${result.conversations.length} conversas • ${result.media.length} mídias`,
       });
 
     } catch (error) {
-      console.error('Erro ao processar arquivo:', error);
+      console.error('❌ Erro fatal no processamento:', error);
+      
+      setCurrentStep('❌ Erro no processamento');
+      
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      
       toast({
         title: "Erro no processamento",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
-      setUploading(false);
-      setProgress(0);
-      setCurrentStep('');
+      // Aguardar um pouco antes de resetar para mostrar o resultado final
+      setTimeout(() => {
+        setUploading(false);
+        setProgress(0);
+        setCurrentStep('');
+      }, 2000);
     }
   }, [onFileProcessed, toast]);
 
@@ -104,10 +122,24 @@ export const InstagramUploader: React.FC<InstagramUploaderProps> = ({ onFileProc
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium">{currentStep}</p>
+                <div className="text-center">
+                  <p className="text-sm font-medium mb-2">{currentStep}</p>
                   <Progress value={progress} className="mt-2" />
-                  <p className="text-xs text-muted-foreground mt-1">{Math.round(progress)}%</p>
+                  <div className="flex justify-between items-center mt-2">
+                    <p className="text-xs text-muted-foreground">{Math.round(progress)}%</p>
+                    <div className="text-xs text-muted-foreground">
+                      {progress < 30 && "📁 Extraindo arquivos..."}
+                      {progress >= 30 && progress < 60 && "🔍 Analisando dados..."}
+                      {progress >= 60 && progress < 85 && "🤖 Processando com IA..."}
+                      {progress >= 85 && progress < 100 && "✨ Finalizando..."}
+                      {progress >= 100 && "🎉 Concluído!"}
+                    </div>
+                  </div>
+                  {progress >= 75 && progress < 100 && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      ⏳ Processando mídias com IA - pode demorar alguns minutos
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (

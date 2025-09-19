@@ -18,12 +18,25 @@ serve(async (req) => {
       throw new Error('Audio data and GROQ API key are required');
     }
 
-    // Convert base64 to blob
-    const binaryAudio = atob(audioData);
-    const bytes = new Uint8Array(binaryAudio.length);
-    for (let i = 0; i < binaryAudio.length; i++) {
-      bytes[i] = binaryAudio.charCodeAt(i);
+    console.log('🎵 Starting audio transcription...');
+
+    // Convert base64 to blob with error handling
+    let bytes: Uint8Array;
+    try {
+      const binaryAudio = atob(audioData);
+      bytes = new Uint8Array(binaryAudio.length);
+      for (let i = 0; i < binaryAudio.length; i++) {
+        bytes[i] = binaryAudio.charCodeAt(i);
+      }
+    } catch (error) {
+      throw new Error('Failed to decode audio data: Invalid base64');
     }
+
+    if (bytes.length === 0) {
+      throw new Error('Empty audio data provided');
+    }
+
+    console.log(`📊 Audio data size: ${bytes.length} bytes`);
 
     // Prepare form data for GROQ Whisper API
     const formData = new FormData();
@@ -32,41 +45,79 @@ serve(async (req) => {
     formData.append('model', 'whisper-large-v3');
     formData.append('response_format', 'json');
 
-    // Use Portuguese language settings for better transcription
+    // Optimized settings for Portuguese
     formData.append('language', 'pt');
-    formData.append('temperature', '0'); // More accurate transcription
+    formData.append('temperature', '0.1'); // Slightly higher for better quality
+    formData.append('prompt', 'Transcreva o áudio em português brasileiro.');
 
-    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${groqApiKey}`,
-      },
-      body: formData,
-    });
+    console.log('🚀 Sending request to GROQ API...');
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('GROQ API error:', errorText);
-      throw new Error(`GROQ API error: ${response.status} - ${errorText}`);
+    // Add timeout and retry logic
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 55000); // 55 second timeout
+
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`,
+        },
+        body: formData,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ GROQ API error:', response.status, errorText);
+        
+        // Handle rate limiting specifically
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after') || '60';
+          throw new Error(`Rate limit exceeded. Try again in ${retryAfter} seconds.`);
+        }
+        
+        throw new Error(`GROQ API error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.text) {
+        throw new Error('No transcription text returned from GROQ API');
+      }
+
+      const transcriptionLength = result.text.length;
+      console.log(`✅ Transcription successful: ${transcriptionLength} characters - "${result.text.substring(0, 100)}..."`);
+
+      return new Response(
+        JSON.stringify({ 
+          text: result.text.trim(),
+          success: true,
+          length: transcriptionLength
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timeout - audio file too large or API too slow');
+      }
+      
+      throw fetchError;
     }
 
-    const result = await response.json();
-    console.log('Transcription successful:', result.text?.substring(0, 100) + '...');
-
-    return new Response(
-      JSON.stringify({ 
-        text: result.text,
-        success: true 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
   } catch (error) {
-    console.error('Error in transcribe-audio function:', error);
+    console.error('❌ Error in transcribe-audio function:', error);
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        success: false 
+        success: false,
+        timestamp: new Date().toISOString()
       }),
       {
         status: 500,

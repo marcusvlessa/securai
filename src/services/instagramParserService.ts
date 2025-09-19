@@ -176,8 +176,11 @@ export class InstagramParserService {
     const zip = new JSZip();
     
     try {
+      console.log('🚀 Iniciando processamento do arquivo ZIP:', file.name);
       onProgress?.('Carregando arquivo ZIP...', 0);
+      
       const zipContent = await zip.loadAsync(file);
+      console.log(`📁 ZIP carregado com ${Object.keys(zipContent.files).length} arquivos`);
       
       onProgress?.('Procurando arquivos principais...', 10);
       
@@ -187,24 +190,27 @@ export class InstagramParserService {
         throw new Error('Arquivo records.html não encontrado no ZIP');
       }
       
-      onProgress?.('Extraindo HTML...', 20);
+      onProgress?.('Extraindo HTML principal...', 20);
       const htmlContent = await htmlFile.async('text');
+      console.log(`📄 HTML extraído com ${htmlContent.length} caracteres`);
       
-      onProgress?.('Extraindo mídias...', 30);
-      const mediaFiles = await this.extractMediaFiles(zipContent);
+      onProgress?.('Extraindo arquivos de mídia...', 30);
+      const mediaFiles = await this.extractMediaFiles(zipContent, onProgress);
+      console.log(`🖼️ ${mediaFiles.size} arquivos de mídia indexados`);
       
-      onProgress?.('Analisando HTML...', 50);
-      const parsedData = await this.parseHtmlContent(htmlContent, mediaFiles);
+      onProgress?.('Analisando estrutura HTML...', 45);
+      const parsedData = await this.parseHtmlContentRobust(htmlContent, mediaFiles);
+      console.log(`🔍 Dados parseados: ${parsedData.conversations?.length || 0} conversas, ${parsedData.users?.length || 0} usuários`);
       
-      onProgress?.('Organizando dados...', 70);
+      onProgress?.('Organizando dados extraídos...', 60);
       const organizedData = this.organizeData(parsedData, mediaFiles);
       
-      onProgress?.('Processando mídias...', 80);
-      await this.processMediaFiles(organizedData.media);
+      onProgress?.('Processando mídias com IA...', 75);
+      await this.processMediaFilesRobust(organizedData.media, onProgress);
       
-      onProgress?.('Finalizando...', 90);
+      onProgress?.('Finalizando processamento...', 95);
       
-      return {
+      const result = {
         id: uuidv4(),
         users: organizedData.users,
         conversations: organizedData.conversations,
@@ -226,8 +232,16 @@ export class InstagramParserService {
         }
       };
       
+      console.log('✅ Processamento concluído com sucesso!', {
+        users: result.users.length,
+        conversations: result.conversations.length,
+        media: result.media.length
+      });
+      
+      return result;
+      
     } catch (error) {
-      console.error('Erro ao processar ZIP:', error);
+      console.error('❌ Erro ao processar ZIP:', error);
       throw new Error(`Falha ao processar arquivo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
@@ -267,40 +281,58 @@ export class InstagramParserService {
     return null;
   }
 
-  private async extractMediaFiles(zipContent: JSZip): Promise<Map<string, Blob>> {
+  private async extractMediaFiles(
+    zipContent: JSZip, 
+    onProgress?: (step: string, progress: number) => void
+  ): Promise<Map<string, Blob>> {
     const mediaFiles = new Map<string, Blob>();
+    const allFiles = Object.entries(zipContent.files).filter(([_, file]) => !file.dir);
+    const mediaFileEntries = allFiles.filter(([filename]) => this.isMediaFile(filename));
     
-    for (const [filename, file] of Object.entries(zipContent.files)) {
-      if (file.dir) continue;
-      
-      // Verificar se é um arquivo de mídia
-      if (this.isMediaFile(filename)) {
-        try {
-          const blob = await file.async('blob');
-          
-          // Indexar de múltiplas formas para facilitar busca
-          const basename = filename.replace(/^.*\//, ''); // Nome sem caminho
-          const fullPath = filename; // Caminho completo
-          
-          // Indexar por basename (para referências como unified_message_123.mp3)
-          mediaFiles.set(basename, blob);
-          // Indexar por caminho completo
-          mediaFiles.set(fullPath, blob);
-          
-          // Para arquivos em linked_media/, também indexar sem o prefixo
-          if (filename.startsWith('linked_media/')) {
-            const withoutPrefix = filename.replace('linked_media/', '');
-            mediaFiles.set(withoutPrefix, blob);
-          }
-          
-          console.log(`Indexed media file: ${basename} (${fullPath})`);
-        } catch (error) {
-          console.warn(`Erro ao extrair mídia ${filename}:`, error);
+    console.log(`📁 Encontrados ${mediaFileEntries.length} arquivos de mídia de ${allFiles.length} arquivos totais`);
+    
+    let processed = 0;
+    for (const [filename, file] of mediaFileEntries) {
+      try {
+        const blob = await file.async('blob');
+        
+        // Sistema de indexação múltipla para facilitar busca
+        const basename = filename.replace(/^.*\//, ''); // Nome sem caminho
+        const fullPath = filename; // Caminho completo
+        
+        // Indexação principal por basename
+        mediaFiles.set(basename, blob);
+        
+        // Indexação por caminho completo
+        mediaFiles.set(fullPath, blob);
+        
+        // Para arquivos em linked_media/, indexar sem prefixo
+        if (filename.startsWith('linked_media/')) {
+          const withoutPrefix = filename.replace('linked_media/', '');
+          mediaFiles.set(withoutPrefix, blob);
         }
+        
+        // Para unified_message files, criar índice adicional
+        if (filename.includes('unified_message_')) {
+          const unifiedMatch = filename.match(/unified_message_\d+\.\w+$/);
+          if (unifiedMatch) {
+            mediaFiles.set(unifiedMatch[0], blob);
+          }
+        }
+        
+        processed++;
+        if (onProgress && processed % 10 === 0) {
+          const progressPercent = 30 + (processed / mediaFileEntries.length) * 15; // 30-45%
+          onProgress(`Processando mídia ${processed}/${mediaFileEntries.length}...`, progressPercent);
+        }
+        
+      } catch (error) {
+        console.warn(`⚠️ Erro ao extrair mídia ${filename}:`, error);
       }
     }
     
-    console.log(`Total media files indexed: ${mediaFiles.size / 3}`); // Dividir por 3 porque indexamos cada arquivo 3 vezes
+    const uniqueFiles = mediaFiles.size / 4; // Cada arquivo é indexado ~4 vezes
+    console.log(`✅ ${uniqueFiles} arquivos de mídia indexados com sucesso`);
     return mediaFiles;
   }
 
@@ -315,80 +347,14 @@ export class InstagramParserService {
     return mediaExtensions.some(ext => lowerFilename.endsWith(ext));
   }
 
-  private async parseHtmlContent(htmlContent: string, mediaFiles: Map<string, Blob>): Promise<any> {
-    // Sanitizar o HTML
-    const cleanHtml = DOMPurify.sanitize(htmlContent);
+  private async parseHtmlContentRobust(htmlContent: string, mediaFiles: Map<string, Blob>): Promise<any> {
+    console.log('🚀 Starting enhanced HTML parsing...');
     
-    // Criar um parser DOM
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(cleanHtml, 'text/html');
+    // Import the enhanced parser
+    const { InstagramParserEnhanced } = await import('./instagramParserEnhanced');
     
-    console.log('Starting comprehensive Meta Business Record parsing...');
-    
-    // Parse all Meta Business Record sections
-    const sectionsFound: string[] = [];
-    
-    // Extract Request Parameters
-    const requestParameters = InstagramParserMethods.parseRequestParameters(doc);
-    if (requestParameters.length > 0) sectionsFound.push('Request Parameters');
-    
-    // Extract NCMEC Reports
-    const ncmecReports = InstagramParserMethods.parseNCMECReports(doc);
-    if (ncmecReports.length > 0) sectionsFound.push('NCMEC Reports');
-    
-    // Extract Profile Information
-    const profile = InstagramParserMethods.parseProfileSection(doc);
-    if (profile) sectionsFound.push('Profile');
-    
-    // Extract Photos section
-    const photosData = InstagramParserMethods.parsePhotosSection(doc, mediaFiles);
-    if (photosData.length > 0) sectionsFound.push('Photos');
-    
-    // Extract Unified Messages (main conversation data)
-    const conversations = this.extractMetaConversations(doc, mediaFiles);
-    if (conversations.length > 0) sectionsFound.push('Unified Messages');
-    
-    // Extract Disappearing Messages
-    const disappearingMessages = InstagramParserMethods.parseDisappearingMessages(doc, mediaFiles);
-    if (disappearingMessages.length > 0) sectionsFound.push('Disappearing Messages');
-    
-    // Extract Threads Posts
-    const threadsPosts = InstagramParserMethods.parseThreadsPosts(doc);
-    if (threadsPosts.length > 0) sectionsFound.push('Threads Posts');
-    
-    // Extract device and login information
-    const devices = InstagramParserMethods.parseDevices(doc);
-    if (devices.length > 0) sectionsFound.push('Devices');
-    
-    const logins = InstagramParserMethods.parseLogins(doc);
-    if (logins.length > 0) sectionsFound.push('Logins');
-    
-    // Extract following/followers data
-    const following = InstagramParserMethods.parseFollowing(doc);
-    if (following.length > 0) sectionsFound.push('Following');
-    
-    // Extract users from all parsed data
-    const users = this.extractUsers(doc, conversations);
-    
-    // Extract case metadata
-    const caseMetadata = InstagramParserMethods.extractCaseMetadata(doc);
-    
-    console.log(`Parsed ${conversations.length} conversations, ${users.length} users`);
-    console.log(`Sections found: ${sectionsFound.join(', ')}`);
-    
-    return { 
-      conversations, 
-      users, 
-      profile,
-      devices,
-      logins,
-      following,
-      threadsPosts,
-      ncmecReports,
-      requestParameters,
-      caseMetadata,
-      sectionsFound
-    };
+    // Use the enhanced parser for better results
+    return InstagramParserEnhanced.parseHtmlContentRobust(htmlContent, mediaFiles);
   }
 
   private extractMetaConversations(doc: Document, mediaFiles: Map<string, Blob>): InstagramConversation[] {
@@ -1073,133 +1039,193 @@ export class InstagramParserService {
     }
   }
 
-  private async processMediaFiles(media: InstagramMedia[]): Promise<void> {
+  private async processMediaFilesRobust(
+    media: InstagramMedia[], 
+    onProgress?: (step: string, progress: number) => void
+  ): Promise<void> {
     const { getGroqSettings } = await import('./groqService');
     const settings = getGroqSettings();
     
     if (!settings.groqApiKey) {
-      console.warn('GROQ API key not configured - skipping media processing');
+      console.warn('⚠️ GROQ API key not configured - skipping media processing');
       return;
     }
 
     const audioFiles = media.filter(m => m.type === 'audio');
     const imageFiles = media.filter(m => m.type === 'image');
+    const totalFiles = audioFiles.length + imageFiles.length;
 
-    console.log(`Processing ${audioFiles.length} audio files and ${imageFiles.length} images`);
+    console.log(`🎵 Processing ${audioFiles.length} audio files and 🖼️ ${imageFiles.length} images`);
 
-    // Process audio files for transcription using GROQ with rate limiting
-    const AUDIO_BATCH_SIZE = 2;
-    const AUDIO_BATCH_DELAY = 3000; // 3 seconds between batches (audio takes longer)
+    let processedCount = 0;
+    const updateProgress = (step: string) => {
+      const progressPercent = 75 + (processedCount / totalFiles) * 20; // 75-95%
+      onProgress?.(step, progressPercent);
+    };
+
+    // Process audio files with intelligent rate limiting
+    const AUDIO_BATCH_SIZE = 1; // More conservative for GROQ rate limits
+    const AUDIO_BATCH_DELAY = 4000; // 4 seconds between audio batches
     
-    for (let i = 0; i < audioFiles.length; i += AUDIO_BATCH_SIZE) {
-      const batch = audioFiles.slice(i, i + AUDIO_BATCH_SIZE);
+    if (audioFiles.length > 0) {
+      console.log(`🎵 Iniciando transcrição de ${audioFiles.length} arquivos de áudio...`);
       
-      await Promise.allSettled(batch.map(async (audio) => {
-        try {
-          // Convert blob to base64 safely
-          const arrayBuffer = await audio.blob.arrayBuffer();
-          const bytes = new Uint8Array(arrayBuffer);
-          let binary = '';
-          const chunkSize = 8192;
-          
-          for (let i = 0; i < bytes.length; i += chunkSize) {
-            binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
-          }
-          const base64Audio = btoa(binary);
-          
-          const { supabase } = await import('@/integrations/supabase/client');
-          
-          // Add timeout to prevent hanging requests
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s for audio
-          
+      for (let i = 0; i < audioFiles.length; i += AUDIO_BATCH_SIZE) {
+        const batch = audioFiles.slice(i, i + AUDIO_BATCH_SIZE);
+        
+        updateProgress(`Transcrevendo áudio ${i + 1}/${audioFiles.length}...`);
+        
+        await Promise.allSettled(batch.map(async (audio) => {
           try {
-            const { data, error } = await supabase.functions.invoke('transcribe-audio', {
-              body: {
-                audioData: base64Audio,
-                groqApiKey: settings.groqApiKey
+            // Safe base64 conversion with chunking to avoid stack overflow
+            const arrayBuffer = await audio.blob.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            
+            if (bytes.length > 10 * 1024 * 1024) { // Skip files > 10MB
+              console.warn(`⚠️ Arquivo de áudio muito grande, pulando: ${audio.filename} (${bytes.length} bytes)`);
+              return;
+            }
+            
+            let binary = '';
+            const chunkSize = 8192;
+            
+            for (let j = 0; j < bytes.length; j += chunkSize) {
+              binary += String.fromCharCode(...bytes.slice(j, j + chunkSize));
+            }
+            const base64Audio = btoa(binary);
+            
+            const { supabase } = await import('@/integrations/supabase/client');
+            
+            // Timeout management with abort controller
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+              controller.abort();
+              console.warn(`⏱️ Timeout processando áudio: ${audio.filename}`);
+            }, 60000); // 60s for audio
+            
+            try {
+              console.log(`🎵 Enviando para transcrição: ${audio.filename}`);
+              
+              const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+                body: {
+                  audioData: base64Audio,
+                  groqApiKey: settings.groqApiKey
+                }
+              });
+              
+              clearTimeout(timeoutId);
+              
+              if (!error && data?.success && data.text) {
+                audio.transcript = data.text;
+                console.log(`✅ Áudio transcrito: ${audio.filename} - "${data.text.substring(0, 100)}..."`);
+              } else {
+                console.warn(`⚠️ Falha na transcrição ${audio.filename}:`, error?.message || data?.error || 'Unknown error');
               }
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (!error && data?.success) {
-              audio.transcript = data.text;
-              console.log(`Transcribed audio: ${audio.filename}`);
-            } else {
-              console.warn(`Failed to transcribe ${audio.filename}:`, error?.message || 'Unknown error');
+            } catch (error) {
+              clearTimeout(timeoutId);
+              if (error.name === 'AbortError') {
+                console.warn(`⏱️ Timeout na transcrição: ${audio.filename}`);
+              } else {
+                console.warn(`❌ Erro na transcrição ${audio.filename}:`, error.message);
+              }
             }
           } catch (error) {
-            clearTimeout(timeoutId);
-            console.warn(`Timeout or error processing audio ${audio.filename}:`, error.message);
+            console.warn(`❌ Erro processando áudio ${audio.filename}:`, error.message);
           }
-        } catch (error) {
-          console.warn(`Error processing audio ${audio.filename}:`, error.message);
+          
+          processedCount++;
+        }));
+        
+        // Progressive delay between batches
+        if (i + AUDIO_BATCH_SIZE < audioFiles.length) {
+          console.log(`⏳ Aguardando ${AUDIO_BATCH_DELAY / 1000}s antes do próximo lote...`);
+          await new Promise(resolve => setTimeout(resolve, AUDIO_BATCH_DELAY));
         }
-      }));
-      
-      // Wait between batches to avoid overwhelming the API
-      if (i + AUDIO_BATCH_SIZE < audioFiles.length) {
-        await new Promise(resolve => setTimeout(resolve, AUDIO_BATCH_DELAY));
       }
     }
 
-    // Process images for classification using GROQ with rate limiting
-    const BATCH_SIZE = 3;
-    const BATCH_DELAY = 2000; // 2 seconds between batches
+    // Process images with intelligent rate limiting
+    const IMAGE_BATCH_SIZE = 2; // Conservative for GROQ
+    const IMAGE_BATCH_DELAY = 3000; // 3 seconds between image batches
     
-    for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
-      const batch = imageFiles.slice(i, i + BATCH_SIZE);
+    if (imageFiles.length > 0) {
+      console.log(`🖼️ Iniciando classificação de ${imageFiles.length} imagens...`);
       
-      await Promise.allSettled(batch.map(async (image) => {
-        try {
-          // Convert blob to base64 safely
-          const arrayBuffer = await image.blob.arrayBuffer();
-          const bytes = new Uint8Array(arrayBuffer);
-          let binary = '';
-          const chunkSize = 8192;
-          
-          for (let i = 0; i < bytes.length; i += chunkSize) {
-            binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
-          }
-          const base64Image = btoa(binary);
-          
-          const { supabase } = await import('@/integrations/supabase/client');
-          
-          // Add timeout to prevent hanging requests
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
-          
+      for (let i = 0; i < imageFiles.length; i += IMAGE_BATCH_SIZE) {
+        const batch = imageFiles.slice(i, i + IMAGE_BATCH_SIZE);
+        
+        updateProgress(`Classificando imagem ${i + 1}/${imageFiles.length}...`);
+        
+        await Promise.allSettled(batch.map(async (image) => {
           try {
-            const { data, error } = await supabase.functions.invoke('classify-image', {
-              body: {
-                imageBase64: base64Image,
-                groqApiKey: settings.groqApiKey
+            // Safe base64 conversion
+            const arrayBuffer = await image.blob.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            
+            if (bytes.length > 5 * 1024 * 1024) { // Skip files > 5MB
+              console.warn(`⚠️ Imagem muito grande, pulando: ${image.filename} (${bytes.length} bytes)`);
+              return;
+            }
+            
+            let binary = '';
+            const chunkSize = 8192;
+            
+            for (let j = 0; j < bytes.length; j += chunkSize) {
+              binary += String.fromCharCode(...bytes.slice(j, j + chunkSize));
+            }
+            const base64Image = btoa(binary);
+            
+            const { supabase } = await import('@/integrations/supabase/client');
+            
+            // Timeout management
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+              controller.abort();
+              console.warn(`⏱️ Timeout processando imagem: ${image.filename}`);
+            }, 45000); // 45s for images
+            
+            try {
+              console.log(`🖼️ Enviando para classificação: ${image.filename}`);
+              
+              const { data, error } = await supabase.functions.invoke('classify-image', {
+                body: {
+                  imageBase64: base64Image,
+                  groqApiKey: settings.groqApiKey
+                }
+              });
+              
+              clearTimeout(timeoutId);
+              
+              if (!error && data?.success && data.classification) {
+                image.classification = data.classification;
+                console.log(`✅ Imagem classificada: ${image.filename} - "${data.classification.substring(0, 100)}..."`);
+              } else {
+                console.warn(`⚠️ Falha na classificação ${image.filename}:`, error?.message || data?.error || 'Unknown error');
               }
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (!error && data?.success) {
-              image.classification = data.classification;
-              console.log(`Classified image: ${image.filename}`);
-            } else {
-              console.warn(`Failed to classify ${image.filename}:`, error?.message || 'Unknown error');
+            } catch (error) {
+              clearTimeout(timeoutId);
+              if (error.name === 'AbortError') {
+                console.warn(`⏱️ Timeout na classificação: ${image.filename}`);
+              } else {
+                console.warn(`❌ Erro na classificação ${image.filename}:`, error.message);
+              }
             }
           } catch (error) {
-            clearTimeout(timeoutId);
-            console.warn(`Timeout or error processing image ${image.filename}:`, error.message);
+            console.warn(`❌ Erro processando imagem ${image.filename}:`, error.message);
           }
-        } catch (error) {
-          console.warn(`Error processing image ${image.filename}:`, error.message);
+          
+          processedCount++;
+        }));
+        
+        // Progressive delay between batches
+        if (i + IMAGE_BATCH_SIZE < imageFiles.length) {
+          console.log(`⏳ Aguardando ${IMAGE_BATCH_DELAY / 1000}s antes do próximo lote...`);
+          await new Promise(resolve => setTimeout(resolve, IMAGE_BATCH_DELAY));
         }
-      }));
-      
-      // Wait between batches to avoid overwhelming the API
-      if (i + BATCH_SIZE < imageFiles.length) {
-        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
       }
     }
+    
+    console.log(`✅ Processamento de mídia concluído: ${processedCount}/${totalFiles} arquivos processados`);
   }
 }
 

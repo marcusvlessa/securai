@@ -155,10 +155,10 @@ export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
                     <div key={device.uuid || index} className="p-4 border rounded-lg">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
-                          {getDeviceIcon(device.type)}
+                          {getDeviceIcon(device.deviceType)}
                           <div>
                             <h4 className="font-semibold">
-                              {device.deviceModel || `${device.type} Device`}
+                              {device.deviceModel || `${device.deviceType} Device`}
                             </h4>
                             <p className="text-sm text-muted-foreground">
                               {device.uuid}
@@ -171,7 +171,7 @@ export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
                       <div className="grid gap-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Tipo:</span>
-                          <span>{device.type}</span>
+                          <span>{device.deviceType}</span>
                         </div>
 
                         {device.os && (

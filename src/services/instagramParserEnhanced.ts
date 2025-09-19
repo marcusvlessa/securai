@@ -119,7 +119,9 @@ export class InstagramParserEnhanced {
       
       // Extract social connections
       console.log('👥 Extracting following/followers...');
-      processedData.following = this.extractSocialConnections(doc);
+      const socialConnections = this.extractSocialConnections(doc);
+      processedData.following = socialConnections.following;
+      processedData.followers = socialConnections.followers;
       
       // Process media files
       console.log('📸 Processing media files...');
@@ -635,16 +637,20 @@ export class InstagramParserEnhanced {
       
       deviceData.forEach((row, index) => {
         if (row.length >= 2) {
-          devices.push({
-            uuid: row[0] || `device_${index}`,
-            type: this.determineDeviceType(row.join(' ')),
-            deviceModel: row[1] || 'Unknown',
-            os: row[2] || 'Unknown',
-            lastSeen: this.parseTimestamp(row[row.length - 1]) || new Date(),
-            ipAddresses: this.extractIPFromText(row.join(' ')) ? [this.extractIPFromText(row.join(' '))!] : [],
-            appVersion: 'Unknown',
-            status: 'active' as const
-          });
+        devices.push({
+          id: uuidv4(),
+          uuid: row[0] || `device_${index}`,
+          deviceType: this.determineDeviceType(row.join(' ')),
+          deviceName: row[1] || 'Unknown',
+          deviceModel: row[1] || 'Unknown',
+          os: row[2] || 'Unknown',
+          lastSeen: this.parseTimestamp(row[row.length - 1]) || new Date(),
+          lastUsed: this.parseTimestamp(row[row.length - 1]) || new Date(),
+          ipAddress: this.extractIPFromText(row.join(' ')) || undefined,
+          ipAddresses: this.extractIPFromText(row.join(' ')) ? [this.extractIPFromText(row.join(' '))!] : [],
+          appVersion: 'Unknown',
+          status: 'active' as const
+        });
         }
       });
       
@@ -669,7 +675,9 @@ export class InstagramParserEnhanced {
       loginData.forEach((row, index) => {
         if (row.length >= 2) {
           logins.push({
+            id: uuidv4(),
             timestamp: this.parseTimestamp(row[0]) || new Date(),
+            ipAddress: this.extractIPFromText(row.join(' ')) || 'Unknown',
             ip: this.extractIPFromText(row.join(' ')) || 'Unknown',
             location: this.extractLocationFromText(row.join(' ')) || 'Unknown',
             device: row[2] || 'Unknown',
@@ -688,9 +696,10 @@ export class InstagramParserEnhanced {
   /**
    * Extract social connections
    */
-  private static extractSocialConnections(doc: Document): InstagramFollowing[] {
+  private static extractSocialConnections(doc: Document): { following: InstagramFollowing[], followers: InstagramFollowing[] } {
     try {
       const following: InstagramFollowing[] = [];
+      const followers: InstagramFollowing[] = [];
       
       // Extract following
       const followingElement = doc.getElementById(this.META_PROPERTIES.FOLLOWING);
@@ -699,10 +708,11 @@ export class InstagramParserEnhanced {
         followingData.forEach((row, index) => {
           if (row.length >= 1) {
             following.push({
+              id: `following-${row[0]}-${index}`,
               username: row[0] || `user_${index}`,
               displayName: row[1] || row[0] || `User ${index}`,
-              followDate: this.parseTimestamp(row[row.length - 1]) || new Date(),
-              followType: 'following' as const
+              timestamp: this.parseTimestamp(row[row.length - 1]) || new Date(),
+              type: 'following' as const
             });
           }
         });
@@ -714,20 +724,21 @@ export class InstagramParserEnhanced {
         const followersData = this.extractTableData(followersElement);
         followersData.forEach((row, index) => {
           if (row.length >= 1) {
-            following.push({
+            followers.push({
+              id: `follower-${row[0]}-${index}`,
               username: row[0] || `user_${index}`,
               displayName: row[1] || row[0] || `User ${index}`,
-              followDate: this.parseTimestamp(row[row.length - 1]) || new Date(),
-              followType: 'follower' as const
+              timestamp: this.parseTimestamp(row[row.length - 1]) || new Date(),
+              type: 'follower' as const
             });
           }
         });
       }
       
-      return following;
+      return { following, followers };
     } catch (error) {
       console.warn('⚠️ Error extracting social connections:', error);
-      return [];
+      return { following: [], followers: [] };
     }
   }
 
@@ -746,8 +757,8 @@ export class InstagramParserEnhanced {
         profilePicture: data.profile.profilePicture,
         conversations: [],
         posts: 0,
-        followers: data.following.filter(f => f.followType === 'follower').length,
-        following: data.following.filter(f => f.followType === 'following').length
+        followers: data.followers?.filter(f => f.type === 'follower').length || 0,
+        following: data.following?.filter(f => f.type === 'following').length || 0,
       });
     }
     

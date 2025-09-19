@@ -200,11 +200,14 @@ export class InstagramParserMethods {
         const cells = row.querySelectorAll('td');
         if (cells.length >= 3) {
           devices.push({
+            id: `device-${index}`,
             uuid: cells[0]?.textContent?.trim() || `device_${index}`,
-            type: cells[1]?.textContent?.trim() || 'unknown',
+            deviceType: cells[1]?.textContent?.trim() || 'unknown',
+            deviceName: cells[1]?.textContent?.trim() || 'unknown',
             deviceModel: cells[2]?.textContent?.trim(),
             status: 'active',
-            lastSeen: this.parseTimestamp(cells[3]?.textContent?.trim() || '')
+            lastSeen: this.parseTimestamp(cells[3]?.textContent?.trim() || ''),
+            lastUsed: this.parseTimestamp(cells[3]?.textContent?.trim() || '')
           });
         }
       });
@@ -229,7 +232,9 @@ export class InstagramParserMethods {
         const cells = row.querySelectorAll('td');
         if (cells.length >= 2) {
           logins.push({
+            id: `login-${index}`,
             timestamp: this.parseTimestamp(cells[0]?.textContent?.trim() || ''),
+            ipAddress: cells[1]?.textContent?.trim() || '',
             ip: cells[1]?.textContent?.trim() || '',
             location: cells[2]?.textContent?.trim(),
             device: cells[3]?.textContent?.trim(),
@@ -258,10 +263,11 @@ export class InstagramParserMethods {
         const cells = row.querySelectorAll('td');
         if (cells.length >= 2) {
           following.push({
+            id: `following-${index}`,
             username: cells[0]?.textContent?.trim() || '',
             displayName: cells[1]?.textContent?.trim(),
-            followDate: this.parseTimestamp(cells[2]?.textContent?.trim() || ''),
-            followType: 'following'
+            timestamp: this.parseTimestamp(cells[2]?.textContent?.trim() || ''),
+            type: 'following'
           });
         }
       });

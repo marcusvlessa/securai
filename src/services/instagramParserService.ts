@@ -1005,7 +1005,7 @@ export class InstagramParserService {
     return isNaN(parsed) ? new Date() : new Date(parsed);
   }
 
-  private organizeData(parsedData: any, mediaFiles: Map<string, Blob>): { users: InstagramUser[]; conversations: InstagramConversation[]; media: InstagramMedia[]; profile?: InstagramProfile; devices: InstagramDevice[]; logins: InstagramLogin[]; following: InstagramFollowing[]; threadsPosts: ThreadsPost[]; ncmecReports: NCMECReport[]; requestParameters: RequestParameter[]; caseMetadata?: CaseMetadata } {
+  private organizeData(parsedData: any, mediaFiles: Map<string, Blob>): { users: InstagramUser[]; conversations: InstagramConversation[]; media: InstagramMedia[]; profile?: InstagramProfile; devices: InstagramDevice[]; logins: InstagramLogin[]; following: InstagramFollowing[]; followers: InstagramFollowing[]; threadsPosts: ThreadsPost[]; ncmecReports: NCMECReport[]; requestParameters: RequestParameter[]; caseMetadata?: CaseMetadata } {
     const media: InstagramMedia[] = [];
     
     // Process media files with proper typing
@@ -1029,6 +1029,7 @@ export class InstagramParserService {
       devices: parsedData.devices || [],
       logins: parsedData.logins || [],
       following: parsedData.following || [],
+      followers: parsedData.followers || [],
       threadsPosts: parsedData.threadsPosts || [],
       ncmecReports: parsedData.ncmecReports || [],
       requestParameters: parsedData.requestParameters || [],

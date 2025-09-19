@@ -1,101 +1,87 @@
-import JSZip from 'jszip';
-import { v4 as uuidv4 } from 'uuid';
 import DOMPurify from 'dompurify';
-import { InstagramParserMethods } from './instagramParserMethods';
-import { 
-  ProcessedInstagramData, 
+import { v4 as uuidv4 } from 'uuid';
+import type { 
   InstagramConversation, 
+  InstagramUser, 
   InstagramMessage, 
-  InstagramUser,
-  InstagramMedia 
+  InstagramDevice, 
+  InstagramLogin, 
+  InstagramProfile,
+  ProcessedInstagramData,
+  InstagramFollowing,
+  ThreadsPost,
+  NCMECReport,
+  RequestParameter
 } from './instagramParserService';
 
-/**
- * Enhanced Instagram Parser with robust error handling and improved parsing
- */
 export class InstagramParserEnhanced {
-  
   /**
-   * Enhanced HTML parsing with multiple fallback strategies
+   * Parse Instagram/Meta Business Record HTML content with robust strategies
    */
   static parseHtmlContentRobust(htmlContent: string, mediaFiles: Map<string, Blob>): ProcessedInstagramData {
     try {
+      console.log('🚀 Starting enhanced Meta Business Record parsing...');
+      
+      const cleanHtml = DOMPurify.sanitize(htmlContent);
       const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlContent, 'text/html');
+      const doc = parser.parseFromString(cleanHtml, 'text/html');
       
-      console.log('🔍 [InstagramParserEnhanced] Iniciando parsing robusto do HTML');
-      console.log('📄 Tamanho do HTML:', htmlContent.length);
-      console.log('📁 Arquivos de mídia:', mediaFiles.size);
-      
-      // Estratégias múltiplas para encontrar conversas
-      let conversations: InstagramConversation[] = [];
-      let users: InstagramUser[] = [];
-      
-      // Estratégia 1: Buscar seções de mensagens
-      const unifiedSection = this.findSectionByKeywords(doc, [
-        'unified messages', 'mensagens unificadas', 'direct messages', 
-        'mensagens diretas', 'instagram messages', 'conversations',
-        'message', 'conversa', 'chat', 'dm'
-      ]);
-      
-      if (unifiedSection) {
-        console.log('✅ Encontrada seção de mensagens unificadas');
-        conversations = this.parseUnifiedMessagesEnhanced(unifiedSection, mediaFiles);
-      }
-      
-      // Estratégia 2: Buscar tabelas se não encontrou
-      if (conversations.length === 0) {
-        console.log('🔄 Estratégia 2: Analisando tabelas...');
-        const tables = doc.querySelectorAll('table');
-        for (let i = 0; i < tables.length; i++) {
-          const tableConversations = this.parseTableAsConversation(tables[i], mediaFiles, i);
-          conversations.push(...tableConversations);
-        }
-      }
-      
-      // Extrair usuários das conversas
-      users = this.extractUsersFromConversations(conversations);
-      
-      console.log(`✅ Parsing concluído: ${conversations.length} conversas, ${users.length} usuários`);
-      
-      // Dados processados
       const processedData: ProcessedInstagramData = {
-        id: crypto.randomUUID(),
-        conversations,
-        users,
-        profile: {
-          username: 'unknown',
-          displayName: 'Usuario',
-          bio: '',
-          followersCount: 0,
-          followingCount: 0,
-          postsCount: 0,
-          isVerified: false,
-          isPrivate: false,
-          profilePictureUrl: '',
-          externalUrl: '',
-          category: '',
-        },
+        id: uuidv4(),
+        conversations: [],
+        users: [],
+        media: [],
         devices: [],
         logins: [],
-        media: Array.from(mediaFiles.entries()).map(([filename, blob]) => ({
-          id: crypto.randomUUID(),
-          filename,
-          type: this.determineMediaTypeFromPath(filename),
-          blob,
-          conversations: [],
-        })),
         following: [],
-        threads: [],
+        profile: null,
+        threadsPosts: [],
         ncmecReports: [],
-        requestParams: [],
+        requestParameters: [],
         metadata: {
-          originalFilename: 'instagram_data.zip',
           processedAt: new Date(),
-          totalSize: htmlContent.length,
-          fileCount: mediaFiles.size,
+          originalFilename: 'records.html',
+          totalFiles: mediaFiles.size,
+          sectionsFound: []
         }
       };
+
+      // Extract different sections of Meta Business Record
+      console.log('📋 Extracting profile information...');
+      processedData.profile = this.extractProfile(doc);
+      
+      console.log('💬 Extracting conversations and messages...');
+      processedData.conversations = this.extractConversations(doc, mediaFiles);
+      
+      console.log('👥 Extracting users...');
+      processedData.users = this.extractUsers(doc, processedData.conversations);
+      
+      console.log('📱 Extracting devices...');
+      processedData.devices = this.extractDevices(doc);
+      
+      console.log('🔐 Extracting logins...');
+      processedData.logins = this.extractLogins(doc);
+      
+      console.log('📸 Extracting media...');
+      processedData.media = this.extractMedia(doc, mediaFiles);
+      
+      console.log('👥 Extracting following/followers...');
+      processedData.following = this.extractFollowing(doc);
+      
+      console.log('🧵 Extracting Threads data...');
+      processedData.threadsPosts = this.extractThreadsData(doc);
+      
+      console.log('📊 Extracting reports and parameters...');
+      processedData.ncmecReports = this.extractNCMECReports(doc);
+      processedData.requestParameters = this.extractRequestParameters(doc);
+      
+      console.log('✅ Parsing completed successfully:', {
+        conversations: processedData.conversations.length,
+        users: processedData.users.length,
+        media: processedData.media.length,
+        devices: processedData.devices.length,
+        logins: processedData.logins.length
+      });
       
       return processedData;
       
@@ -104,478 +90,584 @@ export class InstagramParserEnhanced {
       throw new Error(`Falha no parsing: ${error.message}`);
     }
   }
-    const cleanHtml = DOMPurify.sanitize(htmlContent);
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(cleanHtml, 'text/html');
-    
-    console.log('🔍 Starting enhanced Meta Business Record parsing...');
-    
-    const sectionsFound: string[] = [];
-    let conversations: InstagramConversation[] = [];
-    let users: InstagramUser[] = [];
-    
-    // Strategy 1: Look for Meta Business Record unified messages
-    console.log('📋 Strategy 1: Searching for Unified Messages...');
-    const unifiedSection = this.findSectionByKeywords(doc, [
-      'Unified Messages', 'Messages', 'Mensagens', 'Conversas', 'Conversations'
-    ]);
-    
-    if (unifiedSection) {
-      console.log('✅ Found Unified Messages section');
-      sectionsFound.push('Unified Messages');
-      conversations = this.parseUnifiedMessagesEnhanced(unifiedSection, mediaFiles);
-    }
-    
-    // Strategy 2: Look for conversation tables
-    if (conversations.length === 0) {
-      console.log('📋 Strategy 2: Searching for conversation tables...');
-      const tables = doc.querySelectorAll('table');
-      console.log(`Found ${tables.length} tables to analyze`);
-      
-      tables.forEach((table, index) => {
-        const tableConversations = this.parseTableAsConversation(table, mediaFiles, index);
-        conversations.push(...tableConversations);
-      });
-      
-      if (conversations.length > 0) {
-        sectionsFound.push('Table-based Messages');
-      }
-    }
-    
-    // Strategy 3: Generic text-based parsing
-    if (conversations.length === 0) {
-      console.log('📋 Strategy 3: Generic text parsing...');
-      conversations = this.parseGenericTextConversations(doc, mediaFiles);
-      if (conversations.length > 0) {
-        sectionsFound.push('Generic Text Messages');
-      }
-    }
-    
-    // Extract users from conversations
-    users = this.extractUsersFromConversations(conversations);
-    
-    // Parse other Meta Business Record sections
-    const profile = InstagramParserMethods.parseProfileSection(doc);
-    if (profile) sectionsFound.push('Profile');
-    
-    const devices = InstagramParserMethods.parseDevices(doc);
-    if (devices.length > 0) sectionsFound.push('Devices');
-    
-    const logins = InstagramParserMethods.parseLogins(doc);
-    if (logins.length > 0) sectionsFound.push('Logins');
-    
-    const following = InstagramParserMethods.parseFollowing(doc);
-    if (following.length > 0) sectionsFound.push('Following');
-    
-    const threadsPosts = InstagramParserMethods.parseThreadsPosts(doc);
-    if (threadsPosts.length > 0) sectionsFound.push('Threads Posts');
-    
-    const ncmecReports = InstagramParserMethods.parseNCMECReports(doc);
-    if (ncmecReports.length > 0) sectionsFound.push('NCMEC Reports');
-    
-    const requestParameters = InstagramParserMethods.parseRequestParameters(doc);
-    if (requestParameters.length > 0) sectionsFound.push('Request Parameters');
-    
-    const caseMetadata = InstagramParserMethods.extractCaseMetadata(doc);
-    
-    console.log(`✅ Parsing complete: ${conversations.length} conversations, ${users.length} users`);
-    console.log(`📊 Sections found: ${sectionsFound.join(', ')}`);
-    
-    return {
-      conversations,
-      users,
-      profile,
-      devices,
-      logins,
-      following,
-      threadsPosts,
-      ncmecReports,
-      requestParameters,
-      caseMetadata,
-      sectionsFound
-    };
-  }
-  
+
   /**
-   * Find sections by keywords with flexible matching
+   * Extract profile information from Meta Business Record
    */
-  private static findSectionByKeywords(doc: Document, keywords: string[]): Element | null {
-    // Look in headers first
-    const headers = doc.querySelectorAll('h1, h2, h3, h4, h5, h6, strong, b, th, .header');
-    
-    for (const header of headers) {
-      const text = header.textContent?.toLowerCase().trim() || '';
+  private static extractProfile(doc: Document): InstagramProfile | null {
+    try {
+      // Look for profile section with different patterns
+      const profileSection = this.findSectionByKeywords(doc, [
+        'property-name', 'property-emails', 'property-phone_numbers',
+        'Profile', 'Account', 'User Information'
+      ]);
       
-      for (const keyword of keywords) {
-        if (text.includes(keyword.toLowerCase())) {
-          console.log(`🎯 Found section header: "${text}" matches "${keyword}"`);
-          
-          // Try to find the containing section
-          let section = header.closest('section, div, article');
-          if (!section) {
-            // Look for next sibling that contains content
-            section = header.nextElementSibling;
-            while (section && !this.hasMessageContent(section)) {
-              section = section.nextElementSibling;
-            }
-          }
-          
-          if (section && this.hasMessageContent(section)) {
-            return section;
-          }
-        }
-      }
-    }
-    
-    // Fallback: look for divs with message-like content
-    const allDivs = doc.querySelectorAll('div');
-    for (const div of allDivs) {
-      if (this.hasMessageContent(div)) {
-        return div;
-      }
-    }
-    
-    return null;
-  }
-  
-  /**
-   * Check if element contains message-like content
-   */
-  private static hasMessageContent(element: Element): boolean {
-    // Look for tables, message patterns, or unified_message references
-    const hasTable = element.querySelector('table') !== null;
-    const hasMessages = element.textContent?.includes('unified_message') || false;
-    const hasTimestamps = /\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2}/.test(element.textContent || '');
-    
-    return hasTable || hasMessages || hasTimestamps;
-  }
-  
-  /**
-   * Enhanced unified messages parsing
-   */
-  private static parseUnifiedMessagesEnhanced(
-    section: Element, 
-    mediaFiles: Map<string, Blob>
-  ): InstagramConversation[] {
-    console.log('🔍 Parsing unified messages section...');
-    
-    const conversations: InstagramConversation[] = [];
-    
-    // Look for tables within the section
-    const tables = section.querySelectorAll('table');
-    console.log(`Found ${tables.length} tables in unified messages section`);
-    
-    tables.forEach((table, index) => {
-      const tableConversations = this.parseTableAsConversation(table, mediaFiles, index);
-      conversations.push(...tableConversations);
-    });
-    
-    return conversations;
-  }
-  
-  /**
-   * Parse a table as a conversation with enhanced logic
-   */
-  private static parseTableAsConversation(
-    table: Element, 
-    mediaFiles: Map<string, Blob>, 
-    index: number
-  ): InstagramConversation[] {
-    const messages: InstagramMessage[] = [];
-    const participants = new Set<string>();
-    
-    // Analyze table structure
-    const headers = Array.from(table.querySelectorAll('th')).map(th => 
-      th.textContent?.trim().toLowerCase() || ''
-    );
-    
-    const rows = table.querySelectorAll('tbody tr, tr');
-    
-    console.log(`📊 Analyzing table ${index} with ${rows.length} rows, headers: [${headers.join(', ')}]`);
-    
-    let messageCount = 0;
-    
-    rows.forEach((row, rowIndex) => {
-      // Skip header rows
-      if (row.querySelector('th')) return;
+      if (!profileSection) return null;
       
-      const cells = Array.from(row.querySelectorAll('td'));
-      if (cells.length < 2) return;
+      const profile: InstagramProfile = {
+        username: this.extractTextFromSection(profileSection, 'username', 'name'),
+        displayName: this.extractTextFromSection(profileSection, 'display_name', 'full_name'),
+        email: [this.extractTextFromSection(profileSection, 'email')],
+        phone: [this.extractTextFromSection(profileSection, 'phone', 'telephone')],
+        profilePicture: this.extractImageFromSection(profileSection),
+        accountStatus: 'active',
+        verificationStatus: 'unverified'
+      };
       
-      const message = this.parseTableRowAsMessage(row, cells, headers, mediaFiles, `table_${index}_msg_${rowIndex}`);
-      
-      if (message && message.content.trim()) {
-        messages.push(message);
-        participants.add(message.sender);
-        messageCount++;
-      }
-    });
-    
-    console.log(`✅ Parsed table ${index}: ${messageCount} messages, ${participants.size} participants`);
-    
-    if (messages.length === 0) {
-      return [];
-    }
-    
-    const conversationId = `table_conversation_${index}`;
-    
-    // Update message conversation IDs
-    messages.forEach(msg => {
-      msg.conversationId = conversationId;
-    });
-    
-    return [{
-      id: conversationId,
-      participants: Array.from(participants),
-      title: `Conversa ${index + 1} (${participants.size} participantes)`,
-      messages: messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
-      createdAt: messages[0]?.timestamp || new Date(),
-      lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
-      messageCount: messages.length,
-      mediaCount: messages.filter(m => m.type !== 'text').length
-    }];
-  }
-  
-  /**
-   * Parse table row as message with intelligent column detection
-   */
-  private static parseTableRowAsMessage(
-    row: Element,
-    cells: Element[],
-    headers: string[],
-    mediaFiles: Map<string, Blob>,
-    messageId: string
-  ): InstagramMessage | null {
-    
-    let timestamp = new Date();
-    let sender = 'Unknown';
-    let content = '';
-    let mediaPath: string | undefined;
-    let messageType: 'text' | 'image' | 'video' | 'audio' | 'link' = 'text';
-    
-    // Strategy: Map cells based on headers or position
-    cells.forEach((cell, index) => {
-      const cellText = cell.textContent?.trim() || '';
-      const header = headers[index] || '';
-      
-      // Timestamp detection
-      if (this.isTimestamp(cellText) || header.includes('time') || header.includes('date') || index === 0) {
-        const parsedTime = this.parseTimestamp(cellText);
-        if (parsedTime.getTime() > new Date('2010-01-01').getTime()) {
-          timestamp = parsedTime;
-        }
-      }
-      
-      // Sender detection
-      if (header.includes('sender') || header.includes('from') || header.includes('user') || 
-          (index === 1 && !this.isTimestamp(cellText))) {
-        sender = cellText || 'Unknown';
-      }
-      
-      // Content detection
-      if (header.includes('content') || header.includes('message') || header.includes('text') ||
-          (index >= 2 && cellText.length > 0)) {
-        if (!content || cellText.length > content.length) {
-          content = cellText;
-        }
-      }
-      
-      // Media detection
-      const links = cell.querySelectorAll('a[href*="unified_message"], img[src*="unified_message"]');
-      if (links.length > 0) {
-        const href = links[0].getAttribute('href') || links[0].getAttribute('src');
-        if (href) {
-          mediaPath = this.extractMediaFileName(href);
-          messageType = this.determineMediaTypeFromPath(href);
-        }
-      }
-    });
-    
-    // Validate message has meaningful content
-    if (!content.trim() && !mediaPath) {
+      return profile;
+    } catch (error) {
+      console.warn('⚠️ Error extracting profile:', error);
       return null;
     }
-    
-    // If no sender found, try to extract from content patterns
-    if (sender === 'Unknown') {
-      const senderMatch = content.match(/^([^:]+):/);
-      if (senderMatch) {
-        sender = senderMatch[1].trim();
-        content = content.replace(/^[^:]+:\s*/, '');
-      }
-    }
-    
-    return {
-      id: messageId,
-      conversationId: '', // Will be set by caller
-      sender,
-      content,
-      timestamp,
-      type: messageType,
-      mediaPath,
-      mediaId: mediaPath ? this.extractMediaId(mediaPath) : undefined
-    };
   }
-  
+
   /**
-   * Generic text-based conversation parsing
+   * Extract conversations from unified messages section
    */
-  private static parseGenericTextConversations(
-    doc: Document, 
-    mediaFiles: Map<string, Blob>
-  ): InstagramConversation[] {
-    console.log('🔍 Attempting generic text parsing...');
-    
-    const conversations: InstagramConversation[] = [];
-    const allText = doc.body.textContent || '';
-    
-    // Look for timestamp patterns to identify message blocks
-    const timestampRegex = /(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})/g;
-    const matches = [...allText.matchAll(timestampRegex)];
-    
-    console.log(`Found ${matches.length} potential timestamp matches`);
-    
-    if (matches.length > 5) { // Only proceed if we have enough potential messages
-      const messages: InstagramMessage[] = [];
+  private static extractConversations(doc: Document, mediaFiles: Map<string, Blob>): InstagramConversation[] {
+    try {
+      const conversations: InstagramConversation[] = [];
       
-      matches.forEach((match, index) => {
-        const timestamp = this.parseTimestamp(match[1]);
+      // Look for unified messages section
+      const messagesSection = this.findSectionByKeywords(doc, [
+        'property-unified_messages', 'unified_messages', 'Messages', 'Conversations'
+      ]);
+      
+      if (!messagesSection) {
+        console.warn('⚠️ No unified messages section found');
+        return conversations;
+      }
+      
+      // Extract tables or structured message data
+      const tables = messagesSection.querySelectorAll('table');
+      const messageDivs = messagesSection.querySelectorAll('div.i, div.m');
+      
+      if (tables.length > 0) {
+        // Process table-based messages
+        tables.forEach((table, index) => {
+          const conversation = this.parseTableAsConversation(table, mediaFiles, index);
+          if (conversation) {
+            conversations.push(conversation);
+          }
+        });
+      } else if (messageDivs.length > 0) {
+        // Process div-based messages
+        const conversation = this.parseDivAsConversation(messagesSection, mediaFiles);
+        if (conversation) {
+          conversations.push(conversation);
+        }
+      }
+      
+      return conversations;
+    } catch (error) {
+      console.warn('⚠️ Error extracting conversations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Parse a table as a conversation
+   */
+  private static parseTableAsConversation(table: Element, mediaFiles: Map<string, Blob>, index: number): InstagramConversation | null {
+    try {
+      const rows = table.querySelectorAll('tr');
+      if (rows.length === 0) return null;
+      
+      const messages: InstagramMessage[] = [];
+      let participants: string[] = [];
+      
+      // Extract header to understand column structure
+      const headerRow = rows[0];
+      const headers = Array.from(headerRow.querySelectorAll('th, td')).map(cell => 
+        cell.textContent?.trim().toLowerCase() || ''
+      );
+      
+      // Process each row as a message
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const cells = Array.from(row.querySelectorAll('td'));
         
-        // Extract surrounding text as potential message content
-        const startIndex = Math.max(0, match.index! - 200);
-        const endIndex = Math.min(allText.length, match.index! + 500);
-        const context = allText.substring(startIndex, endIndex);
+        if (cells.length === 0) continue;
         
-        // Simple heuristic to extract sender and content
-        const lines = context.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-        
-        let sender = 'User';
-        let content = '';
-        
-        for (const line of lines) {
-          if (line.includes(match[1])) {
-            // This line contains the timestamp, look for adjacent content
-            const lineIndex = lines.indexOf(line);
-            if (lineIndex > 0) {
-              content = lines[lineIndex - 1] || lines[lineIndex + 1] || '';
-            }
-            break;
+        const message = this.parseTableRowAsMessage(row, cells, headers, mediaFiles, `msg_${index}_${i}`);
+        if (message) {
+          messages.push(message);
+          if (message.sender && !participants.includes(message.sender)) {
+            participants.push(message.sender);
           }
         }
+      }
+      
+      if (messages.length === 0) return null;
+      
+      const conversation: InstagramConversation = {
+        id: `conversation_${index}`,
+        participants,
+        messages,
+        title: participants.length > 1 ? `Chat with ${participants.join(', ')}` : 'Personal Chat',
+        createdAt: messages[0]?.timestamp || new Date(),
+        lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
+        messageCount: messages.length,
+        mediaCount: messages.filter(m => m.type !== 'text').length
+      };
+      
+      return conversation;
+    } catch (error) {
+      console.warn('⚠️ Error parsing table as conversation:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Parse a table row as a message
+   */
+  private static parseTableRowAsMessage(
+    row: Element, 
+    cells: Element[], 
+    headers: string[], 
+    mediaFiles: Map<string, Blob>, 
+    messageId: string
+  ): InstagramMessage | null {
+    try {
+      if (cells.length === 0) return null;
+      
+      let timestamp = new Date();
+      let sender = '';
+      let content = '';
+      let mediaType: 'text' | 'image' | 'video' | 'audio' | 'link' = 'text';
+      let mediaUrl = '';
+      
+      // Map cells to message properties based on headers or position
+      cells.forEach((cell, cellIndex) => {
+        const cellText = cell.textContent?.trim() || '';
+        const header = headers[cellIndex] || '';
         
-        if (content.trim()) {
-          messages.push({
-            id: `generic_msg_${index}`,
-            conversationId: 'generic_conversation',
-            sender,
-            content: content.substring(0, 500), // Limit content length
-            timestamp,
-            type: 'text'
-          });
+        // Try to identify timestamp
+        if (this.isTimestamp(cellText) || header.includes('time') || header.includes('date')) {
+          const parsedTime = this.parseTimestamp(cellText);
+          if (parsedTime) timestamp = parsedTime;
+        }
+        
+        // Try to identify sender
+        else if (header.includes('sender') || header.includes('from') || header.includes('author')) {
+          sender = cellText;
+        }
+        
+        // Try to identify content
+        else if (header.includes('content') || header.includes('message') || header.includes('text')) {
+          content = cellText;
+        }
+        
+        // Check for media links
+        const links = cell.querySelectorAll('a[href]');
+        links.forEach(link => {
+          const href = link.getAttribute('href') || '';
+          if (href.includes('media') || href.includes('attachment')) {
+            mediaType = this.determineMediaTypeFromPath(href);
+            mediaUrl = this.processMediaUrl(href, mediaFiles);
+          }
+        });
+        
+        // If no specific header match, try to infer from content
+        if (!sender && !content) {
+          if (cellIndex === 0 && cellText.length < 50) {
+            sender = cellText;
+          } else if (cellIndex === 1 || (cellIndex === 0 && !sender)) {
+            content = cellText;
+          }
         }
       });
       
-      if (messages.length > 0) {
-        conversations.push({
-          id: 'generic_conversation',
-          participants: ['User'],
-          title: 'Conversa Extraída',
-          messages: messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
-          createdAt: messages[0].timestamp,
-          lastActivity: messages[messages.length - 1].timestamp,
-          messageCount: messages.length,
-          mediaCount: 0
-        });
-        
-        console.log(`✅ Created generic conversation with ${messages.length} messages`);
+      // Fallback: if no sender identified, use a generic one
+      if (!sender) {
+        sender = 'User';
       }
+      
+      const message: InstagramMessage = {
+        id: messageId,
+        conversationId: `conversation_${Math.random()}`,
+        sender,
+        content: content || '',
+        timestamp,
+        type: mediaType,
+        mediaPath: mediaUrl || undefined,
+        reactions: []
+      };
+      
+      return message;
+    } catch (error) {
+      console.warn('⚠️ Error parsing table row as message:', error);
+      return null;
     }
-    
-    return conversations;
   }
-  
+
   /**
-   * Extract users from parsed conversations
+   * Parse div-based conversation structure
    */
-  private static extractUsersFromConversations(conversations: InstagramConversation[]): InstagramUser[] {
-    const usersMap = new Map<string, InstagramUser>();
+  private static parseDivAsConversation(section: Element, mediaFiles: Map<string, Blob>): InstagramConversation | null {
+    try {
+      const messageDivs = section.querySelectorAll('div.i, div.m');
+      const messages: InstagramMessage[] = [];
+      const participants: Set<string> = new Set();
+      
+      messageDivs.forEach((div, index) => {
+        const text = div.textContent?.trim() || '';
+        if (text.length === 0) return;
+        
+        // Try to extract sender and content from text patterns
+        const timeMatch = text.match(/(\d{1,2}\/\d{1,2}\/\d{4}.*?\d{1,2}:\d{2})/);
+        const timestamp = timeMatch ? this.parseTimestamp(timeMatch[1]) : new Date();
+        
+        // Simple pattern: look for "Sender: Message" or similar
+        let sender = 'User';
+        let content = text;
+        
+        const colonIndex = text.indexOf(':');
+        if (colonIndex > 0 && colonIndex < 50) {
+          const potentialSender = text.substring(0, colonIndex).trim();
+          if (potentialSender.length > 0 && potentialSender.length < 30) {
+            sender = potentialSender;
+            content = text.substring(colonIndex + 1).trim();
+          }
+        }
+        
+        participants.add(sender);
+        
+        const message: InstagramMessage = {
+          id: `div_msg_${index}`,
+          conversationId: 'conversation_div',
+          sender,
+          content,
+          timestamp: timestamp || new Date(),
+          type: 'text',
+          reactions: []
+        };
+        
+        messages.push(message);
+      });
+      
+      if (messages.length === 0) return null;
+      
+      const conversation: InstagramConversation = {
+        id: 'conversation_div',
+        participants: Array.from(participants),
+        messages,
+        title: `Chat with ${Array.from(participants).join(', ')}`,
+        createdAt: messages[0]?.timestamp || new Date(),
+        lastActivity: messages[messages.length - 1]?.timestamp || new Date(),
+        messageCount: messages.length,
+        mediaCount: messages.filter(m => m.type !== 'text').length
+      };
+      
+      return conversation;
+    } catch (error) {
+      console.warn('⚠️ Error parsing div as conversation:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Extract users from conversations and other sections
+   */
+  private static extractUsers(doc: Document, conversations: InstagramConversation[]): InstagramUser[] {
+    const users: Map<string, InstagramUser> = new Map();
     
-    conversations.forEach(conv => {
-      conv.participants.forEach(participant => {
-        if (!usersMap.has(participant)) {
-          usersMap.set(participant, {
-            id: uuidv4(),
+    // Extract users from conversations
+    conversations.forEach(conversation => {
+      conversation.participants.forEach(participant => {
+        if (!users.has(participant)) {
+          users.set(participant, {
+            id: participant.toLowerCase().replace(/\s+/g, '_'),
             username: participant,
             displayName: participant,
-            conversations: [conv.id],
-            posts: conv.messages.filter(m => m.sender === participant).length
+            profilePicture: undefined,
+            conversations: [],
+            posts: 0,
+            followers: 0,
+            following: 0
           });
-        } else {
-          const user = usersMap.get(participant)!;
-          if (!user.conversations.includes(conv.id)) {
-            user.conversations.push(conv.id);
-          }
-          user.posts += conv.messages.filter(m => m.sender === participant).length;
         }
       });
     });
     
-    return Array.from(usersMap.values());
+    return Array.from(users.values());
   }
-  
-  // Utility methods
+
+  /**
+   * Extract device information
+   */
+  private static extractDevices(doc: Document): InstagramDevice[] {
+    try {
+      const devices: InstagramDevice[] = [];
+      const deviceSection = this.findSectionByKeywords(doc, [
+        'property-devices', 'devices', 'Device Information'
+      ]);
+      
+      if (!deviceSection) return devices;
+      
+      const tables = deviceSection.querySelectorAll('table');
+      tables.forEach(table => {
+        const rows = table.querySelectorAll('tr');
+        for (let i = 1; i < rows.length; i++) {
+          const cells = Array.from(rows[i].querySelectorAll('td'));
+          if (cells.length >= 2) {
+            const device: InstagramDevice = {
+              uuid: `device_${i}`,
+              type: cells[0]?.textContent?.trim() || 'Unknown',
+              deviceModel: cells[1]?.textContent?.trim() || 'Unknown',
+              os: cells[2]?.textContent?.trim() || 'Unknown',
+              status: 'active',
+              lastSeen: cells[3] ? this.parseTimestamp(cells[3].textContent?.trim() || '') || new Date() : new Date(),
+              ipAddresses: cells[4] ? [cells[4].textContent?.trim() || ''] : []
+            };
+            devices.push(device);
+          }
+        }
+      });
+      
+      return devices;
+    } catch (error) {
+      console.warn('⚠️ Error extracting devices:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Extract login information
+   */
+  private static extractLogins(doc: Document): InstagramLogin[] {
+    try {
+      const logins: InstagramLogin[] = [];
+      const loginSection = this.findSectionByKeywords(doc, [
+        'property-logins', 'logins', 'Login History'
+      ]);
+      
+      if (!loginSection) return logins;
+      
+      const tables = loginSection.querySelectorAll('table');
+      tables.forEach(table => {
+        const rows = table.querySelectorAll('tr');
+        for (let i = 1; i < rows.length; i++) {
+          const cells = Array.from(rows[i].querySelectorAll('td'));
+          if (cells.length >= 3) {
+            const login: InstagramLogin = {
+              timestamp: this.parseTimestamp(cells[0]?.textContent?.trim() || '') || new Date(),
+              ip: cells[1]?.textContent?.trim() || '',
+              location: cells[2]?.textContent?.trim() || 'Unknown',
+              device: cells[3]?.textContent?.trim() || 'Unknown',
+              success: !cells[4]?.textContent?.toLowerCase().includes('failed')
+            };
+            logins.push(login);
+          }
+        }
+      });
+      
+      return logins;
+    } catch (error) {
+      console.warn('⚠️ Error extracting logins:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Extract media files and link with messages
+   */
+  private static extractMedia(doc: Document, mediaFiles: Map<string, Blob>): any[] {
+    const media: any[] = [];
+    
+    mediaFiles.forEach((blob, filename) => {
+      const mediaType = this.determineMediaTypeFromPath(filename);
+      const url = URL.createObjectURL(blob);
+      
+      media.push({
+        id: filename,
+        type: mediaType,
+        url,
+        filename,
+        size: blob.size,
+        timestamp: new Date()
+      });
+    });
+    
+    return media;
+  }
+
+  /**
+   * Extract following/followers information
+   */
+  private static extractFollowing(doc: Document): InstagramFollowing[] {
+    try {
+      const following: InstagramFollowing[] = [];
+      const followingSection = this.findSectionByKeywords(doc, [
+        'property-following', 'following', 'Following List'
+      ]);
+      
+      if (!followingSection) return following;
+      
+      const tables = followingSection.querySelectorAll('table');
+      tables.forEach(table => {
+        const rows = table.querySelectorAll('tr');
+        for (let i = 1; i < rows.length; i++) {
+          const cells = Array.from(rows[i].querySelectorAll('td'));
+          if (cells.length >= 1) {
+            const followingItem: InstagramFollowing = {
+              username: cells[0]?.textContent?.trim() || '',
+              displayName: cells[1]?.textContent?.trim() || '',
+              followDate: cells[2] ? this.parseTimestamp(cells[2].textContent?.trim() || '') : new Date(),
+              followType: 'following'
+            };
+            following.push(followingItem);
+          }
+        }
+      });
+      
+      return following;
+    } catch (error) {
+      console.warn('⚠️ Error extracting following:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Extract Threads data
+   */
+  private static extractThreadsData(doc: Document): ThreadsPost[] {
+    return [];
+  }
+
+  /**
+   * Extract NCMEC reports
+   */
+  private static extractNCMECReports(doc: Document): NCMECReport[] {
+    return [];
+  }
+
+  /**
+   * Extract request parameters
+   */
+  private static extractRequestParameters(doc: Document): RequestParameter[] {
+    return [];
+  }
+
+  // Helper methods
+  private static findSectionByKeywords(doc: Document, keywords: string[]): Element | null {
+    for (const keyword of keywords) {
+      const element = doc.querySelector(`#${keyword}`) || 
+                     doc.querySelector(`[id*="${keyword}"]`) ||
+                     Array.from(doc.querySelectorAll('*')).find(el => 
+                       el.textContent?.toLowerCase().includes(keyword.toLowerCase())
+                     );
+      if (element) return element;
+    }
+    return null;
+  }
+
+  private static extractTextFromSection(section: Element, ...keys: string[]): string {
+    for (const key of keys) {
+      const element = section.querySelector(`[data-key="${key}"]`) ||
+                     Array.from(section.querySelectorAll('*')).find(el => 
+                       el.textContent?.toLowerCase().includes(key)
+                     );
+      if (element) {
+        return element.textContent?.trim() || '';
+      }
+    }
+    return '';
+  }
+
+  private static extractImageFromSection(section: Element): string | undefined {
+    const img = section.querySelector('img');
+    return img?.src;
+  }
+
   private static isTimestamp(text: string): boolean {
-    return /\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2}/.test(text);
+    const timestampPatterns = [
+      /\d{1,2}\/\d{1,2}\/\d{4}/,
+      /\d{4}-\d{2}-\d{2}/,
+      /\d{1,2}:\d{2}/,
+      /\d{1,2}\/\d{1,2}\/\d{4}.*?\d{1,2}:\d{2}/
+    ];
+    return timestampPatterns.some(pattern => pattern.test(text));
   }
-  
-  private static parseTimestamp(timestampStr: string): Date {
-    if (!timestampStr) return new Date();
+
+  private static parseTimestamp(timestampStr: string): Date | null {
+    if (!timestampStr) return null;
+    
+    const date = new Date(timestampStr);
+    if (!isNaN(date.getTime())) return date;
     
     // Try different formats
     const formats = [
-      /(\d{1,2})\/(\d{1,2})\/(\d{4})/,  // MM/DD/YYYY
-      /(\d{4})-(\d{2})-(\d{2})/,        // YYYY-MM-DD
-      /(\d{1,2})-(\d{1,2})-(\d{4})/     // DD-MM-YYYY
+      /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/,
+      /(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})/
     ];
     
     for (const format of formats) {
       const match = timestampStr.match(format);
       if (match) {
-        const [, p1, p2, p3] = match;
-        const date = new Date(parseInt(p3), parseInt(p1) - 1, parseInt(p2));
-        if (!isNaN(date.getTime())) {
-          return date;
+        if (format.source.includes('\/')) {
+          // MM/DD/YYYY format
+          const [, month, day, year, hour, minute] = match;
+          return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
+        } else {
+          // YYYY-MM-DD format
+          const [, year, month, day, hour, minute] = match;
+          return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
         }
       }
     }
     
-    const parsed = Date.parse(timestampStr);
-    return isNaN(parsed) ? new Date() : new Date(parsed);
+    return null;
   }
-  
+
+  private static processMediaUrl(href: string, mediaFiles: Map<string, Blob>): string {
+    // Extract filename from href and find corresponding blob
+    const filename = this.extractMediaFileName(href);
+    const blob = mediaFiles.get(filename);
+    return blob ? URL.createObjectURL(blob) : href;
+  }
+
   private static extractMediaFileName(href: string): string {
-    const parts = href.split('/');
-    return parts[parts.length - 1];
+    return href.split('/').pop() || href;
   }
-  
-  private static extractMediaId(mediaPath: string): string | undefined {
-    const match = mediaPath.match(/unified_message_(\d+)/);
-    return match ? match[0] : undefined;
-  }
-  
+
   private static determineMediaTypeFromPath(href: string): 'text' | 'image' | 'video' | 'audio' | 'link' {
     const extension = href.split('.').pop()?.toLowerCase();
     
-    if (extension) {
-      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
-        return 'image';
-      } else if (['mp4', 'mov', 'avi', 'webm', 'mkv'].includes(extension)) {
-        return 'video';
-      } else if (['mp3', 'm4a', 'wav', 'ogg', 'aac'].includes(extension)) {
-        return 'audio';
-      }
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension || '')) {
+      return 'image';
+    } else if (['mp4', 'avi', 'mov', 'webm'].includes(extension || '')) {
+      return 'video';
+    } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(extension || '')) {
+      return 'audio';
+    } else if (href.startsWith('http')) {
+      return 'link';
     }
     
-    return 'link';
+    return 'text';
+  }
+
+  private static calculateDateRange(conversations: InstagramConversation[]): { start: Date; end: Date } {
+    const dates = conversations.flatMap(conv => 
+      conv.messages.map(msg => msg.timestamp)
+    ).filter(date => date);
+    
+    if (dates.length === 0) {
+      const now = new Date();
+      return { start: now, end: now };
+    }
+    
+    const sortedDates = dates.sort((a, b) => a.getTime() - b.getTime());
+    return {
+      start: sortedDates[0],
+      end: sortedDates[sortedDates.length - 1]
+    };
+  }
+
+  private static extractPreservationId(doc: Document): string {
+    const element = Array.from(doc.querySelectorAll('*')).find(el => 
+      el.textContent?.includes('Preservation ID') || el.textContent?.includes('Record ID')
+    );
+    return element?.textContent?.match(/[A-Z0-9-]+/)?.[0] || '';
   }
 }

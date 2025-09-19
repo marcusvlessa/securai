@@ -392,10 +392,10 @@ export const ConexoesInstagram: React.FC<ConexoesInstagramProps> = ({ data }) =>
                   .sort((a, b) => b.connections - a.connections)
                   .slice(0, 5)
                   .map((user, index) => (
-                    <div key={user.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                     <div key={`user-${index}`} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary">#{index + 1}</Badge>
-                        <span className="text-sm font-medium">{user.displayName || user.username}</span>
+                        <span className="text-sm font-medium">{user.user}</span>
                       </div>
                       <span className="text-sm text-muted-foreground">{user.connections} conversas</span>
                     </div>

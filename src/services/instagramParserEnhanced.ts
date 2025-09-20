@@ -14,13 +14,25 @@ import type {
   RequestParameter
 } from './instagramParserService';
 
+// Tipos para categorias extraídas
+interface CategoryData {
+  [key: string]: string[];
+}
+
+interface ParsedEntity {
+  username: string;
+  id_instagram: string;
+  nome: string;
+  categoria: string;
+}
+
 /**
- * Parser específico para Meta Business Record baseado no modelo Python fornecido
- * Implementa extração universal para todas as categorias do HTML
+ * Parser Enhanced v6.0 - Baseado EXATAMENTE no modelo Python fornecido
+ * Implementa extração correta usando CSS classes .t .o .i .m e property IDs
  */
 export class InstagramParserEnhanced {
   
-  // Lista completa de categorias do Meta Business Record
+  // Lista completa de categorias do Meta Business Record (40+ categorias)
   private static readonly CATEGORIAS = [
     'request_parameters', 'ncmec_reports', 'name', 'emails', 'vanity', 'registration_date',
     'registration_ip', 'phone_numbers', 'logins', 'ip_addresses', 'devices',
@@ -34,11 +46,11 @@ export class InstagramParserEnhanced {
   ];
 
   /**
-   * Entrada principal - implementação completa baseada no modelo Python
+   * Entrada principal - implementação EXATA do modelo Python v6.0
    */
   static parseHtmlContentRobust(htmlContent: string, mediaFiles: Map<string, Blob>): ProcessedInstagramData {
     try {
-      console.log('🚀 Starting Meta Business Record Enhanced Parsing v5.0 - Modelo Python...');
+      console.log('🚀 Starting Meta Business Record Enhanced Parsing v6.0 - Modelo Python EXATO...');
       console.log('📄 HTML Content length:', htmlContent.length);
       console.log('🎬 Media files count:', mediaFiles.size);
       
@@ -67,150 +79,208 @@ export class InstagramParserEnhanced {
         }
       };
 
-      // Coletar dados de todas as categorias usando os métodos específicos do modelo Python
-      const allSections = new Map<string, string[]>();
+      // ===== EXTRAÇÃO BASEADA NO MODELO PYTHON =====
       
-      // Parse genérico para todas as categorias
+      // 1. Parse de TODAS as categorias usando método genérico
+      const allSections: CategoryData = {};
       this.CATEGORIAS.forEach(categoria => {
         const dados = this.parseCategoriaGenerica(doc, categoria);
         if (dados.length > 0) {
-          allSections.set(categoria, dados);
+          allSections[categoria] = dados;
           processedData.metadata.sectionsFound.push(categoria);
           console.log(`✅ Categoria '${categoria}': ${dados.length} registros encontrados`);
+        } else {
+          console.log(`❌ Categoria '${categoria}': 0 registros encontrados`);
         }
       });
 
-      // Extrair entidades universais (todos os usernames/IDs Instagram no HTML)
+      // 2. Extração de entidades universais
       const entidades = this.parseEntidades(doc);
-      console.log(`👥 Entidades identificadas: ${entidades.length}`);
+      console.log(`👥 Entidades universais identificadas: ${entidades.length}`);
 
-      // Parse específico para Following/Followers usando padrão do modelo Python
+      // 3. Parse específico para Following/Followers
       const followingData = this.parseFollowingFollowers(doc, 'following');
       const followersData = this.parseFollowingFollowers(doc, 'followers');
       console.log(`👥 Following: ${followingData.length}, Followers: ${followersData.length}`);
 
-      // Parse específico para mídia
+      // 4. Parse específico para mídia (photos, videos)
       const photosData = this.parseMedia(doc, 'photos');
       const videosData = this.parseMedia(doc, 'videos');
       console.log(`🎬 Photos: ${photosData.length}, Videos: ${videosData.length}`);
 
-      // Parse específico para mensagens unificadas
+      // 5. Parse específico para unified messages
       const unifiedMessagesData = this.parseUnifiedMessages(doc);
       console.log(`💬 Unified Messages: ${unifiedMessagesData.length}`);
 
-      // Parse específico para comentários
+      // 6. Parse específico para comentários
       const commentsData = this.parseComments(doc);
       console.log(`💭 Comments: ${commentsData.length}`);
 
-      // Parse específico para IPs
+      // 7. Parse específico para IP addresses
       const ipAddressesData = this.parseIPAddresses(doc);
       console.log(`🌐 IP Addresses: ${ipAddressesData.length}`);
 
-      // Parse específico para logins/devices
-      const loginsData = this.parseLogins(doc);
-      const devicesData = this.parseDevices(doc);
-      console.log(`🔐 Logins: ${loginsData.length}, Devices: ${devicesData.length}`);
-
-      // Identificar perfil principal
+      // 8. Identificar perfil principal
       const profile = this.identifyMainProfile(doc, entidades, allSections);
       console.log(`👤 Profile identificado: ${profile?.displayName || profile?.username || 'Não identificado'}`);
 
-      // Processar conversas a partir das mensagens unificadas
-      const conversationsData = this.processUnifiedMessagesToConversations(unifiedMessagesData, entidades);
+      // 9. Converter entidades para usuários
+      const users = this.convertEntitiesToUsers(entidades);
+
+      // 10. Processar unified messages em conversas
+      const conversationsData = this.processUnifiedMessagesToConversations(unifiedMessagesData, users);
       console.log(`💬 Conversas processadas: ${conversationsData.conversations.length}`);
 
-      // Preencher dados processados
+      // 11. Mapear dados para estrutura final
       processedData.profile = profile;
-      processedData.users = entidades;
+      processedData.users = users;
       processedData.following = followingData;
       processedData.followers = followersData;
       processedData.conversations = conversationsData.conversations;
-      processedData.devices = devicesData;
-      processedData.logins = loginsData;
+      processedData.devices = this.parseDevices(doc);
+      processedData.logins = this.parseLogins(doc);
       
-      // Processar arquivos de mídia
+      // 11. Processar arquivos de mídia
       processedData.media = this.processMediaFiles(mediaFiles);
       console.log('🎬 Mídia processada:', processedData.media.length);
 
-      // Associar mídias às conversas
+      // 12. Associar mídias às conversas
       this.associateMediaToConversations(processedData.conversations, processedData.media);
 
-      console.log('✅ Meta Business Record parsing completed successfully v5.0');
-      console.log(`📊 Resultados: ${processedData.conversations.length} conversas, ${processedData.users.length} usuários, ${processedData.following.length} following, ${processedData.followers.length} followers`);
+      console.log('✅ Meta Business Record parsing completed successfully v6.0');
+      console.log(`📊 RESULTADOS FINAIS:`);
+      console.log(`   - ${processedData.conversations.length} conversas`);
+      console.log(`   - ${processedData.users.length} usuários`);
+      console.log(`   - ${processedData.following.length} following`);
+      console.log(`   - ${processedData.followers.length} followers`);
+      console.log(`   - ${processedData.devices.length} devices`);
+      console.log(`   - ${processedData.logins.length} logins`);
+      console.log(`   - ${processedData.media.length} arquivos de mídia`);
+      console.log(`   - ${processedData.metadata.sectionsFound.length} categorias encontradas`);
       
       return processedData;
 
     } catch (error) {
-      console.error('❌ Erro durante parsing Meta Business Record:', error);
+      console.error('❌ Erro durante parsing Meta Business Record v6.0:', error);
       throw error;
     }
   }
 
   /**
-   * Parse genérico para qualquer categoria - implementação exata do modelo Python
+   * Parse genérico para qualquer categoria - IMPLEMENTAÇÃO EXATA do modelo Python
    */
   private static parseCategoriaGenerica(doc: Document, categoria: string): string[] {
+    console.log(`🔍 Buscando categoria: property-${categoria}`);
+    
     const bloco = doc.querySelector(`div[id="property-${categoria}"]`);
     if (!bloco) {
+      console.log(`❌ Bloco não encontrado para categoria: ${categoria}`);
       return [];
     }
     
-    const dados: string[] = [];
-    const linhas = bloco.querySelectorAll('div.classpdiv');
+    console.log(`✅ Bloco encontrado para categoria: ${categoria}`);
     
-    linhas.forEach(linha => {
-      const texto = linha.textContent?.trim();
-      if (texto) {
+    const dados: string[] = [];
+    // CORREÇÃO: Usar .m ao invés de .classpdiv (que não existe)
+    const elementos = bloco.querySelectorAll('div.m');
+    
+    console.log(`📄 Elementos .m encontrados: ${elementos.length}`);
+    
+    elementos.forEach((elemento, index) => {
+      const texto = elemento.textContent?.trim();
+      if (texto && texto.length > 0) {
         dados.push(texto);
+        console.log(`   [${index}]: ${texto.substring(0, 100)}...`);
       }
     });
     
+    console.log(`📊 Dados extraídos para ${categoria}: ${dados.length} registros`);
     return dados;
   }
 
   /**
-   * Extrair todas as entidades (usernames + IDs Instagram) do HTML
+   * Extrair todas as entidades (usernames + IDs Instagram) do HTML - MODELO PYTHON EXATO
    */
-  private static parseEntidades(doc: Document): InstagramUser[] {
-    const entidades: InstagramUser[] = [];
+  private static parseEntidades(doc: Document): ParsedEntity[] {
+    console.log('🔍 Extraindo entidades universais...');
+    
+    const entidades: ParsedEntity[] = [];
     const regex = /([\w\.\-]+) Instagram (\d+) ?(.*)/g;
     
-    const allDivs = doc.querySelectorAll('div.classpdiv');
-    allDivs.forEach(div => {
+    // CORREÇÃO: Buscar em TODOS os elementos .m, não .classpdiv
+    const allElements = doc.querySelectorAll('div.m');
+    console.log(`📄 Elementos .m para busca de entidades: ${allElements.length}`);
+    
+    allElements.forEach((div, index) => {
       const texto = div.textContent?.trim() || '';
       let match;
+      // Reset regex para evitar problemas com lastIndex
+      regex.lastIndex = 0;
+      
       while ((match = regex.exec(texto)) !== null) {
         const [, username, instagramId, nome] = match;
         entidades.push({
-          id: instagramId,
           username,
-          displayName: nome.trim() || username,
-          conversations: [],
-          posts: 0,
-          isMainUser: false
+          id_instagram: instagramId,
+          nome: nome.trim(),
+          categoria: 'entidade'
         });
+        
+        console.log(`👤 Entidade encontrada: ${username} (${instagramId}) - ${nome.trim()}`);
       }
     });
     
-    return entidades;
+    // Remover duplicatas baseado no ID do Instagram
+    const entidadesUnicas = entidades.filter((entidade, index, self) => 
+      index === self.findIndex(e => e.id_instagram === entidade.id_instagram)
+    );
+    
+    console.log(`👥 Total de entidades únicas: ${entidadesUnicas.length}`);
+    return entidadesUnicas;
   }
 
   /**
-   * Parse específico para Following/Followers - padrão do modelo Python
+   * Converter entidades para formato InstagramUser
+   */
+  private static convertEntitiesToUsers(entidades: ParsedEntity[]): InstagramUser[] {
+    return entidades.map(entidade => ({
+      id: entidade.id_instagram,
+      username: entidade.username,
+      displayName: entidade.nome || entidade.username,
+      conversations: [],
+      posts: 0,
+      isMainUser: false
+    }));
+  }
+
+  /**
+   * Parse específico para Following/Followers - PADRÃO MODELO PYTHON EXATO
    */
   private static parseFollowingFollowers(doc: Document, categoria: string): InstagramFollowing[] {
+    console.log(`🔍 Parsing ${categoria}...`);
+    
     const bloco = doc.querySelector(`div[id="property-${categoria}"]`);
     if (!bloco) {
+      console.log(`❌ Bloco property-${categoria} não encontrado`);
       return [];
     }
+    
+    console.log(`✅ Bloco property-${categoria} encontrado`);
     
     const seguidores: InstagramFollowing[] = [];
     const regex = /([\w\.\-]+) \(Instagram: (\d+)\) \[?(.*?)\]?/g;
     
-    const linhas = bloco.querySelectorAll('div.classpdiv');
-    linhas.forEach((linha, index) => {
-      const texto = linha.textContent?.trim() || '';
+    // CORREÇÃO: Usar .m ao invés de .classpdiv
+    const elementos = bloco.querySelectorAll('div.m');
+    console.log(`📄 Elementos .m encontrados em ${categoria}: ${elementos.length}`);
+    
+    elementos.forEach((elemento, index) => {
+      const texto = elemento.textContent?.trim() || '';
+      
+      // Reset regex para evitar problemas
+      regex.lastIndex = 0;
       let match;
+      
       while ((match = regex.exec(texto)) !== null) {
         const [, username, instagramId, nome] = match;
         seguidores.push({
@@ -221,108 +291,156 @@ export class InstagramParserEnhanced {
           timestamp: new Date(),
           type: categoria === 'following' ? 'following' : 'follower'
         });
+        
+        console.log(`👤 ${categoria}: ${username} (${instagramId}) - ${nome}`);
       }
     });
     
+    console.log(`📊 Total ${categoria}: ${seguidores.length}`);
     return seguidores;
   }
 
   /**
-   * Parse específico para mídia (photos, videos) - padrão do modelo Python
+   * Parse específico para mídia (photos, videos) - PADRÃO MODELO PYTHON EXATO
    */
   private static parseMedia(doc: Document, categoria: string): any[] {
+    console.log(`🔍 Parsing mídia: ${categoria}...`);
+    
     const bloco = doc.querySelector(`div[id="property-${categoria}"]`);
     if (!bloco) {
+      console.log(`❌ Bloco property-${categoria} não encontrado`);
       return [];
     }
+    
+    console.log(`✅ Bloco property-${categoria} encontrado`);
     
     const items: any[] = [];
     const campos = ['ID', 'Taken', 'Status', 'URL', 'Source', 'Filter', 'Is Published', 'Shared to Platform', 'Like Count', 'Carousel ID', 'Upload IP', 'Owner', 'Author', 'Bytes', 'Caption', 'Date Created', 'Text', 'Deleted by Instagram', 'Privacy Setting'];
     
-    const linhas = bloco.querySelectorAll('div.classmdiv');
-    linhas.forEach(linha => {
-      const texto = linha.textContent || '';
-      const pieces = texto.split('||');
-      const item: any = { categoria, tipo: categoria };
+    // CORREÇÃO: Buscar por elementos .m que contêm dados separados por ||
+    const elementos = bloco.querySelectorAll('div.m');
+    console.log(`📄 Elementos .m encontrados em ${categoria}: ${elementos.length}`);
+    
+    elementos.forEach((elemento, index) => {
+      const texto = elemento.textContent || '';
       
-      pieces.forEach((value, index) => {
-        if (index < campos.length) {
-          item[campos[index]] = value;
+      // Verificar se contém dados estruturados (separados por ||)
+      if (texto.includes('||')) {
+        const pieces = texto.split('||');
+        const item: any = { categoria, tipo: categoria, _index: index };
+        
+        pieces.forEach((value, pieceIndex) => {
+          if (pieceIndex < campos.length) {
+            item[campos[pieceIndex]] = value.trim();
+          }
+        });
+        
+        if (item.ID || item.URL) {
+          items.push(item);
+          console.log(`🎬 Mídia ${categoria}: ID=${item.ID}, URL=${item.URL?.substring(0, 50)}...`);
         }
-      });
-      
-      if (item.ID || item.URL) {
-        items.push(item);
       }
     });
     
+    console.log(`📊 Total mídia ${categoria}: ${items.length}`);
     return items;
   }
 
   /**
-   * Parse específico para mensagens unificadas - padrão do modelo Python
+   * Parse específico para mensagens unificadas - PADRÃO MODELO PYTHON EXATO
    */
   private static parseUnifiedMessages(doc: Document): string[] {
+    console.log('🔍 Parsing unified messages...');
+    
     const bloco = doc.querySelector('div[id="property-unified_messages"]');
     if (!bloco) {
+      console.log('❌ Bloco property-unified_messages não encontrado');
       return [];
     }
     
-    const messages: string[] = [];
-    const divs = bloco.querySelectorAll('div.classmdiv');
+    console.log('✅ Bloco property-unified_messages encontrado');
     
-    divs.forEach(div => {
-      const texto = div.textContent?.trim();
-      if (texto) {
+    const messages: string[] = [];
+    
+    // CORREÇÃO: Buscar por elementos .m ao invés de .classmdiv
+    const elementos = bloco.querySelectorAll('div.m');
+    console.log(`📄 Elementos .m encontrados em unified_messages: ${elementos.length}`);
+    
+    elementos.forEach((elemento, index) => {
+      const texto = elemento.textContent?.trim();
+      if (texto && texto.length > 0) {
         messages.push(texto);
+        console.log(`💬 Message [${index}]: ${texto.substring(0, 100)}...`);
       }
     });
     
+    console.log(`📊 Total unified messages: ${messages.length}`);
     return messages;
   }
 
   /**
-   * Parse específico para comentários - padrão do modelo Python
+   * Parse específico para comentários - PADRÃO MODELO PYTHON EXATO
    */
   private static parseComments(doc: Document): string[] {
+    console.log('🔍 Parsing comments...');
+    
     const bloco = doc.querySelector('div[id="property-comments"]');
     if (!bloco) {
+      console.log('❌ Bloco property-comments não encontrado');
       return [];
     }
     
-    const comentarios: string[] = [];
-    const divs = bloco.querySelectorAll('div.classmdiv');
+    console.log('✅ Bloco property-comments encontrado');
     
-    divs.forEach(div => {
-      const texto = div.textContent?.trim();
-      if (texto) {
+    const comentarios: string[] = [];
+    
+    // CORREÇÃO: Usar .m ao invés de .classmdiv
+    const elementos = bloco.querySelectorAll('div.m');
+    console.log(`📄 Elementos .m encontrados em comments: ${elementos.length}`);
+    
+    elementos.forEach((elemento, index) => {
+      const texto = elemento.textContent?.trim();
+      if (texto && texto.length > 0) {
         comentarios.push(texto);
+        console.log(`💭 Comment [${index}]: ${texto.substring(0, 100)}...`);
       }
     });
     
+    console.log(`📊 Total comments: ${comentarios.length}`);
     return comentarios;
   }
 
   /**
-   * Parse específico para endereços IP - padrão do modelo Python
+   * Parse específico para endereços IP - PADRÃO MODELO PYTHON EXATO
    */
   private static parseIPAddresses(doc: Document): string[] {
+    console.log('🔍 Parsing IP addresses...');
+    
     const bloco = doc.querySelector('div[id="property-ip_addresses"]');
     if (!bloco) {
+      console.log('❌ Bloco property-ip_addresses não encontrado');
       return [];
     }
     
-    const registros: string[] = [];
-    const linhas = bloco.querySelectorAll('div.classpdiv');
+    console.log('✅ Bloco property-ip_addresses encontrado');
     
-    linhas.forEach(linha => {
-      const texto = linha.textContent?.trim() || '';
-      // Regex para IPv4 e IPv6
+    const registros: string[] = [];
+    
+    // CORREÇÃO: Usar .m ao invés de .classpdiv
+    const elementos = bloco.querySelectorAll('div.m');
+    console.log(`📄 Elementos .m encontrados em ip_addresses: ${elementos.length}`);
+    
+    elementos.forEach((elemento, index) => {
+      const texto = elemento.textContent?.trim() || '';
+      
+      // Regex para IPv4 e IPv6 conforme modelo Python
       if (/^\d{1,3}\.\d+\.\d+\.\d+|\[?[\da-fA-F\:]+\]?/.test(texto)) {
         registros.push(texto);
+        console.log(`🌐 IP [${index}]: ${texto}`);
       }
     });
     
+    console.log(`📊 Total IP addresses: ${registros.length}`);
     return registros;
   }
 
@@ -407,14 +525,22 @@ export class InstagramParserEnhanced {
   }
 
   /**
-   * Identificar o perfil principal a partir dos dados extraídos
+   * Identificar o perfil principal a partir dos dados extraídos - MODELO PYTHON
    */
-  private static identifyMainProfile(doc: Document, entidades: InstagramUser[], allSections: Map<string, string[]>): InstagramProfile | null {
-    // Tentar identificar a partir da seção 'name'
-    const nameSection = allSections.get('name');
-    const emailSection = allSections.get('emails');
-    const phoneSection = allSections.get('phone_numbers');
-    const vanitySection = allSections.get('vanity');
+  private static identifyMainProfile(doc: Document, entidades: ParsedEntity[], allSections: CategoryData): InstagramProfile | null {
+    console.log('🔍 Identificando perfil principal...');
+    
+    // Tentar identificar a partir das seções específicas
+    const nameSection = allSections['name'];
+    const emailSection = allSections['emails'];
+    const phoneSection = allSections['phone_numbers'];
+    const vanitySection = allSections['vanity'];
+    
+    console.log('📄 Seções de perfil:');
+    console.log(`   - name: ${nameSection?.length || 0} registros`);
+    console.log(`   - emails: ${emailSection?.length || 0} registros`);
+    console.log(`   - phone_numbers: ${phoneSection?.length || 0} registros`);
+    console.log(`   - vanity: ${vanitySection?.length || 0} registros`);
     
     // Procurar usuário principal nos dados
     let mainUsername = '';
@@ -423,26 +549,30 @@ export class InstagramParserEnhanced {
     // Se há uma seção vanity, é provavelmente o username principal
     if (vanitySection && vanitySection.length > 0) {
       mainUsername = vanitySection[0];
+      console.log(`👤 Username do vanity: ${mainUsername}`);
     }
     
     // Se há uma seção name, é provavelmente o nome real
     if (nameSection && nameSection.length > 0) {
       mainDisplayName = nameSection[0];
+      console.log(`👤 Nome real: ${mainDisplayName}`);
     }
     
     // Se não encontrou nos metadados, procurar nos usuários mais ativos
     if (!mainUsername && entidades.length > 0) {
-      // Assumir que o primeiro usuário ou mais ativo é o principal
+      // Assumir que o primeiro usuário é o principal (owner do account)
       const primeiroUsuario = entidades[0];
       mainUsername = primeiroUsuario.username;
-      mainDisplayName = primeiroUsuario.displayName || primeiroUsuario.username;
+      mainDisplayName = primeiroUsuario.nome || primeiroUsuario.username;
+      console.log(`👤 Username da primeira entidade: ${mainUsername}`);
     }
     
     if (!mainUsername) {
+      console.log('❌ Não foi possível identificar o perfil principal');
       return null;
     }
     
-    return {
+    const profile: InstagramProfile = {
       username: mainUsername,
       displayName: mainDisplayName || mainUsername,
       email: emailSection || [],
@@ -451,10 +581,13 @@ export class InstagramParserEnhanced {
       verificationStatus: 'unverified',
       businessAccount: false,
       registrationDate: undefined,
-      registrationIP: allSections.get('registration_ip')?.[0],
+      registrationIP: allSections['registration_ip']?.[0],
       profilePicture: undefined,
       privacySettings: undefined
     };
+    
+    console.log(`✅ Perfil principal identificado: ${profile.displayName} (@${profile.username})`);
+    return profile;
   }
 
   /**

@@ -19,16 +19,13 @@ interface InstagramDevicesProps {
   data: ProcessedInstagramData;
 }
 
-  const toggleIPExpansion = (ip: string) => {
-    const newExpanded = new Set(expandedIPs);
-    if (newExpanded.has(ip)) {
-      newExpanded.delete(ip);
-    } else {
-      newExpanded.add(ip);
-    }
-    setExpandedIPs(newExpanded);
-  };
+export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
   const { devices, logins } = data;
+  
+  const toggleIPExpansion = (ip: string) => {
+    // Esta função será implementada se necessário para expansão de IPs
+    console.log('Toggle IP expansion for:', ip);
+  };
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('pt-BR', {

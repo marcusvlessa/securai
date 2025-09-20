@@ -196,16 +196,31 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
     }
   };
 
+  const getDisplayNameForUser = (username: string): string => {
+    const userMappings: Record<string, string> = {
+      '73mb_': 'Marcelo Brandão',
+      'meryfelix17': 'Mery Felix',
+      'ericknunes7': 'Erick Nunes (ALEMÃO)',
+      'jgmeira0': 'João Meira (Jão)',
+      'carollebolsas': 'Carole Bolsas',
+      'diegocruz2683': 'Diego Cruz',
+    };
+    
+    return userMappings[username] || username.charAt(0).toUpperCase() + username.slice(1).replace(/[._]/g, ' ');
+  };
+
   const getUserInitials = (username: string) => {
     if (!username) return 'U';
     
-    // For names with spaces, use first letter of each word
-    if (username.includes(' ')) {
-      return username.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+    const displayName = getDisplayNameForUser(username);
+    
+    // For display names with spaces, use first letter of each word
+    if (displayName.includes(' ')) {
+      return displayName.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     }
     
     // For usernames, use first 2 characters
-    return username.substring(0, 2).toUpperCase();
+    return displayName.substring(0, 2).toUpperCase();
   };
 
   const getUserColor = (username: string) => {
@@ -344,7 +359,7 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
                     {/* Nome do chat */}
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium truncate">
-                        {conversation.participants.filter(p => !isMessageFromMainUser(p)).join(', ') || 'Mensagens pessoais'}
+                        {conversation.participants.filter(p => !isMessageFromMainUser(p)).map(p => getDisplayNameForUser(p)).join(', ') || 'Mensagens pessoais'}
                       </p>
                       <span className="text-xs text-muted-foreground">
                         {formatTimestamp(conversation.lastActivity)}
@@ -402,7 +417,7 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
                   </Avatar>
                   <div>
                     <h3 className="font-semibold">
-                      {selectedConversation.participants.filter(p => !isMessageFromMainUser(p)).join(', ') || 'Mensagens pessoais'}
+                      {selectedConversation.participants.filter(p => !isMessageFromMainUser(p)).map(p => getDisplayNameForUser(p)).join(', ') || 'Mensagens pessoais'}
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {selectedConversation.participants.length} participantes • {selectedConversation.messages.length} mensagens
@@ -452,7 +467,7 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
                         {/* Nome do remetente e timestamp */}
                         {showAvatar && (
                           <div className={`flex items-center gap-2 mb-1 ${isFromMainUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                            <span className="text-xs font-medium">{message.sender}</span>
+                            <span className="text-xs font-medium">{getDisplayNameForUser(message.sender)}</span>
                             <span className="text-xs text-muted-foreground">
                               {new Date(message.timestamp).toLocaleTimeString('pt-BR', { 
                                 hour: '2-digit', 

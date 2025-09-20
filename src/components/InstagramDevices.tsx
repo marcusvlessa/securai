@@ -20,7 +20,6 @@ interface InstagramDevicesProps {
 }
 
 export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
-  const { devices, logins } = data;
   
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -32,6 +31,10 @@ export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
     }).format(date);
   };
 
+  // Usar dados reais extraídos
+  const devices = data.devices;
+  const logins = data.logins;
+  
   // Verificar se há dados reais disponíveis
   const hasRealData = devices.length > 0 || logins.length > 0;
   
@@ -71,14 +74,16 @@ export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
     );
   }
 
-  const getDeviceIcon = (type: string) => {
-    const lowerType = type.toLowerCase();
-    if (lowerType.includes('phone') || lowerType.includes('mobile')) {
+  const getDeviceIcon = (deviceType: string) => {
+    const lowerType = deviceType.toLowerCase();
+    if (lowerType.includes('phone') || lowerType.includes('mobile') || lowerType.includes('ios') || lowerType.includes('android')) {
       return <Smartphone className="h-5 w-5" />;
     } else if (lowerType.includes('tablet') || lowerType.includes('ipad')) {
       return <Tablet className="h-5 w-5" />;
-    } else {
+    } else if (lowerType.includes('desktop') || lowerType.includes('computer') || lowerType.includes('mac') || lowerType.includes('pc')) {
       return <Monitor className="h-5 w-5" />;
+    } else {
+      return <Smartphone className="h-5 w-5" />;
     }
   };
 

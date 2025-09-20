@@ -30,6 +30,8 @@ export class InstagramParserEnhanced {
   static parseHtmlContentRobust(htmlContent: string, mediaFiles: Map<string, Blob>): ProcessedInstagramData {
     try {
       console.log('🚀 Starting Meta Business Record Enhanced Parsing v3.0...');
+      console.log('📄 HTML Content length:', htmlContent.length);
+      console.log('🎬 Media files count:', mediaFiles.size);
       
       const cleanHtml = DOMPurify.sanitize(htmlContent);
       const parser = new DOMParser();

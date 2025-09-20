@@ -7,11 +7,12 @@ interface PublicUserProfile {
   id: string
   user_id: string
   name?: string
-  department?: string
   organization_id?: string
   status: string
   created_at: string
   avatar_url?: string
+  // Note: Sensitive fields like email, department, badge_number are NOT included
+  // for security reasons when viewing other users' profiles
 }
 
 interface UserProfileCardProps {
@@ -19,13 +20,15 @@ interface UserProfileCardProps {
   showContactInfo?: boolean // Only for own profile or admin view
   email?: string
   phone?: string
+  department?: string // Only passed when showing own profile or admin view
 }
 
 export const UserProfileCard: React.FC<UserProfileCardProps> = ({ 
   profile, 
   showContactInfo = false,
   email,
-  phone 
+  phone,
+  department 
 }) => {
   const getInitials = (name?: string) => {
     if (!name) return '??'
@@ -69,8 +72,9 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
               </Badge>
             </div>
             
-            {profile.department && (
-              <p className="text-sm text-muted-foreground">{profile.department}</p>
+            {/* Department info only shown for own profile or when contact info is allowed */}
+            {showContactInfo && department && (
+              <p className="text-sm text-muted-foreground">{department}</p>
             )}
             
             {/* Only show contact info for own profile or admin users */}

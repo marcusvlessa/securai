@@ -126,8 +126,16 @@ export const InstagramMedia: React.FC<InstagramMediaProps> = ({ data }) => {
     const item = mediaItems.find(m => m.id === itemId);
     if (!item || item.type !== 'image') return;
 
+    // Prevenir loops infinitos
+    if (item.processingStatus === 'processing') return;
+
     setProcessingItem(itemId);
     setClassificationProgress(0);
+    
+    // Marcar como processando
+    setMediaItems(prev => 
+      prev.map(m => m.id === itemId ? { ...m, processingStatus: 'processing' as const } : m)
+    );
     
     try {
       // Converter blob para base64

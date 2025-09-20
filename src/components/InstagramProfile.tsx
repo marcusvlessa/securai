@@ -29,7 +29,10 @@ export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
         <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <h3 className="text-lg font-semibold mb-2">Perfil não encontrado</h3>
         <p className="text-muted-foreground">
-          Não foi possível extrair dados de perfil do arquivo fornecido
+          Não foi possível extrair dados de perfil do arquivo fornecido.
+        </p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Verifique se o arquivo contém dados de perfil válidos.
         </p>
       </div>
     );

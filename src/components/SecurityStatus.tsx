@@ -6,9 +6,9 @@ import { Shield, CheckCircle, AlertTriangle } from 'lucide-react'
 export const SecurityStatus: React.FC = () => {
   const securityFixes = [
     {
-      title: "PII Data Protection",
+      title: "PII Data Protection - CRITICAL FIX",
       status: "fixed",
-      description: "Restricted user email/phone access to profile owners and admins only"
+      description: "Completely restricted access to sensitive user data (email, badge_number, department) from other users. Only public info (name, status) is now visible to authenticated users."
     },
     {
       title: "Organization Data Security", 
@@ -76,10 +76,10 @@ export const SecurityStatus: React.FC = () => {
         <div className="mt-6 p-4 bg-green-50 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle className="h-5 w-5 text-green-600" />
-            <h4 className="font-medium text-green-800">Security Review Complete</h4>
+            <h4 className="font-medium text-green-800">Critical Security Fix Applied</h4>
           </div>
           <p className="text-sm text-green-700">
-            All critical security vulnerabilities have been addressed. Your application now follows security best practices for PII protection, access control, and data privacy.
+            <strong>SECURITY THREAT ELIMINATED:</strong> The critical vulnerability allowing unauthorized access to user email addresses, badge numbers, and department information has been completely resolved. The RLS policy now only allows viewing of minimal public information (name and status) while protecting all sensitive personal data.
           </p>
         </div>
       </CardContent>

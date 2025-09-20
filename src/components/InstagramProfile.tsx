@@ -131,42 +131,44 @@ export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {profile.email.length > 0 && (
+            {profile.email && profile.email.length > 0 && (
               <div>
                 <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
                   <Mail className="h-4 w-4" />
-                  E-mails
+                  E-mails ({profile.email.length})
                 </h4>
                 <div className="space-y-1">
                   {profile.email.map((email, index) => (
-                    <div key={index} className="p-2 bg-muted rounded text-sm">
-                      {email}
+                    <div key={index} className="p-2 bg-muted rounded text-sm font-mono">
+                      <span className="text-blue-600">{email}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {profile.phone.length > 0 && (
+            {profile.phone && profile.phone.length > 0 && (
               <div>
                 <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
                   <Phone className="h-4 w-4" />
-                  Telefones
+                  Telefones ({profile.phone.length})
                 </h4>
                 <div className="space-y-1">
                   {profile.phone.map((phone, index) => (
-                    <div key={index} className="p-2 bg-muted rounded text-sm">
-                      {phone}
+                    <div key={index} className="p-2 bg-muted rounded text-sm font-mono">
+                      <span className="text-green-600">{phone}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {profile.email.length === 0 && profile.phone.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma informação de contato disponível
-              </p>
+            {(!profile.email || profile.email.length === 0) && (!profile.phone || profile.phone.length === 0) && (
+              <div className="text-center py-6 text-muted-foreground">
+                <Mail className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Nenhuma informação de contato encontrada nos dados</p>
+                <p className="text-xs mt-1">Os dados podem estar em outras seções do arquivo</p>
+              </div>
             )}
           </CardContent>
         </Card>

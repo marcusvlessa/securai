@@ -354,23 +354,26 @@ export const InstagramFollowers: React.FC<InstagramFollowersProps> = ({ data }) 
                 <div className="flex items-center gap-4">
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={data.users.find(u => u.username === rel.username)?.profilePicture} />
-                    <AvatarFallback className="bg-primary/10">
-                      {(rel.displayName || rel.username).substring(0, 2).toUpperCase()}
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      {rel.displayName ? 
+                        rel.displayName.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) :
+                        rel.username.substring(0, 2).toUpperCase()
+                      }
                     </AvatarFallback>
                   </Avatar>
                   
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
-                      <h4 className="font-medium">@{rel.username}</h4>
+                      <h4 className="font-medium text-primary">
+                        {rel.displayName || rel.username}
+                      </h4>
                       {getRelationshipBadge(rel)}
                       {getInteractionBadge(rel.interactionScore)}
                     </div>
                     
-                    {rel.displayName && (
-                      <p className="text-sm text-muted-foreground mb-1">
-                        {rel.displayName}
-                      </p>
-                    )}
+                    <p className="text-sm text-muted-foreground mb-1">
+                      @{rel.username}
+                    </p>
                     
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       {rel.followDate && (

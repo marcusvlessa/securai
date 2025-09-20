@@ -22,11 +22,6 @@ interface InstagramDevicesProps {
 export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
   const { devices, logins } = data;
   
-  const toggleIPExpansion = (ip: string) => {
-    // Esta função será implementada se necessário para expansão de IPs
-    console.log('Toggle IP expansion for:', ip);
-  };
-
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('pt-BR', {
       day: '2-digit',
@@ -36,6 +31,45 @@ export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
       minute: '2-digit'
     }).format(date);
   };
+
+  // Verificar se há dados reais disponíveis
+  const hasRealData = devices.length > 0 || logins.length > 0;
+  
+  if (!hasRealData) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Dispositivos e Logins
+            </CardTitle>
+            <CardDescription>
+              Informações sobre dispositivos registrados e histórico de login
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-12">
+              <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">Dados não disponíveis</h3>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Não foi possível extrair informações de dispositivos ou logins dos dados fornecidos. 
+                Estas informações podem não estar disponíveis no arquivo Meta Business Record.
+              </p>
+              <div className="mt-4 p-4 bg-muted/50 rounded-lg text-sm text-left max-w-lg mx-auto">
+                <p className="font-medium mb-2">Por que isto acontece?</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li>• O arquivo pode não conter seções de dispositivos/logins</li>
+                  <li>• As informações podem estar em formato não suportado</li>
+                  <li>• O Meta Business Record pode ser limitado a mensagens apenas</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const getDeviceIcon = (type: string) => {
     const lowerType = type.toLowerCase();

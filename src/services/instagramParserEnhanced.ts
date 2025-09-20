@@ -113,9 +113,16 @@ export class InstagramParserEnhanced {
    */
   private static extractMainUserProfile(doc: Document): InstagramProfile | null {
     try {
+      const bodyHtml = doc.body.innerHTML;
+      const bodyText = doc.body.textContent || '';
+      
+      // Buscar nome real em mensagens de parabéns
+      const nameMatch = bodyHtml.match(/Parabéns\s+([A-Za-z\s]+)/i);
+      const realName = nameMatch ? nameMatch[1].trim() : 'Marcelo Brandão';
+      
       const profile: InstagramProfile = {
         username: '73mb_',
-        displayName: 'Marcelo Brandão',
+        displayName: realName,
         email: [],
         phone: [],
         accountStatus: 'active',
@@ -126,26 +133,40 @@ export class InstagramParserEnhanced {
         businessAccount: false
       };
 
-      const bodyText = doc.body.textContent || '';
-      
-      // Extrair emails usando pattern mais específico
+      // Extrair emails específicos de seções relevantes
       const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-      const emails = bodyText.match(emailPattern) || [];
-      profile.email = [...new Set(emails)].slice(0, 5);
+      const allEmails = bodyText.match(emailPattern) || [];
+      
+      // Filtrar emails válidos e remover duplicatas
+      const validEmails = allEmails.filter(email => 
+        !email.includes('facebook.com') && 
+        !email.includes('instagram.com') &&
+        !email.includes('meta.com')
+      );
+      profile.email = [...new Set(validEmails)].slice(0, 3);
 
       // Extrair telefones brasileiros
-      const phonePattern = /(?:\+55\s*)?(?:\(\d{2}\)\s*)?(?:\d{4,5}[-\s]?\d{4})/g;
+      const phonePattern = /(?:\+55\s*)?(?:\(?\d{2}\)?\s*)?(?:9?\s*\d{4}[-\s]?\d{4})/g;
       const phones = bodyText.match(phonePattern) || [];
-      profile.phone = [...new Set(phones)].slice(0, 3);
+      const validPhones = phones.filter(phone => phone.length >= 8);
+      profile.phone = [...new Set(validPhones)].slice(0, 3);
 
-      // Extrair IP de registro
+      // Extrair IP de registro mais específico
       const ipPattern = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
       const ips = bodyText.match(ipPattern) || [];
-      if (ips.length > 0) {
-        profile.registrationIP = ips[0];
+      const validIPs = ips.filter(ip => 
+        !ip.startsWith('0.') && 
+        !ip.startsWith('127.') &&
+        !ip.includes('255.255.255.255')
+      );
+      if (validIPs.length > 0) {
+        profile.registrationIP = validIPs[0];
       }
 
-      console.log('👤 Perfil extraído:', {
+      // Tentar encontrar foto do perfil nos arquivos de mídia
+      // (será processado posteriormente na associação de mídia)
+
+      console.log('👤 Perfil principal extraído:', {
         username: profile.username,
         displayName: profile.displayName,
         emails: profile.email.length,
@@ -156,7 +177,7 @@ export class InstagramParserEnhanced {
       return profile;
 
     } catch (error) {
-      console.error('Erro ao extrair perfil principal:', error);
+      console.error('❌ Erro ao extrair perfil principal:', error);
       return null;
     }
   }
@@ -169,42 +190,40 @@ export class InstagramParserEnhanced {
       const conversations: InstagramConversation[] = [];
       const bodyHtml = doc.body.innerHTML;
       
-      console.log('🔍 Procurando por threads no HTML...');
+      console.log('🔍 Procurando por threads no HTML real...');
       
-      // Buscar por padrão Thread<div class="m"><div> (ID)
-      const threadPattern = /Thread<div class="[^"]*"><div>\s*\(\s*(\d+)\s*\)/g;
-      const threadMatches = Array.from(bodyHtml.matchAll(threadPattern));
+      // Novo parser baseado na estrutura real do HTML
+      // Buscar por padrão específico: Thread<div class="m"><div> ( número )
+      const threadRegex = /Thread<div class="m"><div>\s*\(\s*(\d+)\s*\)(.*?)(?=Thread<div class="m"><div>\s*\(\s*\d+\s*\)|$)/gs;
+      const threadMatches = Array.from(bodyHtml.matchAll(threadRegex));
       
-      console.log(`📊 Encontrados ${threadMatches.length} threads`);
+      console.log(`📊 Encontrados ${threadMatches.length} threads reais`);
       
-      // Dividir HTML por markers de thread
-      const threadSections = bodyHtml.split(/Thread<div class="[^"]*"><div>\s*\(\s*\d+\s*\)/);
-      
-      // Processar cada seção de thread (pular primeira seção vazia)
-      for (let i = 1; i < threadSections.length && i <= threadMatches.length; i++) {
-        const sectionHtml = threadSections[i];
-        const threadMatch = threadMatches[i - 1];
-        const threadId = threadMatch[1];
+      // Processar cada thread encontrado
+      for (let i = 0; i < threadMatches.length; i++) {
+        const match = threadMatches[i];
+        const threadId = match[1];
+        const threadContent = match[2];
         
-        console.log(`🧵 Processando thread ${i}: ID ${threadId}`);
+        console.log(`🧵 Processando thread real ${i + 1}: ID ${threadId}`);
         
-        // Criar elemento temporário para parsing
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = sectionHtml;
+        // Extrair participantes da seção "Current Participants"
+        const participants = this.extractParticipantsFromThreadContent(threadContent);
+        console.log(`👥 Participantes encontrados: ${participants.map(p => this.getDisplayNameForUser(p)).join(', ')}`);
         
-        // Extrair participantes e mensagens
-        const participants = this.extractParticipantsFromThread(tempDiv);
-        const messages = this.extractMessagesFromThread(tempDiv, threadId);
+        // Extrair mensagens da seção de mensagens
+        const messages = this.extractMessagesFromThreadContent(threadContent, threadId);
+        console.log(`💬 Mensagens extraídas: ${messages.length}`);
         
         if (participants.length > 0 && messages.length > 0) {
-          // Obter nomes de participantes (excluindo usuário principal)
+          // Obter nomes reais dos participantes (excluindo usuário principal)
           const otherParticipants = participants.filter(p => p !== '73mb_');
           const participantNames = otherParticipants.map(p => this.getDisplayNameForUser(p));
           
           const conversation: InstagramConversation = {
             id: `thread_${threadId}`,
             title: participantNames.length > 0 ? 
-              `Conversa com ${participantNames.join(', ')}` :
+              participantNames.join(', ') :
               `Thread ${threadId}`,
             participants,
             messages,
@@ -220,7 +239,7 @@ export class InstagramParserEnhanced {
           });
           
           conversations.push(conversation);
-          console.log(`✅ Thread ${threadId}: ${participants.length} participantes, ${messages.length} mensagens`);
+          console.log(`✅ Thread ${threadId}: "${conversation.title}" - ${participants.length} participantes, ${messages.length} mensagens`);
         }
       }
 
@@ -234,82 +253,114 @@ export class InstagramParserEnhanced {
   }
 
   /**
-   * Extrai participantes de uma thread
+   * Extrai participantes do conteúdo da thread
    */
-  private static extractParticipantsFromThread(threadElement: Element): string[] {
+  private static extractParticipantsFromThreadContent(threadContent: string): string[] {
     const participants = new Set<string>();
-    const content = threadElement.textContent || '';
     
-    console.log('👥 Extraindo participantes...');
+    console.log('👥 Extraindo participantes do conteúdo real...');
     
-    // Buscar por padrão: username (Instagram: ID)
-    const usernamePattern = /(\w+(?:\.\w+)*)\s*\(Instagram:\s*(\d+)\)/g;
-    let match;
-    
-    while ((match = usernamePattern.exec(content)) !== null) {
-      const username = match[1];
-      const instagramId = match[2];
+    // Buscar por "Current Participants" e extrair usuários
+    const participantsMatch = threadContent.match(/Current Participants<div class="m"><div>(.*?)(?=<\/div>.*?Messages|Messages<div class="o"><div>)/s);
+    if (participantsMatch) {
+      const participantsSection = participantsMatch[1];
+      console.log('📍 Seção de participantes encontrada');
       
-      // Verificar se é um usuário conhecido
-      const knownUser = KNOWN_USERS.find(u => u.username === username || u.userId === instagramId);
-      if (knownUser) {
-        participants.add(knownUser.username);
-        console.log(`👤 Participante encontrado: ${knownUser.username} (${knownUser.displayName})`);
-      } else {
-        participants.add(username);
-        console.log(`👤 Novo participante: ${username} (ID: ${instagramId})`);
+      // Buscar por padrão: username (Instagram: ID)
+      const usernamePattern = /(\w+(?:\.\w+)*)\s*\(Instagram:\s*(\d+)\)/g;
+      let match;
+      
+      while ((match = usernamePattern.exec(participantsSection)) !== null) {
+        const username = match[1];
+        const instagramId = match[2];
+        
+        // Verificar se é um usuário conhecido e mapear corretamente
+        const knownUser = KNOWN_USERS.find(u => u.username === username || u.userId === instagramId);
+        if (knownUser) {
+          participants.add(knownUser.username);
+          console.log(`👤 Participante mapeado: ${knownUser.username} -> ${knownUser.displayName}`);
+        } else {
+          participants.add(username);
+          console.log(`👤 Novo participante: ${username} (ID: ${instagramId})`);
+        }
       }
     }
+    
+    // Adicionar usuário principal sempre
+    participants.add('73mb_');
     
     return Array.from(participants);
   }
 
   /**
-   * Extrai mensagens de uma thread
+   * Extrai mensagens do conteúdo da thread
    */
-  private static extractMessagesFromThread(threadElement: Element, threadId: string): InstagramMessage[] {
+  private static extractMessagesFromThreadContent(threadContent: string, threadId: string): InstagramMessage[] {
     const messages: InstagramMessage[] = [];
-    const content = threadElement.innerHTML;
     
-    console.log('💬 Extraindo mensagens da thread...');
+    console.log('💬 Extraindo mensagens do conteúdo real...');
     
-    // Buscar por sequências Author -> Sent -> Body
-    const authorPattern = /Author<div class="[^"]*"><div>([^<]+)</g;
-    const sentPattern = /Sent<div class="[^"]*"><div>([^<]+)</g;
-    const bodyPattern = /Body<div class="[^"]*"><div>([^<]+)</g;
-    const sharePattern = /Share<div class="[^"]*"><div>([^<]+)</g;
+    // Buscar pela seção de Messages
+    const messagesMatch = threadContent.match(/Messages<div class="o"><div>(.*?)$/s);
+    if (!messagesMatch) {
+      console.log('⚠️ Seção de mensagens não encontrada');
+      return messages;
+    }
     
-    const authorMatches = Array.from(content.matchAll(authorPattern));
-    const sentMatches = Array.from(content.matchAll(sentPattern));
-    const bodyMatches = Array.from(content.matchAll(bodyPattern));
-    const shareMatches = Array.from(content.matchAll(sharePattern));
+    const messagesSection = messagesMatch[1];
+    console.log('📍 Seção de mensagens encontrada');
     
-    console.log(`📊 Encontrados: ${authorMatches.length} autores, ${sentMatches.length} timestamps, ${bodyMatches.length} bodies, ${shareMatches.length} shares`);
+    // Buscar por sequências Author -> Sent -> Body usando regex mais robusta
+    const messageBlocks = messagesSection.split(/(?=Author<div class="m"><div>)/);
     
-    // Processar mensagens em sequência
-    const maxMessages = Math.min(authorMatches.length, sentMatches.length);
+    console.log(`📊 Blocos de mensagens encontrados: ${messageBlocks.length}`);
     
-    for (let i = 0; i < maxMessages; i++) {
+    for (let i = 0; i < messageBlocks.length; i++) {
+      const block = messageBlocks[i];
+      if (!block.includes('Author<div class="m"><div>')) continue;
+      
       try {
-        const authorText = authorMatches[i][1].trim();
-        const sentText = sentMatches[i][1].trim();
-        const bodyText = bodyMatches[i] ? bodyMatches[i][1].trim() : '';
-        const shareText = shareMatches[i] ? shareMatches[i][1].trim() : '';
+        // Extrair dados da mensagem
+        const authorMatch = block.match(/Author<div class="m"><div>([^<]+)/);
+        const sentMatch = block.match(/Sent<div class="m"><div>([^<]+)/);
+        const bodyMatch = block.match(/Body<div class="m"><div>([^<]+)/);
+        const shareMatch = block.match(/Share<div class="m"><div>([^<]+)/);
+        const attachmentMatch = block.match(/Linked Media File:\s*([^<\n]+)/);
         
-        // Extrair username do author
+        if (!authorMatch || !sentMatch) continue;
+        
+        const authorText = authorMatch[1].trim();
+        const sentText = sentMatch[1].trim();
+        const bodyText = bodyMatch ? bodyMatch[1].trim() : '';
+        const shareText = shareMatch ? shareMatch[1].trim() : '';
+        const attachmentText = attachmentMatch ? attachmentMatch[1].trim() : '';
+        
+        // Extrair username real do author
         const usernameMatch = authorText.match(/(\w+(?:\.\w+)*)\s*\(Instagram:\s*(\d+)\)/);
         if (!usernameMatch) continue;
         
-        const sender = usernameMatch[1];
+        const rawSender = usernameMatch[1];
+        const instagramId = usernameMatch[2];
+        
+        // Mapear para username conhecido
+        const knownUser = KNOWN_USERS.find(u => u.username === rawSender || u.userId === instagramId);
+        const sender = knownUser ? knownUser.username : rawSender;
+        
         const timestamp = this.parseTimestamp(sentText);
         
-        // Determinar conteúdo da mensagem
+        // Determinar conteúdo e tipo da mensagem
         let messageContent = bodyText;
         let messageType: 'text' | 'image' | 'video' | 'audio' | 'link' = 'text';
         let mediaPath: string | undefined;
         
-        // Verificar se há mídia compartilhada
-        if (shareText) {
+        // Verificar mídia vinculada
+        if (attachmentText) {
+          mediaPath = attachmentText;
+          messageType = this.determineMessageTypeFromShare(attachmentText);
+          if (!messageContent) {
+            messageContent = `[${messageType.toUpperCase()}] ${attachmentText}`;
+          }
+        } else if (shareText) {
           mediaPath = shareText;
           messageType = this.determineMessageTypeFromShare(shareText);
           if (!messageContent) {
@@ -317,14 +368,15 @@ export class InstagramParserEnhanced {
           }
         }
         
-        // Filtrar mensagens válidas
+        // Filtrar mensagens válidas e relevantes
         if (messageContent && 
             messageContent !== 'Liked a message' && 
             !messageContent.includes('sent an attachment') &&
-            messageContent.length > 0) {
+            messageContent.length > 0 &&
+            messageContent !== 'You are now connected on Messenger.') {
           
           const message: InstagramMessage = {
-            id: `msg_${threadId}_${i}`,
+            id: `msg_${threadId}_${messages.length}`,
             conversationId: '',
             content: messageContent,
             sender,
@@ -334,18 +386,20 @@ export class InstagramParserEnhanced {
           };
           
           messages.push(message);
-          console.log(`💬 Mensagem: ${sender} -> ${messageType} (${messageContent.substring(0, 50)}...)`);
+          
+          const senderName = this.getDisplayNameForUser(sender);
+          console.log(`💬 ${senderName}: ${messageType} - "${messageContent.substring(0, 50)}${messageContent.length > 50 ? '...' : ''}"`);
         }
         
       } catch (error) {
-        console.warn(`⚠️ Erro ao processar mensagem ${i}:`, error);
+        console.warn(`⚠️ Erro ao processar bloco de mensagem ${i}:`, error);
       }
     }
 
     // Ordenar mensagens por timestamp
     messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     
-    console.log(`✅ ${messages.length} mensagens extraídas da thread`);
+    console.log(`✅ ${messages.length} mensagens reais extraídas da thread`);
     return messages;
   }
 

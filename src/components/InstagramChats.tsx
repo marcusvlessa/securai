@@ -203,7 +203,7 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
       return userData.displayName;
     }
     
-    // Fallback para mapeamento manual
+    // Mapeamento expandido e atualizado
     const userMappings: Record<string, string> = {
       '73mb_': 'Marcelo Brandão',
       'meryfelix17': 'Mery Felix',
@@ -212,7 +212,9 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
       'carollebolsas': 'Carole Bolsas',
       'diegocruz2683': 'Diego Cruz',
       'rafa.ramosm': 'Rafael Ramos',
-      'aninhaavelino': 'Ana Avelino'
+      'aninhaavelino': 'Ana Avelino',
+      'user1': 'Usuário 1',
+      'user2': 'Usuário 2'
     };
     
     return userMappings[username] || username.charAt(0).toUpperCase() + username.slice(1).replace(/[._]/g, ' ');

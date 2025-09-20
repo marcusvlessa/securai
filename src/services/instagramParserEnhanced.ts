@@ -116,9 +116,20 @@ export class InstagramParserEnhanced {
       const bodyHtml = doc.body.innerHTML;
       const bodyText = doc.body.textContent || '';
       
-      // Buscar nome real em mensagens de parabéns
-      const nameMatch = bodyHtml.match(/Parabéns\s+([A-Za-z\s]+)/i);
-      const realName = nameMatch ? nameMatch[1].trim() : 'Marcelo Brandão';
+      // Buscar nome real em mensagens de parabéns - melhorar regex
+      const nameMatches = [
+        bodyHtml.match(/Parabéns\s+([A-Za-zÀ-ÿ\s]+?)(?:\s|<|!)/i),
+        bodyHtml.match(/feliz\s+aniversário\s+([A-Za-zÀ-ÿ\s]+?)(?:\s|<|!)/i),
+        bodyHtml.match(/happy\s+birthday\s+([A-Za-zÀ-ÿ\s]+?)(?:\s|<|!)/i)
+      ];
+      
+      let realName = 'Marcelo Brandão';
+      for (const match of nameMatches) {
+        if (match && match[1].trim().length > 2) {
+          realName = match[1].trim();
+          break;
+        }
+      }
       
       const profile: InstagramProfile = {
         username: '73mb_',
@@ -198,6 +209,7 @@ export class InstagramParserEnhanced {
       const threadMatches = Array.from(bodyHtml.matchAll(threadRegex));
       
       console.log(`📊 Encontrados ${threadMatches.length} threads reais`);
+      console.log('🔧 Debug: Primeiros 500 caracteres do HTML:', bodyHtml.substring(0, 500));
       
       // Processar cada thread encontrado
       for (let i = 0; i < threadMatches.length; i++) {
@@ -206,6 +218,8 @@ export class InstagramParserEnhanced {
         const threadContent = match[2];
         
         console.log(`🧵 Processando thread real ${i + 1}: ID ${threadId}`);
+        console.log(`🔧 Debug: Thread content length: ${threadContent.length}`);
+        console.log(`🔧 Debug: Primeiros 200 chars do thread content:`, threadContent.substring(0, 200));
         
         // Extrair participantes da seção "Current Participants"
         const participants = this.extractParticipantsFromThreadContent(threadContent);
@@ -260,8 +274,8 @@ export class InstagramParserEnhanced {
     
     console.log('👥 Extraindo participantes do conteúdo real...');
     
-    // Buscar por "Current Participants" e extrair usuários
-    const participantsMatch = threadContent.match(/Current Participants<div class="m"><div>(.*?)(?=<\/div>.*?Messages|Messages<div class="o"><div>)/s);
+    // Estratégia 1: Buscar por "Current Participants"
+    const participantsMatch = threadContent.match(/Current Participants<div class="m"><div>(.*?)(?=<\/div>.*?Messages|Messages<div class="o"><div>|$)/s);
     if (participantsMatch) {
       const participantsSection = participantsMatch[1];
       console.log('📍 Seção de participantes encontrada');
@@ -284,11 +298,37 @@ export class InstagramParserEnhanced {
           console.log(`👤 Novo participante: ${username} (ID: ${instagramId})`);
         }
       }
+    } else {
+      console.log('⚠️ Seção Current Participants não encontrada, tentando extrair dos Authors');
+      
+      // Estratégia 2: Extrair participantes dos Authors das mensagens
+      const authorPattern = /Author<div class="m"><div>([^<]+)/g;
+      let match;
+      
+      while ((match = authorPattern.exec(threadContent)) !== null) {
+        const authorText = match[1].trim();
+        const usernameMatch = authorText.match(/(\w+(?:\.\w+)*)\s*\(Instagram:\s*(\d+)\)/);
+        
+        if (usernameMatch) {
+          const username = usernameMatch[1];
+          const instagramId = usernameMatch[2];
+          
+          const knownUser = KNOWN_USERS.find(u => u.username === username || u.userId === instagramId);
+          if (knownUser) {
+            participants.add(knownUser.username);
+            console.log(`👤 Participante extraído de Author: ${knownUser.username} -> ${knownUser.displayName}`);
+          } else {
+            participants.add(username);
+            console.log(`👤 Novo participante extraído de Author: ${username} (ID: ${instagramId})`);
+          }
+        }
+      }
     }
     
     // Adicionar usuário principal sempre
     participants.add('73mb_');
     
+    console.log(`👥 Total de participantes encontrados: ${Array.from(participants).length}`);
     return Array.from(participants);
   }
 
@@ -300,15 +340,40 @@ export class InstagramParserEnhanced {
     
     console.log('💬 Extraindo mensagens do conteúdo real...');
     
-    // Buscar pela seção de Messages
-    const messagesMatch = threadContent.match(/Messages<div class="o"><div>(.*?)$/s);
-    if (!messagesMatch) {
-      console.log('⚠️ Seção de mensagens não encontrada');
-      return messages;
+    // Buscar pela seção de Messages - testar múltiplos padrões
+    const messagePatternsToTry = [
+      /Messages<div class="o"><div>(.*?)$/s,
+      /Messages<div[^>]*><div[^>]*>(.*?)$/s,
+      /Messages.*?<div.*?>(.*?)$/s,
+      /<div[^>]*>Messages<\/div>(.*?)$/s
+    ];
+    
+    let messagesSection = '';
+    let patternFound = false;
+    
+    for (const pattern of messagePatternsToTry) {
+      const match = threadContent.match(pattern);
+      if (match) {
+        messagesSection = match[1];
+        patternFound = true;
+        console.log('📍 Seção de mensagens encontrada com padrão alternativo');
+        break;
+      }
     }
     
-    const messagesSection = messagesMatch[1];
-    console.log('📍 Seção de mensagens encontrada');
+    if (!patternFound) {
+      // Fallback: procurar por Author diretamente no conteúdo
+      if (threadContent.includes('Author<div class="m"><div>')) {
+        messagesSection = threadContent;
+        patternFound = true;
+        console.log('📍 Usando conteúdo completo da thread como fallback');
+      }
+    }
+    
+    if (!patternFound) {
+      console.log('⚠️ Seção de mensagens não encontrada com nenhum padrão');
+      return messages;
+    }
     
     // Buscar por sequências Author -> Sent -> Body usando regex mais robusta
     const messageBlocks = messagesSection.split(/(?=Author<div class="m"><div>)/);

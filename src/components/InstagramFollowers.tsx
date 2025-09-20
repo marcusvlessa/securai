@@ -353,8 +353,9 @@ export const InstagramFollowers: React.FC<InstagramFollowersProps> = ({ data }) 
               >
                 <div className="flex items-center gap-4">
                   <Avatar className="h-10 w-10">
+                    <AvatarImage src={data.users.find(u => u.username === rel.username)?.profilePicture} />
                     <AvatarFallback className="bg-primary/10">
-                      {rel.username.substring(0, 2).toUpperCase()}
+                      {(rel.displayName || rel.username).substring(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   

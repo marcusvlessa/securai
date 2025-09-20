@@ -19,7 +19,15 @@ interface InstagramDevicesProps {
   data: ProcessedInstagramData;
 }
 
-export const InstagramDevices: React.FC<InstagramDevicesProps> = ({ data }) => {
+  const toggleIPExpansion = (ip: string) => {
+    const newExpanded = new Set(expandedIPs);
+    if (newExpanded.has(ip)) {
+      newExpanded.delete(ip);
+    } else {
+      newExpanded.add(ip);
+    }
+    setExpandedIPs(newExpanded);
+  };
   const { devices, logins } = data;
 
   const formatDate = (date: Date) => {

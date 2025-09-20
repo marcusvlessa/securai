@@ -79,13 +79,10 @@ export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
         <CardHeader>
           <div className="flex items-start gap-4">
             <Avatar className="h-16 w-16">
-              {profile.profilePicture ? (
-                <AvatarImage src={profile.profilePicture} alt={profile.displayName || profile.username} />
-              ) : (
-                <AvatarFallback className="text-lg bg-primary text-primary-foreground">
-                  {getUserInitials(profile.displayName || profile.username)}
-                </AvatarFallback>
-              )}
+              <AvatarImage src={profile.profilePicture} alt={profile.displayName || profile.username} />
+              <AvatarFallback className="text-lg bg-primary/10 text-primary">
+                {getUserInitials(profile.displayName || profile.username)}
+              </AvatarFallback>
             </Avatar>
             
             <div className="flex-1">

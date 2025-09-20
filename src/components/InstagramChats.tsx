@@ -197,6 +197,13 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
   };
 
   const getDisplayNameForUser = (username: string): string => {
+    // Primeiro buscar nos dados processados do usuário
+    const userData = data.users.find(u => u.username === username);
+    if (userData?.displayName) {
+      return userData.displayName;
+    }
+    
+    // Fallback para mapeamento manual
     const userMappings: Record<string, string> = {
       '73mb_': 'Marcelo Brandão',
       'meryfelix17': 'Mery Felix',
@@ -204,9 +211,16 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
       'jgmeira0': 'João Meira (Jão)',
       'carollebolsas': 'Carole Bolsas',
       'diegocruz2683': 'Diego Cruz',
+      'rafa.ramosm': 'Rafael Ramos',
+      'aninhaavelino': 'Ana Avelino'
     };
     
     return userMappings[username] || username.charAt(0).toUpperCase() + username.slice(1).replace(/[._]/g, ' ');
+  };
+
+  const getUserAvatar = (username: string): string | undefined => {
+    const userData = data.users.find(u => u.username === username);
+    return userData?.profilePicture;
   };
 
   const getUserInitials = (username: string) => {
@@ -456,6 +470,7 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
                       {/* Avatar */}
                       <div className={`${showAvatar ? 'opacity-100' : 'opacity-0'} flex-shrink-0`}>
                         <Avatar className="h-8 w-8">
+                          <AvatarImage src={getUserAvatar(message.sender)} />
                           <AvatarFallback className={getUserColor(message.sender)}>
                             {getUserInitials(message.sender)}
                           </AvatarFallback>

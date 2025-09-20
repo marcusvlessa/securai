@@ -39,8 +39,8 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'media'>('all');
 
-  // Get main user from profile data
-  const mainUser = data.profile?.username || 'main_user';
+  // Identificar usuário principal para destacar suas mensagens
+  const mainUser = data.profile?.username || data.users.find(u => u.isMainUser)?.username || data.users[0]?.username || 'main_user';
   const mainUserDisplay = data.profile?.displayName || data.profile?.username || 'Usuário Principal';
 
   const filteredConversations = useMemo(() => {

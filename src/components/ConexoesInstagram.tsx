@@ -216,7 +216,7 @@ export const ConexoesInstagram: React.FC<ConexoesInstagramProps> = ({ data }) =>
     });
 
     // Incluir conexões de seguidores/seguindo
-    const mainUser = data.profile.username;
+    const mainUser = data.profile?.username || data.users.find(u => u.isMainUser)?.username || 'main_user';
     data.following.forEach(follow => {
       if (!userConnections.has(mainUser)) {
         userConnections.set(mainUser, new Set());

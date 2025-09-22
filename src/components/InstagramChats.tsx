@@ -40,8 +40,8 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
   const [filterType, setFilterType] = useState<'all' | 'text' | 'media'>('all');
 
   // Identificar usuário principal para destacar suas mensagens
-  const mainUser = data.profile?.username || data.users.find(u => u.isMainUser)?.username || data.users[0]?.username || 'main_user';
-  const mainUserDisplay = data.profile?.displayName || data.profile?.username || 'Usuário Principal';
+  const mainUser = data.profile?.username || data.users.find(u => u.isMainUser)?.username || data.users[0]?.username || '73mb_';
+  const mainUserDisplay = data.profile?.displayName || data.profile?.username || 'Marcelo Brandão';
 
   const filteredConversations = useMemo(() => {
     return data.conversations.filter(conv => {

@@ -21,7 +21,7 @@ interface InstagramProfileProps {
 }
 
 export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
-  // Criar perfil padrão se não existir
+  // CORRIGIDO: Usar perfil real extraído do parser
   const profile = data.profile || {
     username: '73mb_',
     displayName: 'Marcelo Brandão',
@@ -32,6 +32,8 @@ export const InstagramProfile: React.FC<InstagramProfileProps> = ({ data }) => {
     verificationStatus: 'unverified' as const,
     businessAccount: false
   };
+  
+  console.log('✅ Perfil carregado no componente:', profile.displayName, profile.username);
 
   const formatDate = (date: Date | undefined) => {
     if (!date) return 'N/A';

@@ -58,6 +58,11 @@ export const ConexoesInstagram: React.FC<ConexoesInstagramProps> = ({ data }) =>
     const userMessageCounts = new Map<string, number>();
     const userInteractions = new Map<string, Map<string, number>>();
 
+    // CORRIGIDO: Verificar se data.users existe
+    if (!data || !data.users || !data.conversations) {
+      return { nodes: [], edges: [] };
+    }
+
     // Processar usuários e contar mensagens
     data.users.forEach(user => {
       const messageCount = data.conversations.reduce((count, conv) => {

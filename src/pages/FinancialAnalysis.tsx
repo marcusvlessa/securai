@@ -34,16 +34,18 @@ const RIFUpload: React.FC<RIFUploadProps> = ({ onDataUploaded }) => {
     if (!files || files.length === 0) return;
     
     if (!currentCase) {
-      toast.error('Por favor, selecione um caso primeiro');
+      toast.error('⚠️ Selecione um caso na barra lateral antes de fazer upload de arquivos RIF');
       return;
     }
 
+    console.log('📤 Iniciando upload RIF para caso:', currentCase.id, currentCase.title);
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        console.log(`📄 Processando arquivo ${i + 1}/${files.length}:`, file.name);
         setUploadProgress(((i + 1) / files.length) * 100);
         
         await uploadRIFData({
@@ -53,11 +55,19 @@ const RIFUpload: React.FC<RIFUploadProps> = ({ onDataUploaded }) => {
         });
       }
       
-      toast.success(`${files.length} arquivo(s) RIF processado(s) com sucesso`);
-      onDataUploaded();
-    } catch (error) {
-      console.error('Erro no upload RIF:', error);
-      toast.error('Erro ao processar arquivos RIF');
+      toast.success(`✅ ${files.length} arquivo(s) RIF processado(s) com sucesso`);
+      await onDataUploaded();
+    } catch (error: any) {
+      console.error('❌ Erro no upload RIF:', error);
+      const errorMessage = error?.message || 'Erro desconhecido';
+      
+      if (errorMessage.includes('row-level security')) {
+        toast.error('🔒 Erro de permissão: Você não tem autorização para adicionar transações a este caso');
+      } else if (errorMessage.includes('invalid input syntax for type uuid')) {
+        toast.error('⚠️ Erro: ID do caso inválido. Selecione um caso válido');
+      } else {
+        toast.error(`❌ Erro ao processar: ${errorMessage}`);
+      }
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -165,8 +175,12 @@ const FinancialAnalysis: React.FC = () => {
   });
 
   const loadMetrics = async () => {
-    if (!currentCase) return;
+    if (!currentCase) {
+      console.log('⚠️ loadMetrics: Nenhum caso selecionado');
+      return;
+    }
     
+    console.log('📊 loadMetrics: Carregando para caso:', currentCase.id);
     setIsLoadingMetrics(true);
     try {
       const metricsData = await getFinancialMetrics(currentCase.id, {
@@ -174,27 +188,44 @@ const FinancialAnalysis: React.FC = () => {
         ...filters
       });
       setMetrics(metricsData);
-    } catch (error) {
-      toast.error('Erro ao carregar métricas financeiras');
+      console.log('✅ Métricas carregadas:', metricsData);
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar métricas:', error);
+      // Não mostrar toast se for erro de dados não encontrados
+      if (!error?.message?.includes('syntax')) {
+        toast.error('Erro ao carregar métricas financeiras');
+      }
     } finally {
       setIsLoadingMetrics(false);
     }
   };
 
   const loadAlerts = async () => {
-    if (!currentCase) return;
+    if (!currentCase) {
+      console.log('⚠️ loadAlerts: Nenhum caso selecionado');
+      return;
+    }
     
+    console.log('🚨 loadAlerts: Carregando para caso:', currentCase.id);
     try {
       const alertsData = await getRedFlagAlerts(currentCase.id);
       setAlerts(alertsData);
-    } catch (error) {
-      toast.error('Erro ao carregar alertas COAF');
+      console.log('✅ Alertas carregados:', alertsData.length);
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar alertas:', error);
+      if (!error?.message?.includes('syntax')) {
+        toast.error('Erro ao carregar alertas COAF');
+      }
     }
   };
 
   const loadTransactions = async () => {
-    if (!currentCase) return;
+    if (!currentCase) {
+      console.log('⚠️ loadTransactions: Nenhum caso selecionado');
+      return;
+    }
     
+    console.log('📋 loadTransactions: Carregando para caso:', currentCase.id);
     try {
       const transactionsData = await getFinancialTransactions(currentCase.id, {
         page: 1,
@@ -202,8 +233,12 @@ const FinancialAnalysis: React.FC = () => {
         ...filters
       });
       setTransactions(transactionsData.transactions || []);
-    } catch (error) {
-      toast.error('Erro ao carregar transações');
+      console.log('✅ Transações carregadas:', transactionsData.transactions?.length || 0);
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar transações:', error);
+      if (!error?.message?.includes('syntax')) {
+        toast.error('Erro ao carregar transações');
+      }
     }
   };
 
@@ -315,10 +350,21 @@ const FinancialAnalysis: React.FC = () => {
   if (!currentCase) {
     return (
       <div className="page-container py-8">
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            Selecione um caso para acessar a Análise Financeira (RIF/COAF).
+        <div className="page-header mb-6">
+          <h1 className="page-title">Análise Financeira (RIF/COAF)</h1>
+          <p className="page-description">
+            Análise de registros financeiros com detecção de red flags conforme COAF
+          </p>
+        </div>
+        
+        <Alert className="bg-warning/10 border-warning">
+          <AlertTriangle className="h-5 w-5 text-warning" />
+          <AlertDescription className="text-base">
+            <strong>Selecione um caso</strong> na barra lateral esquerda para acessar a Análise Financeira (RIF/COAF).
+            <br />
+            <span className="text-sm text-muted-foreground mt-2 block">
+              Você pode criar um novo caso ou selecionar um caso existente no menu "Casos".
+            </span>
           </AlertDescription>
         </Alert>
       </div>
@@ -354,8 +400,28 @@ const FinancialAnalysis: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="dashboard" className="space-y-6">
+          {/* Empty State */}
+          {!currentCase && (
+            <Alert className="bg-warning/10 border-warning">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <AlertDescription>
+                Selecione um caso na barra lateral para visualizar o dashboard financeiro.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {currentCase && !metrics && (
+            <Alert>
+              <FileText className="h-4 w-4" />
+              <AlertDescription>
+                Nenhum dado financeiro encontrado. Faça upload de um arquivo RIF na aba "Upload RIF".
+              </AlertDescription>
+            </Alert>
+          )}
+          
           {/* Controls */}
-          <Card>
+          {currentCase && (
+            <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Filter className="h-5 w-5" />
@@ -418,9 +484,10 @@ const FinancialAnalysis: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* KPI Cards */}
-          {metrics && (
+          {currentCase && metrics && (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

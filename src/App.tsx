@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
+import { Skeleton } from './components/ui/skeleton';
 import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar';
 import { AppSidebar } from './components/AppSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
@@ -78,6 +79,15 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <CaseProvider>
+            <Suspense fallback={
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="space-y-4 w-full max-w-md p-6">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-64 w-full" />
+                  <Skeleton className="h-32 w-full" />
+                </div>
+              </div>
+            }>
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<Index />} />
@@ -193,6 +203,7 @@ function App() {
               <Route path="/unauthorized" element={<Unauthorized />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
             <Toaster />
           </CaseProvider>
         </AuthProvider>

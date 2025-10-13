@@ -382,11 +382,40 @@ export const ConexoesInstagram: React.FC<ConexoesInstagramProps> = ({ data }) =>
             </div>
           </div>
 
-          {/* Grafo */}
-          <div className="border rounded-lg h-96">
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <p>Grafo de conexões será exibido aqui</p>
-            </div>
+          {/* Grafo - Agora com visualização real */}
+          <div className="border rounded-lg h-96 bg-muted/10">
+            {graphData.nodes.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <p>Nenhuma conexão encontrada nos dados</p>
+              </div>
+            ) : (
+              <div className="p-4 h-full overflow-auto">
+                <div className="grid gap-2 max-h-full">
+                  {graphData.nodes.slice(0, 10).map((node) => (
+                    <div 
+                      key={node.id} 
+                      className="flex items-center justify-between p-3 bg-background rounded-lg border hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${node.type === 'user' ? 'bg-primary' : 'bg-secondary'}`} />
+                        <div>
+                          <p className="font-medium text-sm">{node.label}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {node.properties?.conversations || 0} conversas · {node.properties?.messageCount || 0} mensagens
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant="outline">{graphData.edges.filter(e => e.source === node.id || e.target === node.id).length} conexões</Badge>
+                    </div>
+                  ))}
+                  {graphData.nodes.length > 10 && (
+                    <p className="text-center text-sm text-muted-foreground">
+                      +{graphData.nodes.length - 10} usuários...
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

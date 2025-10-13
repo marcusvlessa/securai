@@ -114,7 +114,7 @@ export const InstagramReport: React.FC<InstagramReportProps> = ({ data }) => {
         // Simular geração de relatório baseado nos dados
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        switch (sections[i].id) {
+      switch (sections[i].id) {
           case 'summary':
             sections[i] = generateSummarySection(data);
             break;

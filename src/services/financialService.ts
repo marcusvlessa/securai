@@ -264,37 +264,67 @@ const parseCSVFile = async (file: File): Promise<Partial<RIFTransaction>[]> => {
 };
 
 const parseExcelFile = async (file: File): Promise<Partial<RIFTransaction>[]> => {
-  // For now, return mock data since XLSX parsing requires additional library
-  console.log('Parsing Excel file:', file.name);
+  console.log('🔍 Parsing Excel RIF file:', file.name);
   
-  return [
-    {
-      date: '2024-01-15T10:00:00Z',
-      description: 'TED Recebida - João Silva',
-      counterparty: 'João Silva',
-      agency: '1234',
-      account: '567890-1',
-      bank: '001',
-      amount: '15000.00',
-      type: 'credit' as const,
-      method: 'TED' as const,
-      holderDocument: '123.456.789-01',
-      counterpartyDocument: '987.654.321-00'
-    },
-    {
-      date: '2024-01-15T14:30:00Z',
-      description: 'PIX Enviado - Maria Santos',
-      counterparty: 'Maria Santos',
-      agency: '1234',
-      account: '567890-1',
-      bank: '001',
-      amount: '8500.00',
-      type: 'debit' as const,
-      method: 'PIX' as const,
-      holderDocument: '123.456.789-01',
-      counterpartyDocument: '111.222.333-44'
-    }
-  ];
+  try {
+    const { RIFExcelParser } = await import('./rifExcelParser');
+    const rifData = await RIFExcelParser.parseExcelRIF(file);
+    
+    console.log('✅ RIF Excel parseado:', rifData.stats);
+    
+    // Converter entidades para transações
+    const transactions: Partial<RIFTransaction>[] = [];
+    
+    rifData.entidades.forEach((entity, index) => {
+      // Parse período para data
+      let transactionDate = new Date().toISOString();
+      if (entity.periodo) {
+        const match = entity.periodo.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (match) {
+          const [, day, month, year] = match;
+          transactionDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day)).toISOString();
+        }
+      }
+      
+      // Determinar tipo de transação
+      let type: 'credit' | 'debit' = 'credit';
+      if (entity.tipoRelacao.toUpperCase().includes('BENEFICIARIO')) {
+        type = 'debit'; // Se o titular é beneficiário, é uma saída (débito)
+      } else if (entity.tipoRelacao.toUpperCase().includes('REMETENTE')) {
+        type = 'credit'; // Se o titular recebe, é uma entrada (crédito)
+      }
+      
+      transactions.push({
+        date: transactionDate,
+        description: `${entity.tipoRelacao} - ${entity.remetenteNome} (Indexador ${entity.indexador})`,
+        counterparty: entity.remetenteNome,
+        agency: '',
+        account: '',
+        bank: '',
+        amount: entity.valor.toString(),
+        type: type,
+        method: 'TED' as const, // Assumir TED como padrão
+        holderDocument: entity.titularDocumento,
+        counterpartyDocument: entity.remetenteDocumento
+      });
+    });
+    
+    console.log(`✅ Convertidas ${transactions.length} entidades em transações`);
+    
+    // Salvar relatório detalhado
+    const detailedReport = RIFExcelParser.generateDetailedReport(rifData);
+    console.log('📊 Relatório detalhado:', detailedReport);
+    
+    // Armazenar relatório no localStorage para posterior consulta
+    const reportKey = `securai-rif-report-${rifData.rif}`;
+    localStorage.setItem(reportKey, detailedReport);
+    
+    return transactions;
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar Excel RIF:', error);
+    throw new Error('Falha ao processar arquivo Excel RIF: ' + (error as Error).message);
+  }
 };
 
 const parseJSONFile = async (file: File): Promise<Partial<RIFTransaction>[]> => {
@@ -321,27 +351,115 @@ const parseJSONFile = async (file: File): Promise<Partial<RIFTransaction>[]> => 
 };
 
 const parsePDFFile = async (file: File): Promise<Partial<RIFTransaction>[]> => {
-  // Mock OCR extraction for PDF files
-  console.log('Parsing PDF file with OCR:', file.name);
+  console.log('🔍 Parsing PDF RIF file com OCR:', file.name);
   
-  // Simulate OCR processing time
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  return [
-    {
-      date: '2024-01-10T09:15:00Z',
-      description: 'Extrato Bancário - Depósito Espécie',
-      counterparty: 'Depósito Balcão',
-      agency: '5678',
-      account: '123456-7',
-      bank: '237',
-      amount: '25000.00',
-      type: 'credit' as const,
-      method: 'Espécie' as const,
-      holderDocument: '123.456.789-01',
-      counterpartyDocument: ''
+  try {
+    // Usar biblioteca pdf-parse existente
+    const pdfjsLib = await import('pdfjs-dist');
+    
+    // Configurar worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    
+    const arrayBuffer = await file.arrayBuffer();
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    
+    let fullText = '';
+    
+    // Extrair texto de todas as páginas
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n';
     }
-  ];
+    
+    console.log('📄 Texto extraído do PDF:', fullText.substring(0, 500));
+    
+    // Tentar parsear como RIF de texto
+    try {
+      const { RIFParser } = await import('./rifParser');
+      const rifData = RIFParser.parseRIFText(fullText);
+      
+      const transactions: Partial<RIFTransaction>[] = [];
+      
+      // Converter créditos
+      rifData.creditos.forEach(credito => {
+        transactions.push({
+          date: new Date().toISOString(),
+          description: `Crédito de ${credito.contraparte}`,
+          counterparty: credito.contraparte,
+          agency: credito.agencia,
+          account: credito.conta,
+          bank: credito.banco,
+          amount: credito.valor.toString(),
+          type: 'credit' as const,
+          method: 'TED' as const,
+          holderDocument: rifData.informacoesBasicas.cpf,
+          counterpartyDocument: credito.documento
+        });
+      });
+      
+      // Converter débitos
+      rifData.debitos.forEach(debito => {
+        transactions.push({
+          date: new Date().toISOString(),
+          description: `Débito para ${debito.contraparte}`,
+          counterparty: debito.contraparte,
+          agency: debito.agencia,
+          account: debito.conta,
+          bank: debito.banco,
+          amount: debito.valor.toString(),
+          type: 'debit' as const,
+          method: 'TED' as const,
+          holderDocument: rifData.informacoesBasicas.cpf,
+          counterpartyDocument: debito.documento
+        });
+      });
+      
+      console.log(`✅ PDF RIF parseado com sucesso: ${transactions.length} transações`);
+      return transactions;
+      
+    } catch (parseError) {
+      console.warn('⚠️ Não foi possível parsear como RIF estruturado, usando extração básica');
+      
+      // Fallback: extração básica de valores e documentos
+      const transactions: Partial<RIFTransaction>[] = [];
+      
+      // Regex para encontrar valores monetários
+      const valorRegex = /R\$\s*([\d.,]+)/g;
+      const valores = [...fullText.matchAll(valorRegex)].map(m => m[1]);
+      
+      // Regex para encontrar CPF/CNPJ
+      const docRegex = /(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/g;
+      const documentos = [...fullText.matchAll(docRegex)].map(m => m[1]);
+      
+      console.log(`📊 Extração básica: ${valores.length} valores, ${documentos.length} documentos`);
+      
+      // Criar transação genérica
+      if (valores.length > 0) {
+        transactions.push({
+          date: new Date().toISOString(),
+          description: 'Transação extraída de PDF',
+          counterparty: 'A definir',
+          agency: '',
+          account: '',
+          bank: '',
+          amount: normalizeAmount(valores[0]),
+          type: 'credit' as const,
+          method: 'Outros' as const,
+          holderDocument: documentos[0] ? normalizeDocument(documentos[0]) : '',
+          counterpartyDocument: documentos[1] ? normalizeDocument(documentos[1]) : ''
+        });
+      }
+      
+      return transactions;
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar PDF:', error);
+    throw new Error('Falha ao processar arquivo PDF: ' + (error as Error).message);
+  }
 };
 
 // Normalization functions

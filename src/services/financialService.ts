@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { toast } from 'sonner';
 import { makeGroqAIRequest } from './groqService';
+import { supabase } from '@/integrations/supabase/client';
 
 // Configure Decimal.js for precise financial calculations
 Decimal.config({ precision: 28, rounding: Decimal.ROUND_HALF_EVEN });
@@ -546,56 +547,68 @@ export const uploadRIFData = async (params: {
   const { caseId, file, mappingPreset = 'RIF-COAF' } = params;
   
   try {
-    console.log(`Processing RIF file: ${file.name} for case: ${caseId}`);
+    console.log(`📤 Processando arquivo RIF: ${file.name} para caso: ${caseId}`);
     
     // Parse file
     const parsedTransactions = await parseRIFFile(file);
+    console.log(`📊 ${parsedTransactions.length} transações parseadas do arquivo`);
+    
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
     
     // Validate and enrich transactions
-    const enrichedTransactions: RIFTransaction[] = parsedTransactions
+    const enrichedTransactions = parsedTransactions
       .filter(t => t.date && t.amount)
       .map((t, index) => ({
-        id: `${caseId}-${file.name}-${index}`,
-        caseId,
+        case_id: caseId,
+        user_id: user.id,
         date: t.date || new Date().toISOString(),
         description: t.description || 'Transação sem descrição',
         counterparty: t.counterparty || 'Não informado',
         agency: t.agency || '',
         account: t.account || '',
         bank: t.bank || '',
-        amount: t.amount || '0.00',
+        amount: parseFloat(t.amount || '0'),
         currency: 'BRL',
         type: t.type || 'debit',
         method: t.method || 'Outros',
         channel: 'Internet Banking',
         country: 'BR',
-        holderDocument: t.holderDocument || '',
-        counterpartyDocument: t.counterpartyDocument || '',
-        evidenceId: file.name,
-        createdAt: new Date().toISOString()
+        holder_document: t.holderDocument || '',
+        counterparty_document: t.counterpartyDocument || '',
+        evidence_id: file.name
       }));
     
-    // Save to localStorage
-    const storageKey = `securai-rif-transactions-${caseId}`;
-    const existingData = localStorage.getItem(storageKey);
-    const existingTransactions = existingData ? JSON.parse(existingData) : [];
+    console.log(`✅ ${enrichedTransactions.length} transações válidas preparadas para salvar`);
     
-    // Merge with existing data (avoid duplicates by ID)
-    const allTransactions = [...existingTransactions];
-    enrichedTransactions.forEach(newTx => {
-      const existingIndex = allTransactions.findIndex(tx => tx.id === newTx.id);
-      if (existingIndex >= 0) {
-        allTransactions[existingIndex] = newTx;
-      } else {
-        allTransactions.push(newTx);
+    // Save to Supabase in batches of 100
+    const BATCH_SIZE = 100;
+    let savedCount = 0;
+    
+    for (let i = 0; i < enrichedTransactions.length; i += BATCH_SIZE) {
+      const batch = enrichedTransactions.slice(i, i + BATCH_SIZE);
+      
+      const { error } = await supabase
+        .from('financial_transactions')
+        .insert(batch);
+      
+      if (error) {
+        console.error('❌ Erro ao salvar lote de transações:', error);
+        throw error;
       }
-    });
+      
+      savedCount += batch.length;
+      console.log(`💾 Salvos ${savedCount}/${enrichedTransactions.length} registros...`);
+    }
     
-    localStorage.setItem(storageKey, JSON.stringify(allTransactions));
+    // Calculate totals
+    const totalValue = enrichedTransactions.reduce((sum, t) => sum + t.amount, 0);
     
-    console.log(`Saved ${enrichedTransactions.length} transactions for case ${caseId}`);
+    console.log(`✅ ${savedCount} transações salvas com sucesso no Supabase`);
+    toast.success(`✅ ${savedCount} transações processadas. Total: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
     
-    // Initialize red flag rules if not exists
+    // Initialize red flag rules in localStorage for reference
     const rulesKey = `securai-redflag-rules-${caseId}`;
     if (!localStorage.getItem(rulesKey)) {
       localStorage.setItem(rulesKey, JSON.stringify(DEFAULT_RED_FLAG_RULES));
@@ -616,16 +629,49 @@ export const runRedFlagAnalysis = async (params: {
   const { caseId, thresholds, window } = params;
   
   try {
-    console.log(`Running red flag analysis for case: ${caseId}`);
+    console.log(`🔍 Iniciando análise de red flags para caso: ${caseId}`);
     
-    // Get transactions
-    const storageKey = `securai-rif-transactions-${caseId}`;
-    const transactionsData = localStorage.getItem(storageKey);
-    if (!transactionsData) {
-      throw new Error('Nenhuma transação encontrada para análise');
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuário não autenticado');
+    
+    // Get transactions from Supabase
+    const { data: transactionsData, error } = await supabase
+      .from('financial_transactions')
+      .select('*')
+      .eq('case_id', caseId)
+      .order('date', { ascending: true });
+    
+    if (error) throw error;
+    
+    if (!transactionsData || transactionsData.length === 0) {
+      throw new Error('Nenhuma transação encontrada. Faça upload de dados RIF primeiro.');
     }
     
-    const transactions: RIFTransaction[] = JSON.parse(transactionsData);
+    console.log(`📊 ${transactionsData.length} transações carregadas para análise`);
+    
+    // Convert to RIFTransaction format
+    const transactions: RIFTransaction[] = transactionsData.map(t => ({
+      id: t.id,
+      caseId: t.case_id,
+      date: t.date,
+      description: t.description || '',
+      counterparty: t.counterparty || '',
+      agency: t.agency || '',
+      account: t.account || '',
+      bank: t.bank || '',
+      amount: t.amount.toString(),
+      currency: t.currency || 'BRL',
+      type: t.type as 'credit' | 'debit',
+      method: t.method as RIFTransaction['method'],
+      channel: t.channel || '',
+      country: t.country || 'BR',
+      holderDocument: t.holder_document || '',
+      counterpartyDocument: t.counterparty_document || '',
+      evidenceId: t.evidence_id || '',
+      createdAt: t.created_at
+    }));
+    
     const alerts: RedFlagAlert[] = [];
     
     // Get rules
@@ -668,14 +714,43 @@ export const runRedFlagAnalysis = async (params: {
       alerts.push(...cashAlerts);
     }
     
-    // Save alerts
-    const alertsKey = `securai-redflag-alerts-${caseId}`;
-    localStorage.setItem(alertsKey, JSON.stringify(alerts));
+    console.log(`✅ Gerados ${alerts.length} alertas de red flags`);
     
-    console.log(`Generated ${alerts.length} red flag alerts for case ${caseId}`);
+    // Delete existing alerts for this case
+    await supabase
+      .from('financial_red_flags')
+      .delete()
+      .eq('case_id', caseId);
+    
+    // Save new alerts to Supabase
+    if (alerts.length > 0) {
+      const alertsToInsert = alerts.map(alert => ({
+        case_id: caseId,
+        user_id: user.id,
+        rule_id: alert.ruleId,
+        type: alert.type,
+        description: alert.description,
+        severity: alert.severity,
+        evidence_count: alert.evidenceCount,
+        transaction_ids: alert.transactionIds,
+        parameters: alert.parameters,
+        score: parseFloat(alert.score.toFixed(2)),
+        explanation: alert.explanation
+      }));
+      
+      const { error: insertError } = await supabase
+        .from('financial_red_flags')
+        .insert(alertsToInsert);
+      
+      if (insertError) throw insertError;
+      
+      console.log(`💾 ${alerts.length} alertas salvos no Supabase`);
+    }
+    
+    toast.success(`Análise concluída: ${alerts.length} red flags detectados`);
     
   } catch (error) {
-    console.error('Error running red flag analysis:', error);
+    console.error('❌ Erro na análise de red flags:', error);
     throw error;
   }
 };
@@ -972,10 +1047,42 @@ const detectIntensiveCash = (transactions: RIFTransaction[], params: any, caseId
 // Get financial metrics
 export const getFinancialMetrics = async (caseId: string, filters: any = {}) => {
   try {
-    const storageKey = `securai-rif-transactions-${caseId}`;
-    const transactionsData = localStorage.getItem(storageKey);
+    console.log(`📊 Buscando métricas financeiras para caso: ${caseId}`);
     
-    if (!transactionsData) {
+    // Build query
+    let query = supabase
+      .from('financial_transactions')
+      .select('*')
+      .eq('case_id', caseId);
+    
+    // Apply filters
+    if (filters.timeRange && filters.timeRange !== 'all') {
+      const now = new Date();
+      let days = 30;
+      
+      if (filters.timeRange === '7d') days = 7;
+      else if (filters.timeRange === '30d') days = 30;
+      else if (filters.timeRange === '90d') days = 90;
+      else if (filters.timeRange === '1y') days = 365;
+      
+      const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte('date', cutoffDate);
+    }
+    
+    if (filters.minValue) {
+      query = query.gte('amount', parseFloat(filters.minValue));
+    }
+    
+    if (filters.method) {
+      query = query.eq('method', filters.method);
+    }
+    
+    const { data: transactionsData, error } = await query;
+    
+    if (error) throw error;
+    
+    if (!transactionsData || transactionsData.length === 0) {
+      console.log('⚠️ Nenhuma transação encontrada');
       return {
         totalCredits: '0.00',
         totalDebits: '0.00',
@@ -989,41 +1096,45 @@ export const getFinancialMetrics = async (caseId: string, filters: any = {}) => 
       };
     }
     
-    const transactions: RIFTransaction[] = JSON.parse(transactionsData);
+    console.log(`✅ ${transactionsData.length} transações carregadas`);
     
-    // Apply filters
-    let filteredTxs = transactions;
+    // Convert to RIFTransaction format for calculations
+    const transactions: RIFTransaction[] = transactionsData.map(t => ({
+      id: t.id,
+      caseId: t.case_id,
+      date: t.date,
+      description: t.description || '',
+      counterparty: t.counterparty || '',
+      agency: t.agency || '',
+      account: t.account || '',
+      bank: t.bank || '',
+      amount: t.amount.toString(),
+      currency: t.currency || 'BRL',
+      type: t.type as 'credit' | 'debit',
+      method: t.method as RIFTransaction['method'],
+      channel: t.channel || '',
+      country: t.country || 'BR',
+      holderDocument: t.holder_document || '',
+      counterpartyDocument: t.counterparty_document || '',
+      evidenceId: t.evidence_id || '',
+      createdAt: t.created_at
+    }));
     
-    if (filters.timeRange) {
-      const now = new Date();
-      const days = parseInt(filters.timeRange.replace('d', '')) || 30;
-      const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-      filteredTxs = filteredTxs.filter(tx => new Date(tx.date) >= cutoffDate);
-    }
-    
-    if (filters.minValue) {
-      const minValue = new Decimal(filters.minValue);
-      filteredTxs = filteredTxs.filter(tx => new Decimal(tx.amount).greaterThanOrEqualTo(minValue));
-    }
-    
-    if (filters.method) {
-      filteredTxs = filteredTxs.filter(tx => tx.method === filters.method);
-    }
     
     // Calculate metrics
-    const credits = filteredTxs.filter(tx => tx.type === 'credit');
-    const debits = filteredTxs.filter(tx => tx.type === 'debit');
+    const credits = transactions.filter(tx => tx.type === 'credit');
+    const debits = transactions.filter(tx => tx.type === 'debit');
     
     const totalCredits = credits.reduce((sum, tx) => sum.plus(tx.amount), new Decimal(0));
     const totalDebits = debits.reduce((sum, tx) => sum.plus(tx.amount), new Decimal(0));
     const balance = totalCredits.minus(totalDebits);
-    const avgTicket = filteredTxs.length > 0 ? 
-      totalCredits.plus(totalDebits).dividedBy(filteredTxs.length) : 
+    const avgTicket = transactions.length > 0 ? 
+      totalCredits.plus(totalDebits).dividedBy(transactions.length) : 
       new Decimal(0);
     
     // Top counterparties
     const counterpartyMap = new Map<string, { amount: Decimal; count: number }>();
-    filteredTxs.forEach(tx => {
+    transactions.forEach(tx => {
       const key = tx.counterparty || 'Não informado';
       if (!counterpartyMap.has(key)) {
         counterpartyMap.set(key, { amount: new Decimal(0), count: 0 });
@@ -1043,7 +1154,7 @@ export const getFinancialMetrics = async (caseId: string, filters: any = {}) => 
     
     // Period data for chart
     const periodMap = new Map<string, { credits: Decimal; debits: Decimal }>();
-    filteredTxs.forEach(tx => {
+    transactions.forEach(tx => {
       const date = new Date(tx.date).toISOString().split('T')[0];
       if (!periodMap.has(date)) {
         periodMap.set(date, { credits: new Decimal(0), debits: new Decimal(0) });
@@ -1065,7 +1176,7 @@ export const getFinancialMetrics = async (caseId: string, filters: any = {}) => 
     
     // Method distribution
     const methodMap = new Map<string, { amount: Decimal; count: number }>();
-    filteredTxs.forEach(tx => {
+    transactions.forEach(tx => {
       if (!methodMap.has(tx.method)) {
         methodMap.set(tx.method, { amount: new Decimal(0), count: 0 });
       }
@@ -1085,7 +1196,7 @@ export const getFinancialMetrics = async (caseId: string, filters: any = {}) => 
       totalDebits: totalDebits.toFixed(2),
       balance: balance.toFixed(2),
       avgTicket: avgTicket.toFixed(2),
-      transactionCount: filteredTxs.length,
+      transactionCount: transactions.length,
       topCounterparties,
       periodData,
       methodDistribution,
@@ -1101,90 +1212,96 @@ export const getFinancialMetrics = async (caseId: string, filters: any = {}) => 
 // Get financial transactions
 export const getFinancialTransactions = async (caseId: string, params: any = {}) => {
   try {
-    const storageKey = `securai-rif-transactions-${caseId}`;
-    const transactionsData = localStorage.getItem(storageKey);
+    console.log(`📋 Buscando transações financeiras para caso: ${caseId}`);
     
-    if (!transactionsData) {
-      return { transactions: [], total: 0 };
-    }
-    
-    let transactions: RIFTransaction[] = JSON.parse(transactionsData);
+    // Build query
+    let query = supabase
+      .from('financial_transactions')
+      .select('*', { count: 'exact' })
+      .eq('case_id', caseId);
     
     // Apply filters
     if (params.minValue) {
-      const minValue = new Decimal(params.minValue);
-      transactions = transactions.filter(tx => new Decimal(tx.amount).greaterThanOrEqualTo(minValue));
+      query = query.gte('amount', parseFloat(params.minValue));
     }
     
     if (params.method) {
-      transactions = transactions.filter(tx => tx.method === params.method);
+      query = query.eq('method', params.method);
     }
     
     if (params.counterparty) {
-      transactions = transactions.filter(tx => 
-        tx.counterparty.toLowerCase().includes(params.counterparty.toLowerCase())
-      );
+      query = query.ilike('counterparty', `%${params.counterparty}%`);
     }
     
-    // Sort
-    if (params.sort) {
-      const [field, direction] = params.sort.split(':');
-      transactions.sort((a, b) => {
-        let aVal, bVal;
-        
-        switch (field) {
-          case 'date':
-            aVal = new Date(a.date).getTime();
-            bVal = new Date(b.date).getTime();
-            break;
-          case 'amount':
-            aVal = new Decimal(a.amount).toNumber();
-            bVal = new Decimal(b.amount).toNumber();
-            break;
-          default:
-            aVal = (a as any)[field];
-            bVal = (b as any)[field];
-        }
-        
-        if (direction === 'desc') {
-          return bVal > aVal ? 1 : -1;
-        }
-        return aVal > bVal ? 1 : -1;
-      });
-    }
+    // Sorting
+    const sortField = params.sortField || 'date';
+    const sortOrder = params.sortOrder === 'asc' ? true : false;
+    query = query.order(sortField, { ascending: sortOrder });
     
     // Pagination
     const page = params.page || 1;
-    const pageSize = params.pageSize || 50;
-    const start = (page - 1) * pageSize;
-    const paginatedTransactions = transactions.slice(start, start + pageSize);
+    const pageSize = params.pageSize || 100;
+    const offset = (page - 1) * pageSize;
+    query = query.range(offset, offset + pageSize - 1);
+    
+    const { data, count, error } = await query;
+    
+    if (error) throw error;
+    
+    console.log(`✅ ${data?.length || 0} transações retornadas (total: ${count})`);
     
     return {
-      transactions: paginatedTransactions,
-      total: transactions.length
+      transactions: data || [],
+      total: count || 0
     };
     
   } catch (error) {
-    console.error('Error getting financial transactions:', error);
+    console.error('❌ Erro ao buscar transações:', error);
     throw error;
   }
 };
+    
 
 // Get red flag alerts
 export const getRedFlagAlerts = async (caseId: string): Promise<RedFlagAlert[]> => {
   try {
-    const alertsKey = `securai-redflag-alerts-${caseId}`;
-    const alertsData = localStorage.getItem(alertsKey);
+    console.log(`🚨 Buscando alertas de red flags para caso: ${caseId}`);
     
-    if (!alertsData) {
+    const { data, error } = await supabase
+      .from('financial_red_flags')
+      .select('*')
+      .eq('case_id', caseId)
+      .order('severity', { ascending: false })
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      console.log('⚠️ Nenhum alerta encontrado');
       return [];
     }
     
-    return JSON.parse(alertsData);
+    console.log(`✅ ${data.length} alertas carregados`);
+    
+    // Convert to RedFlagAlert format
+    return data.map(alert => ({
+      id: alert.id,
+      caseId: alert.case_id,
+      ruleId: alert.rule_id,
+      type: alert.type,
+      description: alert.description,
+      severity: alert.severity as 'low' | 'medium' | 'high',
+      evidenceCount: alert.evidence_count,
+      transactionIds: alert.transaction_ids || [],
+      parameters: alert.parameters as Record<string, any>,
+      score: parseFloat(alert.score.toString()),
+      explanation: alert.explanation || '',
+      createdAt: alert.created_at
+    }));
     
   } catch (error) {
-    console.error('Error getting red flag alerts:', error);
-    return [];
+    console.error('❌ Erro ao buscar alertas:', error);
+    throw error;
   }
 };
 
@@ -1297,8 +1414,8 @@ export const exportFinancialData = async (params: {
           tx.amount,
           tx.type === 'credit' ? 'Crédito' : 'Débito',
           tx.method,
-          tx.holderDocument,
-          tx.counterpartyDocument
+          tx.holder_document,
+          tx.counterparty_document
         ].join(','))
       ].join('\n');
       

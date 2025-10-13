@@ -344,7 +344,13 @@ const FinancialAnalysis: React.FC = () => {
         </TabsList>
 
         <TabsContent value="upload">
-          <RIFUpload onDataUploaded={loadMetrics} />
+          <RIFUpload onDataUploaded={async () => {
+            await Promise.all([
+              loadMetrics(),
+              loadAlerts(),
+              loadTransactions()
+            ]);
+          }} />
         </TabsContent>
 
         <TabsContent value="dashboard" className="space-y-6">

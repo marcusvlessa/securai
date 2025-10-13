@@ -149,6 +149,139 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_red_flags: {
+        Row: {
+          case_id: string
+          created_at: string | null
+          description: string
+          evidence_count: number | null
+          explanation: string | null
+          id: string
+          parameters: Json | null
+          rule_id: string
+          score: number | null
+          severity: string
+          transaction_ids: string[] | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          case_id: string
+          created_at?: string | null
+          description: string
+          evidence_count?: number | null
+          explanation?: string | null
+          id?: string
+          parameters?: Json | null
+          rule_id: string
+          score?: number | null
+          severity: string
+          transaction_ids?: string[] | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          case_id?: string
+          created_at?: string | null
+          description?: string
+          evidence_count?: number | null
+          explanation?: string | null
+          id?: string
+          parameters?: Json | null
+          rule_id?: string
+          score?: number | null
+          severity?: string
+          transaction_ids?: string[] | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_red_flags_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_transactions: {
+        Row: {
+          account: string | null
+          agency: string | null
+          amount: number
+          bank: string | null
+          case_id: string
+          channel: string | null
+          counterparty: string | null
+          counterparty_document: string | null
+          country: string | null
+          created_at: string | null
+          currency: string | null
+          date: string
+          description: string | null
+          evidence_id: string | null
+          holder_document: string | null
+          id: string
+          method: string | null
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account?: string | null
+          agency?: string | null
+          amount: number
+          bank?: string | null
+          case_id: string
+          channel?: string | null
+          counterparty?: string | null
+          counterparty_document?: string | null
+          country?: string | null
+          created_at?: string | null
+          currency?: string | null
+          date: string
+          description?: string | null
+          evidence_id?: string | null
+          holder_document?: string | null
+          id?: string
+          method?: string | null
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account?: string | null
+          agency?: string | null
+          amount?: number
+          bank?: string | null
+          case_id?: string
+          channel?: string | null
+          counterparty?: string | null
+          counterparty_document?: string | null
+          country?: string | null
+          created_at?: string | null
+          currency?: string | null
+          date?: string
+          description?: string | null
+          evidence_id?: string | null
+          holder_document?: string | null
+          id?: string
+          method?: string | null
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_transactions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       link_analysis_sessions: {
         Row: {
           analysis_summary: string | null

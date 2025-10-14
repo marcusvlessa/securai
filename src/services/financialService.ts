@@ -1336,17 +1336,20 @@ export const generateCOAFReport = async (params: {
     const alerts = await getRedFlagAlerts(caseId);
     const { transactions } = await getFinancialTransactions(caseId, { ...filters, pageSize: 1000 });
     
-    // Generate insights using Groq
-    const insights = await makeGroqAIRequest([
-      {
-        role: "system",
-        content: "Você é um especialista em análise financeira e compliance COAF. Analise os dados fornecidos e gere um resumo executivo e recomendações."
-      },
-      {
-        role: "user", 
-        content: `Análise financeira RIF/COAF - Créditos: R$ ${metrics.totalCredits}, Débitos: R$ ${metrics.totalDebits}, Saldo: R$ ${metrics.balance}, Transações: ${metrics.transactionCount}, Alertas: ${alerts.length} (${alerts.filter(a => a.severity === 'high').length} críticos). Gere um resumo executivo e recomendações para esta análise financeira COAF.`
-      }
-    ], 2048);
+    // Generate insights - sem usar GROQ para evitar erro de CORS
+    let insights = `RESUMO EXECUTIVO:
+    
+Com base nos dados analisados, foram identificados ${alerts.length} alertas COAF, sendo ${alerts.filter(a => a.severity === 'high').length} de severidade alta.
+
+O volume total de créditos foi de R$ ${metrics.totalCredits}, enquanto os débitos totalizaram R$ ${metrics.totalDebits}, resultando em um saldo líquido de R$ ${metrics.balance}.
+
+RECOMENDAÇÕES:
+${alerts.filter(a => a.severity === 'high').length > 0 ? '- Priorizar investigação dos alertas de alta severidade' : ''}
+${parseFloat(metrics.balance) < 0 ? '- Verificar motivo do saldo negativo' : ''}
+- Revisar manualmente as transações sinalizadas
+- Documentar evidências para eventual comunicação ao COAF
+- Manter registros atualizados conforme Lei 9.613/1998
+`;
     
     // Create report content (simplified - in real app, use PDF library)
     const reportContent = `
@@ -1413,34 +1416,75 @@ export const exportFinancialData = async (params: {
   try {
     const { transactions } = await getFinancialTransactions(caseId, { ...filters, pageSize: 10000 });
     
+    if (!transactions || transactions.length === 0) {
+      throw new Error('Nenhuma transação encontrada para exportar');
+    }
+    
     if (format === 'csv') {
       const headers = [
         'Data', 'Descrição', 'Contraparte', 'Agência', 'Conta', 'Banco',
         'Valor', 'Tipo', 'Método', 'Documento Titular', 'Documento Contraparte'
       ];
       
+      // Escape CSV values properly
+      const escapeCSV = (value: any): string => {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        // If contains comma, quote, or newline, wrap in quotes and escape quotes
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+      
       const csvContent = [
         headers.join(','),
         ...transactions.map(tx => [
-          new Date(tx.date).toLocaleDateString('pt-BR'),
-          `"${tx.description}"`,
-          `"${tx.counterparty}"`,
-          tx.agency,
-          tx.account,
-          tx.bank,
-          tx.amount,
-          tx.type === 'credit' ? 'Crédito' : 'Débito',
-          tx.method,
-          tx.holder_document,
-          tx.counterparty_document
+          escapeCSV(new Date(tx.date).toLocaleDateString('pt-BR')),
+          escapeCSV(tx.description || ''),
+          escapeCSV(tx.counterparty || ''),
+          escapeCSV(tx.agency || ''),
+          escapeCSV(tx.account || ''),
+          escapeCSV(tx.bank || ''),
+          escapeCSV(tx.amount || 0),
+          escapeCSV(tx.type === 'credit' ? 'Crédito' : 'Débito'),
+          escapeCSV(tx.method || ''),
+          escapeCSV(tx.holder_document || ''),
+          escapeCSV(tx.counterparty_document || '')
         ].join(','))
       ].join('\n');
       
       return csvContent;
     }
     
-    // For XLSX, return CSV for now (would need proper XLSX library)
-    return 'XLSX export not implemented - use CSV format';
+    // For XLSX format, generate simple tab-separated format
+    if (format === 'xlsx') {
+      const headers = [
+        'Data', 'Descrição', 'Contraparte', 'Agência', 'Conta', 'Banco',
+        'Valor', 'Tipo', 'Método', 'Documento Titular', 'Documento Contraparte'
+      ];
+      
+      const tsvContent = [
+        headers.join('\t'),
+        ...transactions.map(tx => [
+          new Date(tx.date).toLocaleDateString('pt-BR'),
+          (tx.description || '').replace(/\t/g, ' '),
+          (tx.counterparty || '').replace(/\t/g, ' '),
+          tx.agency || '',
+          tx.account || '',
+          tx.bank || '',
+          tx.amount || 0,
+          tx.type === 'credit' ? 'Crédito' : 'Débito',
+          tx.method || '',
+          tx.holder_document || '',
+          tx.counterparty_document || ''
+        ].join('\t'))
+      ].join('\n');
+      
+      return tsvContent;
+    }
+    
+    throw new Error('Formato de exportação inválido');
     
   } catch (error) {
     console.error('Error exporting financial data:', error);

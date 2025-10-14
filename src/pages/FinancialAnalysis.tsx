@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { Upload, FileText, AlertTriangle, Download, Zap, TrendingUp, DollarSign, Users, Filter, Eye, FileBarChart } from 'lucide-react';
@@ -18,7 +19,8 @@ import {
   getFinancialTransactions, 
   generateCOAFReport,
   getRedFlagAlerts,
-  exportFinancialData
+  exportFinancialData,
+  type RedFlagAlert
 } from '@/services/financialService';
 
 interface RIFUploadProps {
@@ -148,16 +150,7 @@ interface FinancialMetrics {
   timeHeatmap: Array<{ hour: number; day: string; count: number }>;
 }
 
-interface RedFlagAlert {
-  id: string;
-  type: string;
-  description: string;
-  severity: 'low' | 'medium' | 'high';
-  evidenceCount: number;
-  transactionIds: string[];
-  createdAt: string;
-  parameters: Record<string, any>;
-}
+// RedFlagAlert importado de financialService
 
 const FinancialAnalysis: React.FC = () => {
   const { currentCase } = useCase();
@@ -600,19 +593,81 @@ const FinancialAnalysis: React.FC = () => {
               ) : (
                 <div className="space-y-4">
                   {alerts.map((alert) => (
-                    <div key={alert.id} className="border rounded-lg p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium">{alert.type}</h4>
-                        <Badge className={getSeverityColor(alert.severity)}>
-                          {alert.severity}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{alert.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>{alert.evidenceCount} evidências</span>
-                        <span>{new Date(alert.createdAt).toLocaleDateString('pt-BR')}</span>
-                      </div>
-                    </div>
+                    <Dialog key={alert.id}>
+                      <DialogTrigger asChild>
+                        <div className="border rounded-lg p-4 space-y-2 cursor-pointer hover:bg-accent transition-colors">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">{alert.type}</h4>
+                            <Badge className={getSeverityColor(alert.severity)}>
+                              {alert.severity}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{alert.description}</p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span>{alert.evidenceCount} evidências</span>
+                            <span>{new Date(alert.createdAt).toLocaleDateString('pt-BR')}</span>
+                          </div>
+                        </div>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            {alert.type}
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="font-medium mb-2">Descrição</h4>
+                            <p className="text-sm text-muted-foreground">{alert.description}</p>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-medium mb-2">Explicação Técnica</h4>
+                            <p className="text-sm text-muted-foreground">{alert.explanation}</p>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium mb-2">Severidade</h4>
+                              <Badge className={getSeverityColor(alert.severity)}>
+                                {alert.severity === 'high' ? 'Alta' : alert.severity === 'medium' ? 'Média' : 'Baixa'}
+                              </Badge>
+                            </div>
+                            
+                            <div>
+                              <h4 className="font-medium mb-2">Score de Risco</h4>
+                              <p className="text-sm">{alert.score.toFixed(0)}/100</p>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-medium mb-2">Evidências</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {alert.evidenceCount} transação(ões) identificada(s)
+                            </p>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-medium mb-2">Parâmetros de Detecção</h4>
+                            <div className="text-sm text-muted-foreground space-y-1">
+                              {Object.entries(alert.parameters).map(([key, value]) => (
+                                <div key={key}>
+                                  <strong>{key}:</strong> {String(value)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-medium mb-2">Data de Detecção</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(alert.createdAt).toLocaleString('pt-BR')}
+                            </p>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   ))}
                 </div>
               )}

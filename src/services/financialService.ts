@@ -714,6 +714,23 @@ export const runRedFlagAnalysis = async (params: {
       createdAt: t.created_at
     }));
     
+    // Detectar tamanho do dataset e ajustar limiares
+    const datasetSize = transactionsData.length;
+    const isDynamicThreshold = datasetSize < 50;
+    
+    console.log(`🔍 Iniciando análise de red flags:`);
+    console.log(`  📊 Transações: ${transactions.length}`);
+    console.log(`  ⚙️ Limiares dinâmicos: ${isDynamicThreshold ? 'ATIVADOS' : 'PADRÃO'}`);
+    
+    // Ajustar limiares para datasets pequenos
+    const adjustedThresholds = {
+      fracionamento: isDynamicThreshold ? 5000 : 10000,
+      especie: isDynamicThreshold ? 25000 : 50000,
+      minTransactions: isDynamicThreshold ? 2 : 3
+    };
+    
+    console.log(`  🎯 Limiares: fracionamento=R$ ${adjustedThresholds.fracionamento.toLocaleString('pt-BR')}, espécie=R$ ${adjustedThresholds.especie.toLocaleString('pt-BR')}`);
+    
     const alerts: RedFlagAlert[] = [];
     
     // Get rules
@@ -724,7 +741,13 @@ export const runRedFlagAnalysis = async (params: {
     // Run fractionamento analysis
     const fractioningRule = rules.find(r => r.id === 'fracionamento' && r.enabled);
     if (fractioningRule) {
-      const fractioningAlerts = detectFractionamento(transactions, fractioningRule.parameters, caseId);
+      const adjustedParams = { 
+        ...fractioningRule.parameters, 
+        threshold: adjustedThresholds.fracionamento,
+        minTransactions: adjustedThresholds.minTransactions
+      };
+      const fractioningAlerts = detectFractionamento(transactions, adjustedParams, caseId);
+      console.log(`  ✅ Fracionamento: ${fractioningAlerts.length} alertas`);
       alerts.push(...fractioningAlerts);
     }
     
@@ -752,9 +775,27 @@ export const runRedFlagAnalysis = async (params: {
     // Run intensive cash usage analysis
     const cashRule = rules.find(r => r.id === 'especie-intensa' && r.enabled);
     if (cashRule) {
-      const cashAlerts = detectIntensiveCash(transactions, cashRule.parameters, caseId);
+      const adjustedCashParams = { 
+        ...cashRule.parameters, 
+        threshold: adjustedThresholds.especie 
+      };
+      const cashAlerts = detectIntensiveCash(transactions, adjustedCashParams, caseId);
+      console.log(`  ✅ Espécie Intensa: ${cashAlerts.length} alertas`);
       alerts.push(...cashAlerts);
     }
+    
+    // Run atypical values analysis (valores muito altos)
+    const atypicalRule: RedFlagRule = {
+      id: 'valor-atipico',
+      name: 'Valor Atípico',
+      description: 'Transações com valores excepcionalmente altos',
+      enabled: true,
+      severity: 'high',
+      parameters: { threshold: 1000000 }
+    };
+    const atypicalAlerts = detectAtypicalValues(transactions, atypicalRule.parameters, caseId);
+    console.log(`  ✅ Valores Atípicos: ${atypicalAlerts.length} alertas`);
+    alerts.push(...atypicalAlerts);
     
     console.log(`✅ Gerados ${alerts.length} alertas de red flags`);
     
@@ -1081,6 +1122,38 @@ const detectIntensiveCash = (transactions: RIFTransaction[], params: any, caseId
         createdAt: new Date().toISOString()
       });
     }
+  });
+  
+  return alerts;
+};
+
+// Detect atypical values (valores muito altos)
+const detectAtypicalValues = (transactions: RIFTransaction[], params: any, caseId: string): RedFlagAlert[] => {
+  const alerts: RedFlagAlert[] = [];
+  const threshold = params.threshold || 1000000;
+  
+  console.log(`🔍 Detectando valores atípicos (> R$ ${threshold.toLocaleString('pt-BR')})`);
+  
+  const highValueTxs = transactions.filter(tx => 
+    new Decimal(tx.amount).greaterThan(threshold)
+  );
+  
+  highValueTxs.forEach(tx => {
+    const txAmount = new Decimal(tx.amount);
+    alerts.push({
+      id: `atipico-${tx.id}`,
+      caseId,
+      ruleId: 'valor-atipico',
+      type: 'Valor Atípico',
+      description: `Transação de valor excepcionalmente alto: R$ ${txAmount.toFixed(2)}`,
+      severity: 'high',
+      evidenceCount: 1,
+      transactionIds: [tx.id],
+      parameters: { amount: tx.amount, threshold },
+      score: Math.min(100, txAmount.dividedBy(threshold).times(50).toNumber()),
+      explanation: 'Valores muito acima da média podem indicar operações estruturadas ou lavagem de dinheiro',
+      createdAt: new Date().toISOString()
+    });
   });
   
   return alerts;

@@ -72,7 +72,7 @@ ${metrics.topCounterparties.slice(0, 10).map((c, i) => `${i + 1}. ${c.name}: R$ 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-exp',
+        model: 'google/gemini-2.5-flash',
         messages: [
           {
             role: 'system',
@@ -140,7 +140,12 @@ IMPORTANTE:
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Erro da API Lovable AI:', errorText);
+      console.error('❌ Erro da API Lovable AI:', errorText);
+      console.error('Request details:', {
+        model: 'google/gemini-2.5-flash',
+        status: response.status,
+        statusText: response.statusText
+      });
       throw new Error(`Erro ao chamar Lovable AI: ${response.status} - ${errorText}`);
     }
 
@@ -155,7 +160,7 @@ IMPORTANTE:
         metadata: {
           caseId,
           generatedAt: new Date().toISOString(),
-          model: 'google/gemini-2.0-flash-exp',
+          model: 'google/gemini-2.5-flash',
           alertsAnalyzed: alerts.length,
           transactionsCount: metrics.transactionCount,
         }

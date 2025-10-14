@@ -403,6 +403,30 @@ const FinancialAnalysis: React.FC = () => {
             </Alert>
           )}
           
+          {/* Debug Panel */}
+          {currentCase && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  🔍 Status da Análise
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <strong>Transações no banco:</strong> {metrics?.transactionCount || 0}
+                  </div>
+                  <div>
+                    <strong>Alertas detectados:</strong> {alerts.length}
+                  </div>
+                  <div>
+                    <strong>Última atualização:</strong> {new Date().toLocaleTimeString('pt-BR')}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
           {currentCase && !metrics && (
             <Alert>
               <FileText className="h-4 w-4" />

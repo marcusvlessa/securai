@@ -1481,34 +1481,8 @@ export const exportFinancialData = async (params: {
         ].join(','))
       ].join('\n');
       
-      return csvContent;
-    }
-    
-    // For XLSX format, generate simple tab-separated format
-    if (format === 'xlsx') {
-      const headers = [
-        'Data', 'Descrição', 'Contraparte', 'Agência', 'Conta', 'Banco',
-        'Valor', 'Tipo', 'Método', 'Documento Titular', 'Documento Contraparte'
-      ];
-      
-      const tsvContent = [
-        headers.join('\t'),
-        ...transactions.map(tx => [
-          new Date(tx.date).toLocaleDateString('pt-BR'),
-          (tx.description || '').replace(/\t/g, ' '),
-          (tx.counterparty || '').replace(/\t/g, ' '),
-          tx.agency || '',
-          tx.account || '',
-          tx.bank || '',
-          tx.amount || 0,
-          tx.type === 'credit' ? 'Crédito' : 'Débito',
-          tx.method || '',
-          tx.holder_document || '',
-          tx.counterparty_document || ''
-        ].join('\t'))
-      ].join('\n');
-      
-      return tsvContent;
+      // ✅ Converter string para Blob
+      return new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     }
     
     throw new Error('Formato de exportação inválido');

@@ -582,6 +582,21 @@ export const uploadRIFData = async (params: {
     
     console.log(`✅ ${enrichedTransactions.length} transações válidas preparadas para salvar`);
     
+    // ✅ SOLUÇÃO: Limpar transações anteriores deste caso antes de inserir novas
+    // Isso garante que cada upload crie uma nova análise ao invés de acumular
+    console.log(`🗑️ Removendo transações anteriores do caso ${caseId}...`);
+    const { error: deleteError } = await supabase
+      .from('financial_transactions')
+      .delete()
+      .eq('case_id', caseId);
+    
+    if (deleteError) {
+      console.error('❌ Erro ao limpar transações antigas:', deleteError);
+      throw deleteError;
+    }
+    
+    console.log('✅ Transações antigas removidas. Inserindo novas transações...');
+    
     // Save to Supabase in batches of 100
     const BATCH_SIZE = 100;
     let savedCount = 0;
@@ -606,7 +621,20 @@ export const uploadRIFData = async (params: {
     const totalValue = enrichedTransactions.reduce((sum, t) => sum + t.amount, 0);
     
     console.log(`✅ ${savedCount} transações salvas com sucesso no Supabase`);
-    toast.success(`✅ ${savedCount} transações processadas. Total: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+    
+    // ✅ Limpar red flags anteriores deste caso antes de executar nova análise
+    console.log(`🗑️ Removendo red flags anteriores do caso ${caseId}...`);
+    const { error: deleteRedFlagsError } = await supabase
+      .from('financial_red_flags')
+      .delete()
+      .eq('case_id', caseId);
+    
+    if (deleteRedFlagsError) {
+      console.warn('⚠️ Aviso ao limpar red flags antigas:', deleteRedFlagsError);
+      // Não bloqueia o fluxo se houver erro ao limpar red flags
+    }
+    
+    toast.success(`✅ Nova análise criada: ${savedCount} transações. Total: R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
     
     // Initialize red flag rules in localStorage for reference
     const rulesKey = `securai-redflag-rules-${caseId}`;

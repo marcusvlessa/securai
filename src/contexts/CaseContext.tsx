@@ -165,52 +165,59 @@ export const CaseProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const createCase = async (caseData: Partial<Case>): Promise<Case> => {
     try {
-      const newCase: Partial<Case> = {
-        ...caseData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      // ✅ Obter o user_id do usuário autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // ✅ Apenas campos que existem na tabela cases do Supabase
+      const dbCase = {
+        title: caseData.title || '',
+        description: caseData.description || '',
         status: caseData.status || 'open',
         priority: caseData.priority || 'medium',
         case_type: caseData.case_type || 'investigação',
-        organization_id: caseData.organization_id || 'default-org',
-        evidence_count: caseData.evidence_count || 0,
-        witness_count: caseData.witness_count || 0,
-        suspect_count: caseData.suspect_count || 0,
-        tags: caseData.tags || [],
-        metadata: caseData.metadata || {}
+        user_id: user.id
       };
 
       console.log('CaseContext: Tentando criar caso no Supabase...');
 
       const { data, error: insertError } = await supabase
         .from('cases')
-        .insert([newCase as any])
+        .insert([dbCase])
         .select()
         .single();
 
       if (insertError) {
         console.error('CaseContext: Erro ao criar caso:', insertError);
-        
-        // Se a tabela não existe, criar caso mockado
-        if (insertError.code === '42P01') { // Table doesn't exist
-          console.log('CaseContext: Tabela cases não existe, criando caso mockado');
-          const mockCase: Case = {
-            id: `mock-case-${Date.now()}`,
-            ...newCase
-          } as Case;
-          
-          setCases(prev => [mockCase, ...prev]);
-          toast.info('Caso criado localmente (tabela cases não configurada)');
-          return mockCase;
-        }
-        
         throw insertError;
       }
 
       console.log('CaseContext: Caso criado com sucesso:', data);
-      setCases(prev => [data as unknown as Case, ...prev]);
+      
+      // ✅ Converter dados do DB para o tipo Case completo
+      const fullCase: Case = {
+        id: data.id,
+        title: data.title,
+        description: data.description || '',
+        status: (data.status as Case['status']) || 'open',
+        priority: (data.priority as Case['priority']) || 'medium',
+        case_type: data.case_type || 'investigação',
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+        organization_id: 'default-org',
+        evidence_count: 0,
+        witness_count: 0,
+        suspect_count: 0,
+        tags: [],
+        metadata: {}
+      };
+      
+      setCases(prev => [fullCase, ...prev]);
       toast.success('Caso criado com sucesso!');
-      return data as unknown as Case;
+      return fullCase;
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao criar caso';

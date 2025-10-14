@@ -33,8 +33,8 @@ const RIFUpload: React.FC<RIFUploadProps> = ({ onDataUploaded }) => {
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
-    if (!currentCase) {
-      toast.error('⚠️ Selecione um caso na barra lateral antes de fazer upload de arquivos RIF');
+    if (!currentCase?.id) {
+      toast.error('⚠️ Selecione um caso válido na barra lateral antes de fazer upload de arquivos RIF');
       return;
     }
 
@@ -175,8 +175,8 @@ const FinancialAnalysis: React.FC = () => {
   });
 
   const loadMetrics = async () => {
-    if (!currentCase) {
-      console.log('⚠️ loadMetrics: Nenhum caso selecionado');
+    if (!currentCase?.id) {
+      console.log('⚠️ loadMetrics: Nenhum caso válido selecionado');
       return;
     }
     
@@ -201,8 +201,8 @@ const FinancialAnalysis: React.FC = () => {
   };
 
   const loadAlerts = async () => {
-    if (!currentCase) {
-      console.log('⚠️ loadAlerts: Nenhum caso selecionado');
+    if (!currentCase?.id) {
+      console.log('⚠️ loadAlerts: Nenhum caso válido selecionado');
       return;
     }
     
@@ -220,8 +220,8 @@ const FinancialAnalysis: React.FC = () => {
   };
 
   const loadTransactions = async () => {
-    if (!currentCase) {
-      console.log('⚠️ loadTransactions: Nenhum caso selecionado');
+    if (!currentCase?.id) {
+      console.log('⚠️ loadTransactions: Nenhum caso válido selecionado');
       return;
     }
     
@@ -243,7 +243,7 @@ const FinancialAnalysis: React.FC = () => {
   };
 
   const runAnalysis = async () => {
-    if (!currentCase) return;
+    if (!currentCase?.id) return;
     
     setIsRunningAnalysis(true);
     try {
@@ -269,7 +269,7 @@ const FinancialAnalysis: React.FC = () => {
   };
 
   const generateReport = async () => {
-    if (!currentCase) return;
+    if (!currentCase?.id) return;
     
     setIsGeneratingReport(true);
     try {
@@ -297,7 +297,7 @@ const FinancialAnalysis: React.FC = () => {
   };
 
   const exportData = async (format: 'csv' | 'xlsx') => {
-    if (!currentCase) return;
+    if (!currentCase?.id) return;
     
     try {
       const data = await exportFinancialData({
@@ -323,12 +323,12 @@ const FinancialAnalysis: React.FC = () => {
   };
 
   useEffect(() => {
-    if (currentCase) {
+    if (currentCase?.id) {
       loadMetrics();
       loadAlerts();
       loadTransactions();
     }
-  }, [currentCase, selectedTimeRange, filters]);
+  }, [currentCase?.id, selectedTimeRange, filters]);
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {

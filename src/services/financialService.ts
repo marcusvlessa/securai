@@ -1,7 +1,7 @@
 import Decimal from 'decimal.js';
 import { toast } from 'sonner';
-import { makeGroqAIRequest } from './groqService';
 import { supabase } from '@/integrations/supabase/client';
+import { UnifiedRIFParser, StandardRIFRow } from './rifParserUnified';
 
 // Configure Decimal.js for precise financial calculations
 Decimal.config({ precision: 28, rounding: Decimal.ROUND_HALF_EVEN });
@@ -1322,75 +1322,81 @@ export const getRedFlagAlerts = async (caseId: string): Promise<RedFlagAlert[]> 
   }
 };
 
-// Generate COAF report
+/**
+ * Gera relatório COAF com análise de IA real via Edge Function
+ */
 export const generateCOAFReport = async (params: {
   caseId: string;
   filters: any;
   includeCharts: boolean;
 }): Promise<string> => {
-  const { caseId, filters, includeCharts } = params;
+  const { caseId, filters } = params;
   
   try {
-    // Get data
+    // Buscar dados
     const metrics = await getFinancialMetrics(caseId, filters);
     const alerts = await getRedFlagAlerts(caseId);
-    const { transactions } = await getFinancialTransactions(caseId, { ...filters, pageSize: 1000 });
+    const { transactions } = await getFinancialTransactions(caseId, { ...filters, pageSize: 100 });
     
-    // Generate insights - sem usar GROQ para evitar erro de CORS
-    let insights = `RESUMO EXECUTIVO:
+    console.log('📄 Gerando relatório COAF com IA...');
+
+    // Chamar Edge Function para análise com IA
+    const { data: aiAnalysis, error } = await supabase.functions.invoke('analyze-rif', {
+      body: { 
+        caseId, 
+        metrics, 
+        alerts,
+        transactions: transactions.slice(0, 50)
+      }
+    });
+
+    if (error) {
+      console.error('⚠️ Erro ao gerar insights com IA, usando fallback:', error);
+    }
+
+    const insights = aiAnalysis?.insights || `RESUMO EXECUTIVO:
     
 Com base nos dados analisados, foram identificados ${alerts.length} alertas COAF, sendo ${alerts.filter(a => a.severity === 'high').length} de severidade alta.
 
 O volume total de créditos foi de R$ ${metrics.totalCredits}, enquanto os débitos totalizaram R$ ${metrics.totalDebits}, resultando em um saldo líquido de R$ ${metrics.balance}.
 
 RECOMENDAÇÕES:
-${alerts.filter(a => a.severity === 'high').length > 0 ? '- Priorizar investigação dos alertas de alta severidade' : ''}
-${parseFloat(metrics.balance) < 0 ? '- Verificar motivo do saldo negativo' : ''}
+- Priorizar investigação dos alertas de alta severidade
 - Revisar manualmente as transações sinalizadas
-- Documentar evidências para eventual comunicação ao COAF
-- Manter registros atualizados conforme Lei 9.613/1998
-`;
+- Documentar evidências para eventual comunicação ao COAF`;
     
-    // Create report content (simplified - in real app, use PDF library)
     const reportContent = `
-RELATÓRIO DE ANÁLISE FINANCEIRA (RIF/COAF)
-=========================================
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                     RELATÓRIO FINANCEIRO COAF                             ║
+║                     ${new Date().toLocaleString('pt-BR').padEnd(50)}          ║
+╚═══════════════════════════════════════════════════════════════════════════╝
 
-IDENTIFICAÇÃO DO CASO
-- Caso: ${caseId}
-- Data do Relatório: ${new Date().toLocaleDateString('pt-BR')}
-- Período Analisado: ${filters.timeRange || 'Todos os dados'}
+${insights}
 
-RESUMO EXECUTIVO
-- Total de Créditos: R$ ${metrics.totalCredits}
-- Total de Débitos: R$ ${metrics.totalDebits}
-- Saldo Líquido: R$ ${metrics.balance}
-- Transações Analisadas: ${metrics.transactionCount}
-- Alertas COAF Gerados: ${alerts.length}
+═══════════════════════════════════════════════════════════════════════════
+MÉTRICAS CONSOLIDADAS
+═══════════════════════════════════════════════════════════════════════════
+• Total de Créditos:        R$ ${metrics.totalCredits}
+• Total de Débitos:         R$ ${metrics.totalDebits}
+• Saldo Final:              R$ ${metrics.balance}
+• Total de Transações:      ${metrics.transactionCount}
+• Ticket Médio:             R$ ${metrics.avgTicket || 'N/A'}
 
-METODOLOGIA
-- Fonte dos Dados: Arquivos RIF fornecidos
-- Regras Aplicadas: Fracionamento, Circularidade, Fan-in/Fan-out, Perfil Incompatível, Uso Intensivo de Espécie
-- Conformidade: Lei 9.613/1998 e orientações COAF
+═══════════════════════════════════════════════════════════════════════════
+RED FLAGS IDENTIFICADOS (${alerts.length} alertas)
+═══════════════════════════════════════════════════════════════════════════
+${alerts.map((alert, i) => `
+[${String(i + 1).padStart(2, '0')}] ${alert.type.toUpperCase()} - ${alert.severity.toUpperCase()}
+     Descrição: ${alert.description}
+     Score: ${alert.score}/100
+     Transações: ${alert.transactionIds.length}
+`).join('\n')}
 
-RED FLAGS IDENTIFICADOS
-${alerts.map(alert => `
-- ${alert.type}: ${alert.description}
-  Severidade: ${alert.severity}
-  Evidências: ${alert.evidenceCount} transações
-  Score: ${alert.score.toFixed(0)}/100
-`).join('')}
-
-INSIGHTS DA ANÁLISE
-${insights || 'Análise não disponível'}
-
-CONCLUSÕES E RECOMENDAÇÕES
-${insights || 'Recomendações não disponíveis'}
-
-ANEXOS
-- Lista detalhada de transações
-- Gráficos de distribuição temporal e por método
-- Detalhamento das evidências de red flags
+═══════════════════════════════════════════════════════════════════════════
+Relatório gerado automaticamente pelo Sistema de Análise Financeira
+Modelo IA: ${aiAnalysis?.metadata?.model || 'Fallback Manual'}
+Data/Hora: ${new Date().toLocaleString('pt-BR')}
+═══════════════════════════════════════════════════════════════════════════
 
 ---
 Relatório gerado automaticamente pelo sistema Secur:AI
@@ -1405,12 +1411,12 @@ Conformidade: Lei 9.613/1998 e orientações COAF
   }
 };
 
-// Export financial data
+// Export financial data with real XLSX support
 export const exportFinancialData = async (params: {
   caseId: string;
   filters: any;
   format: 'csv' | 'xlsx';
-}): Promise<string> => {
+}): Promise<Blob> => {
   const { caseId, filters, format } = params;
   
   try {
@@ -1418,6 +1424,27 @@ export const exportFinancialData = async (params: {
     
     if (!transactions || transactions.length === 0) {
       throw new Error('Nenhuma transação encontrada para exportar');
+    }
+
+    if (format === 'xlsx') {
+      const XLSX = await import('xlsx');
+      
+      const data = transactions.map(tx => ({
+        'Data': new Date(tx.date).toLocaleDateString('pt-BR'),
+        'Descrição': tx.description || '',
+        'Contraparte': tx.counterparty || '',
+        'Valor': tx.amount,
+        'Tipo': tx.type === 'credit' ? 'Crédito' : 'Débito',
+        'Método': tx.method || '',
+        'Banco': tx.bank || '',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Transações');
+      
+      const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+      return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     }
     
     if (format === 'csv') {

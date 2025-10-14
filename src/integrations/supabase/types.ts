@@ -149,6 +149,71 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_metrics_cache: {
+        Row: {
+          avg_transaction_amount: number | null
+          balance: number
+          case_id: string
+          created_at: string
+          id: string
+          last_calculated_at: string
+          method_distribution: Json | null
+          metrics_data: Json | null
+          period_end: string
+          period_start: string
+          temporal_data: Json | null
+          top_counterparties: Json | null
+          total_credits: number
+          total_debits: number
+          transaction_count: number
+          updated_at: string
+        }
+        Insert: {
+          avg_transaction_amount?: number | null
+          balance?: number
+          case_id: string
+          created_at?: string
+          id?: string
+          last_calculated_at?: string
+          method_distribution?: Json | null
+          metrics_data?: Json | null
+          period_end: string
+          period_start: string
+          temporal_data?: Json | null
+          top_counterparties?: Json | null
+          total_credits?: number
+          total_debits?: number
+          transaction_count?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_transaction_amount?: number | null
+          balance?: number
+          case_id?: string
+          created_at?: string
+          id?: string
+          last_calculated_at?: string
+          method_distribution?: Json | null
+          metrics_data?: Json | null
+          period_end?: string
+          period_start?: string
+          temporal_data?: Json | null
+          top_counterparties?: Json | null
+          total_credits?: number
+          total_debits?: number
+          transaction_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_metrics_cache_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_red_flags: {
         Row: {
           case_id: string

@@ -18,7 +18,7 @@ export interface RIFTransaction {
   amount: string; // Using string to maintain precision
   currency: string;
   type: 'credit' | 'debit';
-  method: 'PIX' | 'TED' | 'TEF' | 'Espécie' | 'Cartão' | 'Boleto' | 'Outros';
+  method: 'PIX' | 'TED' | 'DOC' | 'TEF' | 'Espécie' | 'Cartão' | 'Boleto' | 'Outros';
   channel: string;
   country: string;
   holderDocument: string;
@@ -523,6 +523,7 @@ const normalizeMethod = (methodStr: string): RIFTransaction['method'] => {
   const method = methodStr.toUpperCase();
   if (method.includes('PIX')) return 'PIX';
   if (method.includes('TED')) return 'TED';
+  if (method.includes('DOC')) return 'DOC';
   if (method.includes('TEF') || method.includes('TRANSF')) return 'TEF';
   if (method.includes('ESPECIE') || method.includes('DINHEIRO')) return 'Espécie';
   if (method.includes('CARTAO')) return 'Cartão';
@@ -718,18 +719,21 @@ export const runRedFlagAnalysis = async (params: {
     const datasetSize = transactionsData.length;
     const isDynamicThreshold = datasetSize < 50;
     
-    console.log(`🔍 Iniciando análise de red flags:`);
-    console.log(`  📊 Transações: ${transactions.length}`);
-    console.log(`  ⚙️ Limiares dinâmicos: ${isDynamicThreshold ? 'ATIVADOS' : 'PADRÃO'}`);
-    
-    // Ajustar limiares para datasets pequenos
-    const adjustedThresholds = {
-      fracionamento: isDynamicThreshold ? 5000 : 10000,
-      especie: isDynamicThreshold ? 25000 : 50000,
-      minTransactions: isDynamicThreshold ? 2 : 3
-    };
-    
-    console.log(`  🎯 Limiares: fracionamento=R$ ${adjustedThresholds.fracionamento.toLocaleString('pt-BR')}, espécie=R$ ${adjustedThresholds.especie.toLocaleString('pt-BR')}`);
+  console.log(`🔍 Iniciando análise de red flags:`);
+  console.log(`  📊 Transações: ${transactions.length}`);
+  console.log(`  ⚙️ Limiares dinâmicos: ${isDynamicThreshold ? 'ATIVADOS' : 'PADRÃO'}`);
+  
+  // Ajustar limiares para datasets pequenos
+  const adjustedThresholds = {
+    fracionamento: isDynamicThreshold ? 5000 : 10000,
+    especie: isDynamicThreshold ? 25000 : 50000,
+    minTransactions: isDynamicThreshold ? 2 : 3
+  };
+  
+  console.log(`  🎯 Limiares ajustados:`);
+  console.log(`     - Fracionamento: R$ ${adjustedThresholds.fracionamento.toLocaleString('pt-BR')}`);
+  console.log(`     - Espécie: R$ ${adjustedThresholds.especie.toLocaleString('pt-BR')}`);
+  console.log(`     - Mín. transações: ${adjustedThresholds.minTransactions}`);
     
     const alerts: RedFlagAlert[] = [];
     
@@ -755,20 +759,28 @@ export const runRedFlagAnalysis = async (params: {
     const circularityRule = rules.find(r => r.id === 'circularidade' && r.enabled);
     if (circularityRule) {
       const circularityAlerts = detectCircularidade(transactions, circularityRule.parameters, caseId);
-      alerts.push(...circularityAlerts);
+      const simpleCircularityAlerts = detectSimpleCircularity(transactions, circularityRule.parameters.window || 24, caseId);
+      console.log(`  ✅ Circularidade: ${circularityAlerts.length + simpleCircularityAlerts.length} alertas`);
+      alerts.push(...circularityAlerts, ...simpleCircularityAlerts);
     }
     
     // Run fan-in/fan-out analysis
     const fanInOutRule = rules.find(r => r.id === 'fan-in-out' && r.enabled);
     if (fanInOutRule) {
-      const fanInOutAlerts = detectFanInOut(transactions, fanInOutRule.parameters, caseId);
+      const adjustedFanParams = {
+        ...fanInOutRule.parameters,
+        threshold: isDynamicThreshold ? 3 : fanInOutRule.parameters.threshold
+      };
+      const fanInOutAlerts = detectFanInOut(transactions, adjustedFanParams, caseId, datasetSize);
+      console.log(`  ✅ Fan-in/Fan-out: ${fanInOutAlerts.length} alertas`);
       alerts.push(...fanInOutAlerts);
     }
     
     // Run incompatible profile analysis
     const profileRule = rules.find(r => r.id === 'perfil-incompativel' && r.enabled);
     if (profileRule) {
-      const profileAlerts = detectIncompatibleProfile(transactions, profileRule.parameters, caseId);
+      const profileAlerts = detectIncompatibleProfile(transactions, profileRule.parameters, caseId, datasetSize);
+      console.log(`  ✅ Perfil Incompatível: ${profileAlerts.length} alertas`);
       alerts.push(...profileAlerts);
     }
     
@@ -796,6 +808,16 @@ export const runRedFlagAnalysis = async (params: {
     const atypicalAlerts = detectAtypicalValues(transactions, atypicalRule.parameters, caseId);
     console.log(`  ✅ Valores Atípicos: ${atypicalAlerts.length} alertas`);
     alerts.push(...atypicalAlerts);
+    
+    // Run round values detection
+    const roundValuesAlerts = detectRoundValues(transactions, caseId);
+    console.log(`  ✅ Valores Redondos: ${roundValuesAlerts.length} alertas`);
+    alerts.push(...roundValuesAlerts);
+    
+    // Run concentration detection
+    const concentrationAlerts = detectConcentration(transactions, caseId);
+    console.log(`  ✅ Concentração: ${concentrationAlerts.length} alertas`);
+    alerts.push(...concentrationAlerts);
     
     console.log(`✅ Gerados ${alerts.length} alertas de red flags`);
     
@@ -848,15 +870,20 @@ const detectFractionamento = (transactions: RIFTransaction[], params: any, caseI
   // Group transactions by holder and method
   const groups = new Map<string, RIFTransaction[]>();
   
+  console.log(`🔍 Fracionamento: analisando transações`);
+  
   transactions.forEach(tx => {
-    if (tx.type === 'credit' && (tx.method === 'PIX' || tx.method === 'Espécie')) {
-      const key = `${tx.holderDocument}-${tx.method}`;
+    // Incluir TED e DOC além de PIX e Espécie
+    if (tx.method === 'PIX' || tx.method === 'TED' || tx.method === 'DOC' || tx.method === 'Espécie') {
+      const key = `${tx.counterparty}-${tx.counterpartyDocument}-${tx.method}`;
       if (!groups.has(key)) {
         groups.set(key, []);
       }
       groups.get(key)!.push(tx);
     }
   });
+  
+  console.log(`  🔍 Fracionamento: ${groups.size} grupos de contrapartes encontrados`);
   
   groups.forEach((txs, key) => {
     // Sort by date
@@ -971,10 +998,12 @@ const detectCircularidade = (transactions: RIFTransaction[], params: any, caseId
   return alerts;
 };
 
-const detectFanInOut = (transactions: RIFTransaction[], params: any, caseId: string): RedFlagAlert[] => {
+const detectFanInOut = (transactions: RIFTransaction[], params: any, caseId: string, datasetSize: number = 0): RedFlagAlert[] => {
   const alerts: RedFlagAlert[] = [];
   const threshold = params.threshold || 10;
   const windowHours = params.window || 168; // 7 days
+  
+  console.log(`🔍 Fan-in/Fan-out: threshold=${threshold}, dataset=${datasetSize}`);
   
   // Group by holder
   const holderMap = new Map<string, RIFTransaction[]>();
@@ -1004,10 +1033,14 @@ const detectFanInOut = (transactions: RIFTransaction[], params: any, caseId: str
         }
       }
       
-      if (windowTxs.length >= threshold) {
+      // Ajustar threshold para datasets pequenos
+      const adjustedFanThreshold = datasetSize < 50 ? 3 : threshold;
+      
+      if (windowTxs.length >= adjustedFanThreshold) {
         const uniqueCounterparties = new Set(windowTxs.map(tx => tx.counterpartyDocument));
         
-        if (uniqueCounterparties.size >= threshold) {
+        if (uniqueCounterparties.size >= adjustedFanThreshold) {
+          console.log(`    ✅ Fan-in/out: ${holder} com ${uniqueCounterparties.size} contrapartes`);
           alerts.push({
             id: `fan-in-out-${holder}-${i}`,
             caseId,
@@ -1030,10 +1063,12 @@ const detectFanInOut = (transactions: RIFTransaction[], params: any, caseId: str
   return alerts;
 };
 
-const detectIncompatibleProfile = (transactions: RIFTransaction[], params: any, caseId: string): RedFlagAlert[] => {
+const detectIncompatibleProfile = (transactions: RIFTransaction[], params: any, caseId: string, datasetSize: number = 0): RedFlagAlert[] => {
   const alerts: RedFlagAlert[] = [];
   const multiplier = params.multiplier || 5;
   const windowHours = params.window || 720; // 30 days
+  
+  console.log(`🔍 Perfil Incompatível: dataset=${datasetSize}`);
   
   // Group by holder
   const holderMap = new Map<string, RIFTransaction[]>();
@@ -1046,7 +1081,9 @@ const detectIncompatibleProfile = (transactions: RIFTransaction[], params: any, 
   });
   
   holderMap.forEach((txs, holder) => {
-    if (txs.length < 10) return; // Need sufficient history
+    // Ajustar mínimo de transações para datasets pequenos
+    const minTxsRequired = datasetSize < 50 ? 3 : 10;
+    if (txs.length < minTxsRequired) return;
     
     // Sort by date
     txs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -1156,6 +1193,131 @@ const detectAtypicalValues = (transactions: RIFTransaction[], params: any, caseI
     });
   });
   
+  return alerts;
+};
+
+// Detect simple circularity (A→B→A patterns)
+const detectSimpleCircularity = (transactions: RIFTransaction[], windowHours: number, caseId: string): RedFlagAlert[] => {
+  const alerts: RedFlagAlert[] = [];
+  
+  console.log(`🔍 Detectando circularidade simples (A→B→A)`);
+  
+  transactions.forEach((txOut, i) => {
+    if (txOut.type !== 'debit') return;
+    
+    // Procurar transação de volta no mesmo período
+    const txIn = transactions.find((tx, j) => 
+      j !== i &&
+      tx.type === 'credit' &&
+      tx.counterpartyDocument === txOut.holderDocument &&
+      tx.holderDocument === txOut.counterpartyDocument &&
+      Math.abs(new Date(tx.date).getTime() - new Date(txOut.date).getTime()) < windowHours * 60 * 60 * 1000
+    );
+    
+    if (txIn) {
+      const amountDiff = Math.abs(new Decimal(txIn.amount).minus(txOut.amount).toNumber());
+      const similarity = 1 - (amountDiff / parseFloat(txOut.amount));
+      
+      if (similarity > 0.7) { // 70% de similaridade nos valores
+        alerts.push({
+          id: `circularidade-simples-${txOut.id}`,
+          caseId,
+          ruleId: 'circularidade',
+          type: 'Circularidade Financeira',
+          description: `Circularidade detectada: ${txOut.counterparty} recebe R$ ${txIn.amount} e envia R$ ${txOut.amount}`,
+          severity: 'high',
+          evidenceCount: 2,
+          transactionIds: [txIn.id, txOut.id],
+          parameters: { similarity, windowHours },
+          score: 75,
+          explanation: 'Movimentação circular (ida e volta) pode indicar ocultação de origem de recursos',
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+  });
+  
+  console.log(`  ✅ Circularidade Simples: ${alerts.length} alertas`);
+  return alerts;
+};
+
+// Detect round values (valores redondos suspeitos)
+const detectRoundValues = (transactions: RIFTransaction[], caseId: string): RedFlagAlert[] => {
+  const alerts: RedFlagAlert[] = [];
+  
+  console.log(`🔍 Detectando valores redondos suspeitos`);
+  
+  const roundTxs = transactions.filter(tx => {
+    const amount = new Decimal(tx.amount);
+    // Valores múltiplos de 10.000 ou 5.000
+    return amount.mod(10000).equals(0) || amount.mod(5000).equals(0);
+  });
+  
+  console.log(`  🔍 ${roundTxs.length} transações com valores redondos encontradas`);
+  
+  if (roundTxs.length >= 3) {
+    const totalRound = roundTxs.reduce((sum, tx) => sum.plus(tx.amount), new Decimal(0));
+    
+    alerts.push({
+      id: `valores-redondos-${caseId}`,
+      caseId,
+      ruleId: 'valores-redondos',
+      type: 'Valores Redondos Suspeitos',
+      description: `${roundTxs.length} transações com valores exatamente redondos totalizando R$ ${totalRound.toFixed(2)}`,
+      severity: 'medium',
+      evidenceCount: roundTxs.length,
+      transactionIds: roundTxs.map(tx => tx.id),
+      parameters: { count: roundTxs.length, total: totalRound.toFixed(2) },
+      score: Math.min(100, roundTxs.length * 15),
+      explanation: 'Valores exatamente redondos podem indicar transações estruturadas',
+      createdAt: new Date().toISOString()
+    });
+  }
+  
+  return alerts;
+};
+
+// Detect counterparty concentration (concentração de contrapartes)
+const detectConcentration = (transactions: RIFTransaction[], caseId: string): RedFlagAlert[] => {
+  const alerts: RedFlagAlert[] = [];
+  
+  console.log(`🔍 Detectando concentração de contrapartes`);
+  
+  const counterpartyMap = new Map<string, RIFTransaction[]>();
+  transactions.forEach(tx => {
+    const key = `${tx.counterparty}-${tx.counterpartyDocument}`;
+    if (!counterpartyMap.has(key)) {
+      counterpartyMap.set(key, []);
+    }
+    counterpartyMap.get(key)!.push(tx);
+  });
+  
+  const totalTxs = transactions.length;
+  counterpartyMap.forEach((txs, counterparty) => {
+    const percentage = (txs.length / totalTxs) * 100;
+    
+    // Se 1 contraparte representa > 50% das transações
+    if (percentage > 50) {
+      const totalAmount = txs.reduce((sum, tx) => sum.plus(tx.amount), new Decimal(0));
+      
+      alerts.push({
+        id: `concentracao-${counterparty}`,
+        caseId,
+        ruleId: 'concentracao',
+        type: 'Concentração de Contraparte',
+        description: `${counterparty} representa ${percentage.toFixed(1)}% das transações (${txs.length}/${totalTxs})`,
+        severity: 'medium',
+        evidenceCount: txs.length,
+        transactionIds: txs.map(tx => tx.id),
+        parameters: { percentage: percentage.toFixed(1), totalAmount: totalAmount.toFixed(2) },
+        score: Math.min(100, percentage * 1.5),
+        explanation: 'Alta concentração em uma única contraparte pode indicar relacionamento oculto ou estruturação',
+        createdAt: new Date().toISOString()
+      });
+    }
+  });
+  
+  console.log(`  ✅ Concentração: ${alerts.length} alertas detectados`);
   return alerts;
 };
 

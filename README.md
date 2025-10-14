@@ -95,9 +95,38 @@ securai/
 
 ### ✅ Sistema de Autenticação
 - Login/Registro com Supabase
-- Controle de acesso baseado em roles
+- Controle de acesso baseado em roles (admin, delegado, investigator, analyst, viewer)
+- Sistema de aprovação de novos usuários
 - Recuperação de senha
 - Perfis de usuário personalizados
+- Auditoria completa de mudanças de permissões
+
+### 🔐 Primeiro Acesso e Administração
+
+**Importante:** O primeiro usuário cadastrado pode ser promovido a administrador executando:
+
+```sql
+SELECT initialize_first_admin();
+```
+
+Ou manualmente via SQL:
+
+```sql
+-- Promover usuário específico para admin
+INSERT INTO user_roles (user_id, role)
+SELECT id, 'admin'::app_role
+FROM auth.users
+WHERE email = 'seu@email.com'
+ON CONFLICT (user_id, role) DO NOTHING;
+```
+
+Após a promoção:
+1. Faça logout
+2. Limpe o cache do navegador
+3. Faça login novamente
+4. Acesse `/admin-panel` para gerenciar usuários
+
+Para mais informações sobre administração, consulte o [Guia de Administração e Segurança](SECURITY_ADMIN.md).
 
 ### ✅ Gestão de Casos
 - Criação e edição de casos

@@ -1,62 +1,96 @@
-import React from 'react';
-import { AlertTriangle, Shield, ArrowLeft } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle, ShieldAlert, Mail } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Unauthorized = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900">
-            <Shield className="h-8 w-8 text-red-600 dark:text-red-400" />
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl">
+        <CardHeader>
+          <div className="flex items-center gap-3 mb-2">
+            <ShieldAlert className="h-8 w-8 text-destructive" />
+            <CardTitle className="text-2xl">Acesso Negado</CardTitle>
           </div>
-          <CardTitle className="text-2xl font-bold text-red-600 dark:text-red-400">
-            Acesso Negado
-          </CardTitle>
-          <CardDescription className="text-gray-600 dark:text-gray-400">
-            Você não tem permissão para acessar esta página
+          <CardDescription>
+            Você não possui permissão para acessar esta página
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
-              <p className="text-sm text-red-800 dark:text-red-200">
-                Esta área requer permissões específicas que não estão disponíveis na sua conta.
-              </p>
-            </div>
-          </div>
-          
-          <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-            <p><strong>Possíveis motivos:</strong></p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>Seu perfil não possui a role necessária</li>
-              <li>Suas permissões foram revogadas</li>
-              <li>O sistema está em manutenção</li>
+        <CardContent className="space-y-6">
+          {/* Informações do Perfil Atual */}
+          {profile && (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-1">
+                  <p className="font-medium">Seu perfil atual:</p>
+                  <ul className="text-sm space-y-1 ml-4">
+                    <li><strong>Nome:</strong> {profile.name || 'Não informado'}</li>
+                    <li><strong>Email:</strong> {profile.email}</li>
+                    <li><strong>Função:</strong> {profile.role || 'Não atribuída'}</li>
+                  </ul>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Explicação do Erro */}
+          <div>
+            <h3 className="font-semibold mb-2">Por que estou vendo esta mensagem?</h3>
+            <p className="text-muted-foreground mb-3">
+              Esta página requer permissões especiais que seu perfil atual não possui.
+              Possíveis motivos:
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground ml-4">
+              <li>A página requer função de <strong>Administrador</strong> e você possui função de <strong>{profile?.role || 'usuário'}</strong></li>
+              <li>Seu perfil está aguardando aprovação por um administrador</li>
+              <li>Suas permissões foram alteradas recentemente</li>
+              <li>Você não está autorizado a acessar este módulo específico</li>
             </ul>
           </div>
 
-          <div className="flex flex-col gap-2 pt-4">
+          {/* Como Resolver */}
+          <div className="bg-muted/50 p-4 rounded-lg">
+            <h3 className="font-semibold mb-2 flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Como obter acesso?
+            </h3>
+            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground ml-4">
+              <li>Entre em contato com um administrador do sistema</li>
+              <li>Solicite as permissões necessárias para este módulo</li>
+              <li>Aguarde a aprovação do administrador</li>
+              <li>Faça logout e login novamente após a aprovação</li>
+            </ol>
+          </div>
+
+          {/* Ações */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <Button 
               onClick={() => navigate('/dashboard')}
-              className="w-full"
-              variant="outline"
+              className="flex-1"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar ao Dashboard
             </Button>
-            
             <Button 
-              onClick={() => navigate('/settings')}
-              className="w-full"
               variant="outline"
+              onClick={() => navigate('/settings')}
+              className="flex-1"
             >
-              <Shield className="h-4 w-4 mr-2" />
               Verificar Permissões
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => {
+                window.location.href = 'mailto:admin@securai.com.br?subject=Solicitação de Permissões&body=Olá, gostaria de solicitar permissões para acessar o sistema SecurAI.';
+              }}
+              className="flex-1"
+            >
+              Contatar Admin
             </Button>
           </div>
         </CardContent>

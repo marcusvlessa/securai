@@ -574,6 +574,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      initialize_first_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       log_security_event: {
         Args: { p_event_data?: Json; p_event_type: string; p_user_id?: string }
         Returns: string

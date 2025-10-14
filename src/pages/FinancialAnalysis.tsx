@@ -167,7 +167,7 @@ const FinancialAnalysis: React.FC = () => {
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [selectedTimeRange, setSelectedTimeRange] = useState('30d');
+  const [selectedTimeRange, setSelectedTimeRange] = useState('all');
   const [filters, setFilters] = useState({
     minValue: '',
     method: '',

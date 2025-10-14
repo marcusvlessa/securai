@@ -614,6 +614,20 @@ export const uploadRIFData = async (params: {
       localStorage.setItem(rulesKey, JSON.stringify(DEFAULT_RED_FLAG_RULES));
     }
     
+    // Executar análise de red flags automaticamente
+    console.log('🔍 Iniciando análise automática de red flags...');
+    try {
+      await runRedFlagAnalysis({
+        caseId,
+        thresholds: { fractionamento: 10000, especie: 50000 },
+        window: 168
+      });
+      console.log('✅ Análise de red flags concluída');
+    } catch (analysisError) {
+      console.error('⚠️ Erro na análise automática de red flags:', analysisError);
+      toast.error('⚠️ Upload concluído, mas houve erro na análise automática. Execute a análise manualmente.');
+    }
+    
   } catch (error) {
     console.error('Error uploading RIF data:', error);
     throw new Error('Erro ao processar arquivo RIF: ' + (error as Error).message);
@@ -1055,8 +1069,8 @@ export const getFinancialMetrics = async (caseId: string, filters: any = {}) => 
       .select('*')
       .eq('case_id', caseId);
     
-    // Apply filters
-    if (filters.timeRange && filters.timeRange !== 'all') {
+    // Apply filters (SOMENTE se explicitamente fornecidos e diferentes de 'all')
+    if (filters.timeRange && filters.timeRange !== 'all' && filters.timeRange !== undefined) {
       const now = new Date();
       let days = 30;
       
@@ -1067,6 +1081,9 @@ export const getFinancialMetrics = async (caseId: string, filters: any = {}) => 
       
       const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
       query = query.gte('date', cutoffDate);
+      console.log(`📅 Filtro de tempo aplicado: últimos ${days} dias`);
+    } else {
+      console.log('📅 Sem filtro de tempo - carregando todas as transações');
     }
     
     if (filters.minValue) {

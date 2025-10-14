@@ -58,6 +58,26 @@ const RIFUpload: React.FC<RIFUploadProps> = ({ onDataUploaded }) => {
       }
       
       toast.success(`✅ ${files.length} arquivo(s) RIF processado(s) com sucesso`);
+      
+      // Executar análise automaticamente após upload
+      console.log('🔄 Executando análise de red flags automaticamente...');
+      try {
+        await runRedFlagAnalysis({
+          caseId: currentCase.id,
+          thresholds: {
+            fractioningThreshold: 10000,
+            fanInOutThreshold: 10,
+            circularityWindow: 30,
+            incompatibleProfileMultiplier: 5
+          },
+          window: 30
+        });
+        console.log('✅ Análise automática concluída');
+      } catch (analysisError) {
+        console.error('⚠️ Erro na análise automática:', analysisError);
+        toast.warning('Upload concluído, mas houve erro na análise. Execute manualmente.');
+      }
+      
       await onDataUploaded();
     } catch (error: any) {
       console.error('❌ Erro no upload RIF:', error);
@@ -266,23 +286,27 @@ const FinancialAnalysis: React.FC = () => {
     
     setIsGeneratingReport(true);
     try {
+      console.log('📄 Gerando relatório COAF com IA...');
       const reportData = await generateCOAFReport({
         caseId: currentCase.id,
         filters: filters,
         includeCharts: true
       });
       
-      // Create and download PDF
-      const blob = new Blob([reportData], { type: 'application/pdf' });
+      console.log('✅ Relatório gerado, preparando download...');
+      
+      // Create and download as TEXT file (not PDF)
+      const blob = new Blob([reportData], { type: 'text/plain; charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `relatorio-coaf-${currentCase.title}-${new Date().toISOString().split('T')[0]}.pdf`;
+      link.download = `relatorio-coaf-${currentCase.title}-${new Date().toISOString().split('T')[0]}.txt`;
       link.click();
       URL.revokeObjectURL(url);
       
-      toast.success('Relatório COAF gerado com sucesso');
+      toast.success('Relatório COAF gerado e baixado com sucesso!');
     } catch (error) {
+      console.error('❌ Erro ao gerar relatório:', error);
       toast.error('Erro ao gerar relatório COAF');
     } finally {
       setIsGeneratingReport(false);
@@ -760,18 +784,23 @@ const FinancialAnalysis: React.FC = () => {
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-3">
-                  <h4 className="font-medium">Relatório COAF (PDF)</h4>
+                  <h4 className="font-medium">Relatório COAF com IA</h4>
                   <p className="text-sm text-muted-foreground">
-                    Gera relatório completo conforme padrões COAF com gráficos e análises.
+                    Gera relatório com análise automatizada por IA conforme padrões COAF.
                   </p>
                   <Button 
                     onClick={generateReport}
-                    disabled={isGeneratingReport}
+                    disabled={isGeneratingReport || !metrics || alerts.length === 0}
                     className="w-full"
                   >
                     <FileBarChart className="h-4 w-4 mr-2" />
-                    {isGeneratingReport ? 'Gerando...' : 'Gerar Relatório PDF'}
+                    {isGeneratingReport ? 'Gerando relatório com IA...' : 'Gerar Relatório com IA'}
                   </Button>
+                  {(!metrics || alerts.length === 0) && (
+                    <p className="text-xs text-amber-600">
+                      ⚠️ Execute a análise de red flags primeiro
+                    </p>
+                  )}
                 </div>
                 
                 <div className="space-y-3">

@@ -83,7 +83,15 @@ export class InstagramParserEnhanced {
       media: mediaData,
       threadsPosts: [],
       ncmecReports: [],
-      requestParameters: [],
+      requestParameters: {
+        service: '',
+        internalTicketNumber: '',
+        target: '',
+        accountIdentifier: '',
+        accountType: '',
+        generated: new Date(),
+        dateRange: { start: new Date(), end: new Date() }
+      },
       disappearingMessages: [],
       metadata: {
         processedAt: new Date(),
@@ -200,10 +208,12 @@ export class InstagramParserEnhanced {
           messages.push({
             id: `msg_${threadIndex}_${messageCount}`,
             conversationId: `conv_${threadIndex}`,
+            threadId: `conv_${threadIndex}`,
             sender: messageCount % 2 === 0 ? mainUsername : Array.from(participants)[0] || 'Unknown',
             content: text.substring(0, 100),
             timestamp: new Date(),
             type: 'text',
+            removedBySender: false,
             reactions: []
           });
           messageCount++;
@@ -215,13 +225,18 @@ export class InstagramParserEnhanced {
         
         conversations.push({
           id: `conv_${threadIndex}`,
+          threadId: `conv_${threadIndex}`,
           participants: participantsList.length > 0 ? participantsList : ['Unknown'],
+          participantsWithIds: participantsList.map(p => ({ username: p, instagramId: '' })),
           title: participantsList.join(', ') || 'Sem nome',
           messages,
           createdAt: new Date(),
           lastActivity: new Date(),
           messageCount: messages.length,
-          mediaCount: 0
+          mediaCount: 0,
+          attachmentsCount: 0,
+          sharesCount: 0,
+          callsCount: 0
         });
         
         console.log(`✅ Conversa ${threadIndex + 1}: ${participantsList.join(', ')} (${messages.length} msgs)`);

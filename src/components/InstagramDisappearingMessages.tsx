@@ -2,14 +2,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Clock, User, MessageCircle } from "lucide-react";
 import { format } from "date-fns";
-import { MetaDisappearingMessage } from "@/services/instagramMetaBusinessParser";
+import { ProcessedInstagramData } from "@/services/instagramParserService";
 
 interface InstagramDisappearingMessagesProps {
-  data: MetaDisappearingMessage[];
+  data: ProcessedInstagramData;
 }
 
 export const InstagramDisappearingMessages = ({ data }: InstagramDisappearingMessagesProps) => {
-  if (data.length === 0) {
+  const messages = data.disappearingMessages || [];
+  
+  if (messages.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -40,11 +42,11 @@ export const InstagramDisappearingMessages = ({ data }: InstagramDisappearingMes
             Reported Disappearing Messages
           </CardTitle>
           <CardDescription>
-            {data.length} mensagem(ns) efêmera(s) reportada(s)
+            {messages.length} mensagem(ns) efêmera(s) reportada(s)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {data.map((message) => (
+          {messages.map((message) => (
             <Card key={message.id} className="border-l-4 border-l-destructive">
               <CardContent className="pt-6 space-y-3">
                 {/* Header */}

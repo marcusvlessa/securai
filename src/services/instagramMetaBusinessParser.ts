@@ -228,48 +228,38 @@ export class InstagramMetaBusinessParser {
     
     const conversations: MetaConversation[] = [];
     
-    // Encontrar todos os elementos que contêm "Thread"
-    const threadElements = Array.from(section.querySelectorAll('.o > .i'))
-      .filter(el => el.textContent?.includes('Thread'));
+    // Pegar TODO o conteúdo HTML da seção e dividir por "Thread"
+    const content = section.innerHTML;
+    const threadBlocks = content.split(/<div class="t o"><div class="t i">Thread<div class="m"><div>/);
     
-    console.log(`📊 [UnifiedMessages] Encontrados ${threadElements.length} threads`);
+    console.log(`📊 [UnifiedMessages] Encontrados ${threadBlocks.length - 1} threads no HTML`);
     
-    for (const threadEl of threadElements) {
+    // Pular o primeiro bloco (é o texto antes do primeiro Thread)
+    for (let i = 1; i < threadBlocks.length; i++) {
       try {
-        const threadId = this.extractThreadId(threadEl);
-        if (!threadId) continue;
+        const threadHtml = threadBlocks[i];
         
+        // Extrair Thread ID - formato: " (123456789)"
+        const threadIdMatch = threadHtml.match(/^\s*\((\d+)\)/);
+        if (!threadIdMatch) continue;
+        
+        const threadId = threadIdMatch[1];
         console.log(`🧵 [Thread ${threadId}] Processando...`);
         
-        const participants = this.extractParticipants(threadEl);
-        const participantsUpdatedAt = this.extractParticipantsTimestamp(threadEl);
+        // Criar um documento temporário para parsear este thread
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = threadHtml;
         
-        const messages: MetaMessage[] = [];
+        // Extrair participantes
+        const participants = this.extractParticipantsFromHtml(tempDiv);
+        const participantsUpdatedAt = this.extractParticipantsTimestampFromHtml(tempDiv);
         
-        // Encontrar todas as mensagens dentro deste thread
-        let currentEl: Element | null = threadEl.parentElement;
-        while (currentEl && !currentEl.textContent?.includes('Thread') || currentEl === threadEl.parentElement) {
-          if (currentEl !== threadEl.parentElement && currentEl.textContent?.includes('Thread')) {
-            break;
-          }
-          
-          const authorEl = currentEl.querySelector('.o > .i')?.textContent?.includes('Author') 
-            ? currentEl.querySelector('.o > .i')
-            : null;
-          
-          if (authorEl && currentEl.parentElement) {
-            const message = this.extractMessage(currentEl.parentElement, threadId, uuidv4(), mediaFiles);
-            if (message) {
-              messages.push(message);
-            }
-          }
-          
-          currentEl = currentEl.nextElementSibling;
-        }
+        // Extrair todas as mensagens
+        const messages = this.extractAllMessagesFromThread(tempDiv, threadId, mediaFiles);
         
-        if (messages.length > 0) {
+        if (messages.length > 0 || participants.length > 0) {
           const attachmentsCount = messages.reduce((sum, m) => sum + m.attachments.length, 0);
-          const sharesCount = messages.filter(m => m.share).length;
+          const sharesCount = messages.filter(m => m.share && Object.keys(m.share).length > 0).length;
           const callsCount = messages.filter(m => m.callRecord).length;
           
           conversations.push({
@@ -282,8 +272,8 @@ export class InstagramMetaBusinessParser {
             attachmentsCount,
             sharesCount,
             callsCount,
-            createdAt: messages[messages.length - 1]?.sent || new Date(),
-            lastActivity: messages[0]?.sent || new Date()
+            createdAt: messages.length > 0 ? messages[messages.length - 1].sent : new Date(),
+            lastActivity: messages.length > 0 ? messages[0].sent : new Date()
           });
           
           console.log(`✅ [Thread ${threadId}] ${messages.length} mensagens, ${participants.length} participantes`);
@@ -298,42 +288,63 @@ export class InstagramMetaBusinessParser {
   }
   
   /**
-   * Extrai uma mensagem completa
+   * Extrai TODAS as mensagens de um thread
    */
-  private static extractMessage(
-    messageEl: Element,
+  private static extractAllMessagesFromThread(
+    threadDiv: HTMLDivElement,
     threadId: string,
-    conversationId: string,
     mediaFiles: Map<string, Blob>
-  ): MetaMessage | null {
-    const author = this.extractAuthor(messageEl);
-    const sent = this.extractSent(messageEl);
-    const body = this.extractBody(messageEl);
-    const removedBySender = messageEl.textContent?.includes('Removed by Sender') || false;
-    const attachments = this.extractAttachments(messageEl, mediaFiles);
-    const share = this.extractShare(messageEl);
-    const callRecord = this.extractCallRecord(messageEl);
+  ): MetaMessage[] {
+    const messages: MetaMessage[] = [];
     
-    if (!sent) return null;
+    // Dividir o HTML por "Author"
+    const html = threadDiv.innerHTML;
+    const authorBlocks = html.split(/<div class="t o"><div class="t i">Author<div class="m"><div>/);
     
-    const type = callRecord ? 'call' 
-      : share ? 'share'
-      : attachments.length > 0 ? (attachments[0].type.includes('image') ? 'image' : 'video')
-      : 'text';
+    // Pular o primeiro bloco (antes do primeiro Author)
+    for (let i = 1; i < authorBlocks.length; i++) {
+      try {
+        const messageHtml = authorBlocks[i];
+        
+        // Criar elemento temporário
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = '<div class="t o"><div class="t i">Author<div class="m"><div>' + messageHtml;
+        
+        const author = this.extractAuthorFromHtml(tempDiv);
+        const sent = this.extractSentFromHtml(tempDiv);
+        const body = this.extractBodyFromHtml(tempDiv);
+        const removedBySender = messageHtml.includes('Removed by Sender');
+        const attachments = this.extractAttachmentsFromHtml(tempDiv, mediaFiles);
+        const share = this.extractShareFromHtml(tempDiv);
+        const callRecord = this.extractCallRecordFromHtml(tempDiv);
+        
+        if (sent) {
+          const type: 'text' | 'image' | 'video' | 'audio' | 'link' | 'share' | 'call' = 
+            callRecord ? 'call' 
+            : share && share.url ? 'share'
+            : attachments.length > 0 ? (attachments[0].type.includes('image') ? 'image' : attachments[0].type.includes('video') ? 'video' : 'audio')
+            : 'text';
+          
+          messages.push({
+            id: uuidv4(),
+            threadId,
+            conversationId: threadId,
+            author,
+            sent,
+            body: body || '',
+            type,
+            removedBySender,
+            attachments,
+            share: share && Object.keys(share).length > 0 ? share : undefined,
+            callRecord
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao extrair mensagem:', error);
+      }
+    }
     
-    return {
-      id: uuidv4(),
-      threadId,
-      conversationId,
-      author,
-      sent,
-      body: body || '',
-      type,
-      removedBySender,
-      attachments,
-      share,
-      callRecord
-    };
+    return messages;
   }
   
   /**
@@ -346,25 +357,33 @@ export class InstagramMetaBusinessParser {
   }
   
   /**
-   * Extrai participantes no formato "username (Instagram: 123456)"
+   * Extrai participantes do HTML
    */
-  private static extractParticipants(threadEl: Element): MetaParticipant[] {
-    const participantsEl = Array.from(threadEl.parentElement?.querySelectorAll('.o > .i') || [])
-      .find(el => el.textContent?.includes('Current Participants'));
-    
-    if (!participantsEl) return [];
-    
-    const text = participantsEl.querySelector('.m')?.textContent || '';
-    const lines = text.split('\n').filter(l => l.trim());
-    
+  private static extractParticipantsFromHtml(threadDiv: HTMLDivElement): MetaParticipant[] {
     const participants: MetaParticipant[] = [];
+    
+    // Procurar por "Current Participants"
+    const text = threadDiv.textContent || '';
+    const lines = text.split('\n');
+    
+    let capturing = false;
     for (const line of lines) {
-      const match = line.match(/^(.+?)\s*\(Instagram:\s*(\d+)\)/);
-      if (match) {
-        participants.push({
-          username: match[1].trim(),
-          instagramId: match[2].trim()
-        });
+      if (line.includes('Current Participants')) {
+        capturing = true;
+        continue;
+      }
+      
+      if (capturing) {
+        const match = line.match(/^(.+?)\s*\(Instagram:\s*(\d+)\)/);
+        if (match) {
+          participants.push({
+            username: match[1].trim(),
+            instagramId: match[2].trim()
+          });
+        } else if (line.trim() && !line.includes('UTC') && !line.includes('Author')) {
+          // Se encontrou uma linha que não é participante, parar
+          break;
+        }
       }
     }
     
@@ -374,151 +393,235 @@ export class InstagramMetaBusinessParser {
   /**
    * Extrai timestamp dos participantes
    */
-  private static extractParticipantsTimestamp(threadEl: Element): Date {
-    const participantsEl = Array.from(threadEl.parentElement?.querySelectorAll('.o > .i') || [])
-      .find(el => el.textContent?.includes('Current Participants'));
+  private static extractParticipantsTimestampFromHtml(threadDiv: HTMLDivElement): Date {
+    const text = threadDiv.textContent || '';
+    const lines = text.split('\n');
     
-    if (!participantsEl) return new Date();
+    for (const line of lines) {
+      if (line.includes('Current Participants')) {
+        // A próxima linha é o timestamp
+        const nextIndex = lines.indexOf(line) + 1;
+        if (nextIndex < lines.length) {
+          const timestamp = this.parseTimestamp(lines[nextIndex]);
+          if (timestamp) return timestamp;
+        }
+      }
+    }
     
-    const text = participantsEl.querySelector('.m')?.textContent || '';
-    const firstLine = text.split('\n')[0];
-    return this.parseTimestamp(firstLine) || new Date();
+    return new Date();
   }
   
   /**
-   * Extrai Author
+   * Extrai Author do HTML
    */
-  private static extractAuthor(messageEl: Element): MetaParticipant | null {
-    const authorEl = Array.from(messageEl.querySelectorAll('.o > .i'))
-      .find(el => el.textContent?.trim().startsWith('Author'));
+  private static extractAuthorFromHtml(messageDiv: HTMLDivElement): MetaParticipant | null {
+    const text = messageDiv.textContent || '';
+    const lines = text.split('\n');
     
-    if (!authorEl) return null;
-    
-    const text = authorEl.querySelector('.m')?.textContent?.trim() || '';
-    const match = text.match(/^(.+?)\s*\(Instagram:\s*(\d+)\)/);
-    
-    if (match) {
-      return {
-        username: match[1].trim(),
-        instagramId: match[2].trim()
-      };
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('Author')) {
+        // A próxima linha não-vazia contém o author
+        for (let j = i + 1; j < lines.length; j++) {
+          const line = lines[j].trim();
+          if (line && !line.includes('Sent')) {
+            const match = line.match(/^(.+?)\s*\(Instagram:\s*(\d+)\)/);
+            if (match) {
+              return {
+                username: match[1].trim(),
+                instagramId: match[2].trim()
+              };
+            }
+            break;
+          }
+        }
+      }
     }
     
     return null;
   }
   
   /**
-   * Extrai timestamp Sent
+   * Extrai timestamp Sent do HTML
    */
-  private static extractSent(messageEl: Element): Date | null {
-    const sentEl = Array.from(messageEl.querySelectorAll('.o > .i'))
-      .find(el => el.textContent?.trim().startsWith('Sent'));
+  private static extractSentFromHtml(messageDiv: HTMLDivElement): Date | null {
+    const text = messageDiv.textContent || '';
+    const lines = text.split('\n');
     
-    if (!sentEl) return null;
-    
-    const text = sentEl.querySelector('.m')?.textContent?.trim() || '';
-    return this.parseTimestamp(text);
-  }
-  
-  /**
-   * Extrai Body da mensagem
-   */
-  private static extractBody(messageEl: Element): string | null {
-    const bodyEl = Array.from(messageEl.querySelectorAll('.o > .i'))
-      .find(el => el.textContent?.trim().startsWith('Body'));
-    
-    if (!bodyEl) return null;
-    
-    return bodyEl.querySelector('.m')?.textContent?.trim() || '';
-  }
-  
-  /**
-   * Extrai Attachments
-   */
-  private static extractAttachments(
-    messageEl: Element,
-    mediaFiles: Map<string, Blob>
-  ): MetaAttachment[] {
-    const attachmentEls = Array.from(messageEl.querySelectorAll('.o > .i'))
-      .filter(el => el.textContent?.includes('Attachment') || el.textContent?.includes('Type'));
-    
-    const attachments: MetaAttachment[] = [];
-    
-    for (const attachEl of attachmentEls) {
-      const mElements = attachEl.parentElement?.querySelectorAll('.m') || [];
-      
-      let type = '';
-      let size: number | undefined;
-      let url: string | undefined;
-      let photoId: string | undefined;
-      
-      for (const mEl of mElements) {
-        const text = mEl.textContent?.trim() || '';
-        
-        if (text.includes('/')) {
-          type = text;
-        } else if (text.match(/^\d+$/)) {
-          size = parseInt(text);
-        } else if (text.startsWith('http')) {
-          url = text;
-        } else if (text.match(/^\d{15,}$/)) {
-          photoId = text;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('Sent')) {
+        // A próxima linha não-vazia contém o timestamp
+        for (let j = i + 1; j < lines.length; j++) {
+          const line = lines[j].trim();
+          if (line) {
+            const timestamp = this.parseTimestamp(line);
+            if (timestamp) return timestamp;
+            break;
+          }
         }
       }
-      
-      if (type || url || photoId) {
-        attachments.push({ type, size, url, photoId });
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Extrai Body da mensagem do HTML
+   */
+  private static extractBodyFromHtml(messageDiv: HTMLDivElement): string | null {
+    const text = messageDiv.textContent || '';
+    const lines = text.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === 'Body') {
+        // A próxima linha não-vazia contém o body
+        for (let j = i + 1; j < lines.length; j++) {
+          const line = lines[j].trim();
+          if (line && !line.includes('Share') && !line.includes('Attachments')) {
+            return line;
+          }
+          if (line.includes('Share') || line.includes('Attachments') || line.includes('Author')) {
+            break;
+          }
+        }
       }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Extrai Attachments do HTML
+   */
+  private static extractAttachmentsFromHtml(
+    messageDiv: HTMLDivElement,
+    mediaFiles: Map<string, Blob>
+  ): MetaAttachment[] {
+    const attachments: MetaAttachment[] = [];
+    const text = messageDiv.textContent || '';
+    const lines = text.split('\n');
+    
+    let capturing = false;
+    let currentAttachment: Partial<MetaAttachment> = {};
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      if (trimmed === 'Attachments') {
+        capturing = true;
+        continue;
+      }
+      
+      if (capturing) {
+        if (trimmed === 'Type') {
+          // Próxima linha é o type
+          continue;
+        } else if (trimmed.includes('/')) {
+          currentAttachment.type = trimmed;
+        } else if (trimmed === 'Size') {
+          continue;
+        } else if (trimmed.match(/^\d+$/)) {
+          currentAttachment.size = parseInt(trimmed);
+        } else if (trimmed === 'URL') {
+          continue;
+        } else if (trimmed.startsWith('http')) {
+          currentAttachment.url = trimmed;
+        } else if (trimmed.startsWith('Photo ID') || trimmed.match(/^\d{15,}$/)) {
+          if (trimmed.match(/^\d{15,}$/)) {
+            currentAttachment.photoId = trimmed;
+          }
+        } else if ((trimmed.includes('Author') || trimmed.includes('Share') || !trimmed) && Object.keys(currentAttachment).length > 0) {
+          attachments.push({ 
+            type: currentAttachment.type || '', 
+            size: currentAttachment.size, 
+            url: currentAttachment.url, 
+            photoId: currentAttachment.photoId 
+          });
+          currentAttachment = {};
+          if (trimmed.includes('Author') || trimmed.includes('Share')) {
+            break;
+          }
+        }
+      }
+    }
+    
+    if (Object.keys(currentAttachment).length > 0) {
+      attachments.push({ 
+        type: currentAttachment.type || '', 
+        size: currentAttachment.size, 
+        url: currentAttachment.url, 
+        photoId: currentAttachment.photoId 
+      });
     }
     
     return attachments;
   }
   
   /**
-   * Extrai Share
+   * Extrai Share do HTML
    */
-  private static extractShare(messageEl: Element): MetaShare | undefined {
-    const shareEl = Array.from(messageEl.querySelectorAll('.o > .i'))
-      .find(el => el.textContent?.trim().startsWith('Share'));
+  private static extractShareFromHtml(messageDiv: HTMLDivElement): MetaShare | undefined {
+    const text = messageDiv.textContent || '';
     
-    if (!shareEl) return undefined;
+    if (!text.includes('Share')) return undefined;
     
-    const dateCreatedEl = shareEl.querySelector('.o .i')?.textContent?.includes('Date Created')
-      ? shareEl.querySelector('.o .i .m')
-      : null;
-    const textEl = Array.from(shareEl.querySelectorAll('.o .i'))
-      .find(el => el.textContent?.trim().startsWith('Text'));
-    const urlEl = Array.from(shareEl.querySelectorAll('.o .i'))
-      .find(el => el.textContent?.trim().startsWith('Url'));
+    const lines = text.split('\n');
+    const share: Partial<MetaShare> = {};
     
-    return {
-      dateCreated: dateCreatedEl ? this.parseTimestamp(dateCreatedEl.textContent || '') : undefined,
-      text: textEl?.querySelector('.m')?.textContent?.trim(),
-      url: urlEl?.querySelector('.m')?.textContent?.trim()
-    };
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      
+      if (trimmed === 'Date Created') {
+        const nextLine = lines[i + 1]?.trim();
+        if (nextLine && nextLine !== 'Unknown') {
+          share.dateCreated = this.parseTimestamp(nextLine) || undefined;
+        }
+      } else if (trimmed === 'Text') {
+        const nextLine = lines[i + 1]?.trim();
+        if (nextLine && nextLine !== 'Url') {
+          share.text = nextLine;
+        }
+      } else if (trimmed === 'Url') {
+        const nextLine = lines[i + 1]?.trim();
+        if (nextLine && nextLine.startsWith('http')) {
+          share.url = nextLine;
+        }
+      }
+    }
+    
+    return Object.keys(share).length > 0 ? share as MetaShare : undefined;
   }
   
   /**
-   * Extrai Call Record
+   * Extrai Call Record do HTML
    */
-  private static extractCallRecord(messageEl: Element): MetaCallRecord | undefined {
-    const callEl = Array.from(messageEl.querySelectorAll('.o > .i'))
-      .find(el => el.textContent?.trim().startsWith('Call Record'));
+  private static extractCallRecordFromHtml(messageDiv: HTMLDivElement): MetaCallRecord | undefined {
+    const text = messageDiv.textContent || '';
     
-    if (!callEl) return undefined;
+    if (!text.includes('Call Record')) return undefined;
     
-    const typeEl = Array.from(callEl.querySelectorAll('.o .i'))
-      .find(el => el.textContent?.trim().startsWith('Type'));
-    const missedEl = Array.from(callEl.querySelectorAll('.o .i'))
-      .find(el => el.textContent?.trim().startsWith('Missed'));
-    const durationEl = Array.from(callEl.querySelectorAll('.o .i'))
-      .find(el => el.textContent?.trim().startsWith('Duration'));
+    const lines = text.split('\n');
+    const callRecord: Partial<MetaCallRecord> = {};
     
-    return {
-      type: typeEl?.querySelector('.m')?.textContent?.trim() || '',
-      missed: missedEl?.querySelector('.m')?.textContent?.trim() === 'true',
-      duration: parseInt(durationEl?.querySelector('.m')?.textContent?.trim() || '0')
-    };
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      
+      if (trimmed === 'Type') {
+        const nextLine = lines[i + 1]?.trim();
+        if (nextLine && (nextLine === 'audio' || nextLine === 'video')) {
+          callRecord.type = nextLine;
+        }
+      } else if (trimmed === 'Missed') {
+        const nextLine = lines[i + 1]?.trim();
+        callRecord.missed = nextLine === 'true';
+      } else if (trimmed === 'Duration') {
+        const nextLine = lines[i + 1]?.trim();
+        if (nextLine && nextLine.match(/^\d+$/)) {
+          callRecord.duration = parseInt(nextLine);
+        }
+      }
+    }
+    
+    return Object.keys(callRecord).length > 0 ? callRecord as MetaCallRecord : undefined;
   }
   
   /**

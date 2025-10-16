@@ -2,13 +2,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Calendar, FileText, Hash, Link2, Shield, User } from "lucide-react";
 import { format } from "date-fns";
-import { MetaRequestParameters } from "@/services/instagramMetaBusinessParser";
+import { ProcessedInstagramData } from "@/services/instagramParserService";
 
 interface InstagramRequestParamsProps {
-  data: MetaRequestParameters;
+  data: ProcessedInstagramData;
 }
 
 export const InstagramRequestParams = ({ data }: InstagramRequestParamsProps) => {
+  if (!data.requestParameters) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <p>Nenhum parâmetro de requisição encontrado</p>
+      </div>
+    );
+  }
+
+  const params = data.requestParameters;
+
   return (
     <div className="space-y-4">
       <Card>
@@ -28,7 +39,7 @@ export const InstagramRequestParams = ({ data }: InstagramRequestParamsProps) =>
               <Shield className="h-5 w-5 text-primary mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Service</p>
-                <p className="text-base font-semibold">{data.service}</p>
+                <p className="text-base font-semibold">{params.service}</p>
               </div>
             </div>
 
@@ -37,7 +48,7 @@ export const InstagramRequestParams = ({ data }: InstagramRequestParamsProps) =>
               <Hash className="h-5 w-5 text-primary mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Internal Ticket Number</p>
-                <p className="text-base font-semibold">{data.internalTicketNumber}</p>
+                <p className="text-base font-semibold">{params.internalTicketNumber}</p>
               </div>
             </div>
 
@@ -46,7 +57,7 @@ export const InstagramRequestParams = ({ data }: InstagramRequestParamsProps) =>
               <User className="h-5 w-5 text-primary mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Target (Instagram ID)</p>
-                <p className="text-base font-semibold font-mono">{data.target}</p>
+                <p className="text-base font-semibold font-mono">{params.target}</p>
               </div>
             </div>
 
@@ -56,12 +67,12 @@ export const InstagramRequestParams = ({ data }: InstagramRequestParamsProps) =>
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Account Identifier</p>
                 <a 
-                  href={data.accountIdentifier} 
+                  href={params.accountIdentifier} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-base font-semibold text-primary hover:underline break-all"
                 >
-                  {data.accountIdentifier}
+                  {params.accountIdentifier}
                 </a>
               </div>
             </div>
@@ -69,7 +80,7 @@ export const InstagramRequestParams = ({ data }: InstagramRequestParamsProps) =>
             {/* Account Type */}
             <div className="flex items-start gap-3 p-3 border rounded-lg">
               <Badge variant="outline" className="mt-1">
-                {data.accountType}
+                {params.accountType}
               </Badge>
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Account Type</p>
@@ -82,7 +93,7 @@ export const InstagramRequestParams = ({ data }: InstagramRequestParamsProps) =>
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground">Generated</p>
                 <p className="text-base font-semibold">
-                  {format(data.generated, 'PPpp')}
+                  {format(params.generated, 'PPpp')}
                 </p>
               </div>
             </div>
@@ -93,11 +104,11 @@ export const InstagramRequestParams = ({ data }: InstagramRequestParamsProps) =>
             <p className="text-sm font-medium text-muted-foreground mb-2">Date Range</p>
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="secondary">
-                {format(data.dateRange.start, 'PPP')}
+                {format(params.dateRange.start, 'PPP')}
               </Badge>
               <span className="text-muted-foreground">to</span>
               <Badge variant="secondary">
-                {format(data.dateRange.end, 'PPP')}
+                {format(params.dateRange.end, 'PPP')}
               </Badge>
             </div>
           </div>

@@ -16,6 +16,9 @@ import { InstagramIPs } from '@/components/InstagramIPs';
 import { InstagramFollowers } from '@/components/InstagramFollowers';
 import { ConexoesInstagram } from '@/components/ConexoesInstagram';
 import { InstagramReport } from '@/components/InstagramReport';
+import { InstagramRequestParams } from '@/components/InstagramRequestParams';
+import { InstagramNCMEC } from '@/components/InstagramNCMEC';
+import { InstagramDisappearingMessages } from '@/components/InstagramDisappearingMessages';
 import { ApiKeyInput } from '@/components/ui/api-key-input';
 import { ProcessedInstagramData } from '@/services/instagramParserService';
 
@@ -194,18 +197,19 @@ const InstagramAnalysis = () => {
           <CardContent>
             {selectedFile ? (
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-11">
+                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-12 gap-1">
                   <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+                  <TabsTrigger value="params">Parâmetros</TabsTrigger>
                   <TabsTrigger value="chats">Conversas</TabsTrigger>
                   <TabsTrigger value="profile">Perfil</TabsTrigger>
                   <TabsTrigger value="devices">Dispositivos</TabsTrigger>
                   <TabsTrigger value="ips">IPs</TabsTrigger>
                   <TabsTrigger value="followers">Seguidores</TabsTrigger>
+                  <TabsTrigger value="ncmec">NCMEC</TabsTrigger>
+                  <TabsTrigger value="disappearing">Efêmeras</TabsTrigger>
                   <TabsTrigger value="search">Buscar</TabsTrigger>
                   <TabsTrigger value="media">Mídia</TabsTrigger>
-                  <TabsTrigger value="connections">Conexões</TabsTrigger>
-                  <TabsTrigger value="report">Relatório IA</TabsTrigger>
-                  <TabsTrigger value="settings">Config</TabsTrigger>
+                  <TabsTrigger value="report">Relatório</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="overview">
@@ -218,6 +222,10 @@ const InstagramAnalysis = () => {
                     processedAt: selectedFile.metadata.processedAt.toISOString(),
                     status: 'completed' as const
                   }} />
+                </TabsContent>
+                
+                <TabsContent value="params">
+                  <InstagramRequestParams data={selectedFile} />
                 </TabsContent>
                 
                 <TabsContent value="chats">
@@ -240,6 +248,14 @@ const InstagramAnalysis = () => {
                   <InstagramFollowers data={selectedFile} />
                 </TabsContent>
                 
+                <TabsContent value="ncmec">
+                  <InstagramNCMEC data={selectedFile} />
+                </TabsContent>
+                
+                <TabsContent value="disappearing">
+                  <InstagramDisappearingMessages data={selectedFile} />
+                </TabsContent>
+                
                 <TabsContent value="search">
                   <InstagramSearch fileData={{
                     id: selectedFile.id,
@@ -255,26 +271,9 @@ const InstagramAnalysis = () => {
                 <TabsContent value="media">
                   <InstagramMedia data={selectedFile} />
                 </TabsContent>
-                
-                <TabsContent value="connections">
-                  <ConexoesInstagram data={selectedFile} />
-                </TabsContent>
 
                 <TabsContent value="report">
                   <InstagramReport data={selectedFile} />
-                </TabsContent>
-
-                <TabsContent value="settings">
-                  <div className="space-y-4">
-                    <div className="text-center mb-6">
-                      <Settings className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                      <h3 className="text-lg font-semibold">Configurações GROQ</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Configure a API GROQ para transcrição de áudio e classificação de imagem
-                      </p>
-                    </div>
-                    <ApiKeyInput />
-                  </div>
                 </TabsContent>
               </Tabs>
             ) : (

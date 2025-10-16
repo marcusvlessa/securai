@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { Upload, Users, MessageSquare, Search, Image, Volume2, Download, Settings } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { InstagramUploader } from '@/components/InstagramUploader';
@@ -197,8 +198,9 @@ const InstagramAnalysis = () => {
           <CardContent>
             {selectedFile ? (
               <Tabs defaultValue="overview" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-12 gap-1">
+                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-13 gap-1">
                   <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+                  <TabsTrigger value="warnings">⚠️ Avisos</TabsTrigger>
                   <TabsTrigger value="params">Parâmetros</TabsTrigger>
                   <TabsTrigger value="chats">Conversas</TabsTrigger>
                   <TabsTrigger value="profile">Perfil</TabsTrigger>
@@ -222,6 +224,80 @@ const InstagramAnalysis = () => {
                     processedAt: selectedFile.metadata.processedAt.toISOString(),
                     status: 'completed' as const
                   }} />
+                </TabsContent>
+                
+                <TabsContent value="warnings">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Status das Seções</CardTitle>
+                      <CardDescription>
+                        Seções disponíveis e não encontradas no arquivo processado
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div>
+                        <h3 className="font-semibold text-green-600 mb-3 flex items-center gap-2">
+                          <Badge variant="default" className="bg-green-600">✅ Disponíveis</Badge>
+                        </h3>
+                        <ul className="space-y-2">
+                          {selectedFile.metadata.availableSections?.map((section, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-sm">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span>{section}</span>
+                            </li>
+                          ))}
+                          {(!selectedFile.metadata.availableSections || selectedFile.metadata.availableSections.length === 0) && (
+                            <li className="text-sm text-muted-foreground">Nenhuma seção disponível</li>
+                          )}
+                        </ul>
+                      </div>
+                      
+                      <Separator />
+                      
+                      <div>
+                        <h3 className="font-semibold text-orange-600 mb-3 flex items-center gap-2">
+                          <Badge variant="secondary" className="bg-orange-100 text-orange-700">⚠️ Não Encontradas</Badge>
+                        </h3>
+                        <ul className="space-y-2">
+                          {selectedFile.metadata.warnings?.map((warning, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-sm">
+                              <span className="text-orange-600 mt-0.5">⚠</span>
+                              <span>{warning}</span>
+                            </li>
+                          ))}
+                          {(!selectedFile.metadata.warnings || selectedFile.metadata.warnings.length === 0) && (
+                            <li className="text-sm text-muted-foreground">Nenhum aviso</li>
+                          )}
+                        </ul>
+                      </div>
+                      
+                      <Separator />
+                      
+                      <div className="bg-muted/30 p-4 rounded-lg">
+                        <h4 className="font-medium mb-2">📋 Resumo</h4>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Total de conversas:</span>
+                            <span className="ml-2 font-semibold">{selectedFile.conversations.length}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Total de mídias:</span>
+                            <span className="ml-2 font-semibold">{selectedFile.media.length}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Usuários identificados:</span>
+                            <span className="ml-2 font-semibold">{selectedFile.users.length}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Mensagens totais:</span>
+                            <span className="ml-2 font-semibold">
+                              {selectedFile.conversations.reduce((sum, c) => sum + c.messageCount, 0)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </TabsContent>
                 
                 <TabsContent value="params">

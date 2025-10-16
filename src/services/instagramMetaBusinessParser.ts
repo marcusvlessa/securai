@@ -25,6 +25,9 @@ export interface MetaAttachment {
   size?: number;
   url?: string;
   photoId?: string;
+  filename?: string;
+  blob?: Blob;
+  blobUrl?: string;
 }
 
 export interface MetaShare {
@@ -129,6 +132,7 @@ export class InstagramMetaBusinessParser {
     ncmecReports: MetaNCMECReport[];
     threadsPosts: MetaThreadsPost[];
     disappearingMessages: MetaDisappearingMessage[];
+    photos: Array<{id: string, path: string, blob: Blob | null, timestamp?: Date}>;
   } {
     console.log('🔍 [MetaBusinessParser] Iniciando parse completo...');
     
@@ -138,6 +142,7 @@ export class InstagramMetaBusinessParser {
     const ncmecReports = this.parseNCMECReports(doc);
     const threadsPosts = this.parseThreadsPostsComplete(doc);
     const disappearingMessages = this.parseDisappearingMessages(doc);
+    const photos = this.parsePhotos(doc, mediaFiles);
     
     console.log(`✅ [MetaBusinessParser] Parse concluído:`, {
       hasRequestParams: !!requestParameters,
@@ -145,7 +150,8 @@ export class InstagramMetaBusinessParser {
       hasProfilePicture: !!profilePicture,
       ncmecReportsCount: ncmecReports.length,
       threadsPostsCount: threadsPosts.length,
-      disappearingMessagesCount: disappearingMessages.length
+      disappearingMessagesCount: disappearingMessages.length,
+      photosCount: photos.length
     });
     
     return {
@@ -154,7 +160,8 @@ export class InstagramMetaBusinessParser {
       profilePicture,
       ncmecReports,
       threadsPosts,
-      disappearingMessages
+      disappearingMessages,
+      photos
     };
   }
   
@@ -490,70 +497,140 @@ export class InstagramMetaBusinessParser {
   }
   
   /**
-   * Extrai Attachments do HTML
+   * Extrai Attachments do HTML com busca de blobs locais
    */
   private static extractAttachmentsFromHtml(
     messageDiv: HTMLDivElement,
     mediaFiles: Map<string, Blob>
   ): MetaAttachment[] {
     const attachments: MetaAttachment[] = [];
-    const text = messageDiv.textContent || '';
-    const lines = text.split('\n');
     
-    let capturing = false;
-    let currentAttachment: Partial<MetaAttachment> = {};
+    // ETAPA 1: Buscar elementos de mídia no DOM (imagens, vídeos, áudios)
+    const mediaElements = messageDiv.querySelectorAll('img[src*="linked_media"], video[src*="linked_media"], audio[src*="linked_media"]');
     
-    for (const line of lines) {
-      const trimmed = line.trim();
+    console.log(`🔍 [Attachments] Encontrados ${mediaElements.length} elementos de mídia no DOM`);
+    
+    mediaElements.forEach((el, idx) => {
+      const src = el.getAttribute('src') || '';
+      const filename = src.split('/').pop() || '';
       
-      if (trimmed === 'Attachments') {
-        capturing = true;
-        continue;
+      console.log(`  📎 [${idx + 1}] Processando: ${src}`);
+      
+      // Buscar blob com múltiplas variações
+      const blob = mediaFiles.get(src) || 
+                   mediaFiles.get(`linked_media/${filename}`) || 
+                   mediaFiles.get(filename);
+      
+      if (blob) {
+        const blobUrl = URL.createObjectURL(blob);
+        const mediaType = this.getMediaTypeFromElement(el) || this.getMediaTypeFromFilename(filename);
+        
+        attachments.push({
+          type: mediaType,
+          size: blob.size,
+          url: blobUrl,
+          blobUrl: blobUrl,
+          photoId: this.extractPhotoIdFromFilename(filename),
+          filename,
+          blob
+        });
+        
+        console.log(`  ✅ Blob encontrado: ${filename} (${blob.size} bytes)`);
+      } else {
+        console.warn(`  ⚠️ Blob não encontrado para: ${filename}`);
       }
+    });
+    
+    // FALLBACK: Se não encontrou via DOM, tentar via texto
+    if (attachments.length === 0) {
+      const text = messageDiv.textContent || '';
+      const lines = text.split('\n');
       
-      if (capturing) {
-        if (trimmed === 'Type') {
-          // Próxima linha é o type
+      let capturing = false;
+      let currentAttachment: Partial<MetaAttachment> = {};
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        
+        if (trimmed === 'Attachments') {
+          capturing = true;
           continue;
-        } else if (trimmed.includes('/')) {
-          currentAttachment.type = trimmed;
-        } else if (trimmed === 'Size') {
-          continue;
-        } else if (trimmed.match(/^\d+$/)) {
-          currentAttachment.size = parseInt(trimmed);
-        } else if (trimmed === 'URL') {
-          continue;
-        } else if (trimmed.startsWith('http')) {
-          currentAttachment.url = trimmed;
-        } else if (trimmed.startsWith('Photo ID') || trimmed.match(/^\d{15,}$/)) {
-          if (trimmed.match(/^\d{15,}$/)) {
-            currentAttachment.photoId = trimmed;
-          }
-        } else if ((trimmed.includes('Author') || trimmed.includes('Share') || !trimmed) && Object.keys(currentAttachment).length > 0) {
-          attachments.push({ 
-            type: currentAttachment.type || '', 
-            size: currentAttachment.size, 
-            url: currentAttachment.url, 
-            photoId: currentAttachment.photoId 
-          });
-          currentAttachment = {};
-          if (trimmed.includes('Author') || trimmed.includes('Share')) {
-            break;
+        }
+        
+        if (capturing) {
+          if (trimmed === 'Type') {
+            continue;
+          } else if (trimmed.includes('/')) {
+            currentAttachment.type = trimmed;
+          } else if (trimmed === 'Size') {
+            continue;
+          } else if (trimmed.match(/^\d+$/)) {
+            currentAttachment.size = parseInt(trimmed);
+          } else if (trimmed === 'URL') {
+            continue;
+          } else if (trimmed.startsWith('http')) {
+            currentAttachment.url = trimmed;
+          } else if (trimmed.startsWith('Photo ID') || trimmed.match(/^\d{15,}$/)) {
+            if (trimmed.match(/^\d{15,}$/)) {
+              currentAttachment.photoId = trimmed;
+            }
+          } else if ((trimmed.includes('Author') || trimmed.includes('Share') || !trimmed) && Object.keys(currentAttachment).length > 0) {
+            attachments.push({ 
+              type: currentAttachment.type || '', 
+              size: currentAttachment.size, 
+              url: currentAttachment.url, 
+              photoId: currentAttachment.photoId 
+            });
+            currentAttachment = {};
+            if (trimmed.includes('Author') || trimmed.includes('Share')) {
+              break;
+            }
           }
         }
       }
+      
+      if (Object.keys(currentAttachment).length > 0) {
+        attachments.push({ 
+          type: currentAttachment.type || '', 
+          size: currentAttachment.size, 
+          url: currentAttachment.url, 
+          photoId: currentAttachment.photoId 
+        });
+      }
     }
     
-    if (Object.keys(currentAttachment).length > 0) {
-      attachments.push({ 
-        type: currentAttachment.type || '', 
-        size: currentAttachment.size, 
-        url: currentAttachment.url, 
-        photoId: currentAttachment.photoId 
-      });
-    }
-    
+    console.log(`✅ [Attachments] Total de ${attachments.length} attachments extraídos`);
     return attachments;
+  }
+  
+  /**
+   * Determina o tipo de mídia a partir do elemento HTML
+   */
+  private static getMediaTypeFromElement(element: Element): string {
+    const tagName = element.tagName.toLowerCase();
+    if (tagName === 'img') return 'image/jpeg';
+    if (tagName === 'video') return 'video/mp4';
+    if (tagName === 'audio') return 'audio/mpeg';
+    return 'application/octet-stream';
+  }
+  
+  /**
+   * Determina o tipo de mídia a partir do filename
+   */
+  private static getMediaTypeFromFilename(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) return 'image/jpeg';
+    if (['mp4', 'mov', 'avi', 'webm'].includes(ext || '')) return 'video/mp4';
+    if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext || '')) return 'audio/mpeg';
+    return 'application/octet-stream';
+  }
+  
+  /**
+   * Extrai Photo ID do filename
+   */
+  private static extractPhotoIdFromFilename(filename: string): string | undefined {
+    const match = filename.match(/\d{15,}/);
+    return match ? match[0] : undefined;
   }
   
   /**
@@ -658,6 +735,50 @@ export class InstagramMetaBusinessParser {
       blob,
       filename
     };
+  }
+  
+  /**
+   * ETAPA 2: Parse de Photos (seção separada de fotos)
+   */
+  static parsePhotos(
+    doc: Document,
+    mediaFiles: Map<string, Blob>
+  ): Array<{id: string, path: string, blob: Blob | null, timestamp?: Date}> {
+    console.log('🔍 [Photos] Parsing photos section...');
+    
+    const section = doc.querySelector('#property-photos');
+    if (!section || section.textContent?.includes('No responsive records located')) {
+      console.log('ℹ️ [Photos] Nenhum registro encontrado');
+      return [];
+    }
+    
+    const photos: Array<{id: string, path: string, blob: Blob | null, timestamp?: Date}> = [];
+    const imgElements = section.querySelectorAll('img[src*="linked_media"]');
+    
+    console.log(`📊 [Photos] Encontradas ${imgElements.length} imagens na seção`);
+    
+    imgElements.forEach((img, idx) => {
+      const src = img.getAttribute('src') || '';
+      const filename = src.split('/').pop() || '';
+      const photoId = filename.match(/\d{15,}/)?.[0] || `photo_${idx}`;
+      
+      const blob = mediaFiles.get(src) || mediaFiles.get(`linked_media/${filename}`) || mediaFiles.get(filename);
+      
+      if (blob) {
+        photos.push({
+          id: photoId,
+          path: src,
+          blob,
+          timestamp: undefined // Extrair se disponível no HTML
+        });
+        console.log(`  ✅ [${idx + 1}] ${filename} (${blob.size} bytes)`);
+      } else {
+        console.warn(`  ⚠️ [${idx + 1}] Blob não encontrado para ${filename}`);
+      }
+    });
+    
+    console.log(`✅ [Photos] ${photos.length} fotos extraídas com sucesso`);
+    return photos;
   }
   
   /**

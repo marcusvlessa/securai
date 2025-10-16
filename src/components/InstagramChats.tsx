@@ -507,8 +507,69 @@ export const InstagramChats: React.FC<InstagramChatsProps> = ({ data }) => {
                             <p className="text-sm leading-relaxed">{message.content}</p>
                           )}
                           
-                          {/* Mídia */}
-                          {message.mediaPath && (
+                          {/* ETAPA 5: Mídia inline com attachments */}
+                          {(message as any).attachments && Array.isArray((message as any).attachments) && (message as any).attachments.length > 0 && (
+                            <div className="mt-2 space-y-2">
+                              {(message as any).attachments.map((att: any, idx: number) => (
+                                <div key={idx} className="rounded-lg overflow-hidden">
+                                  {/* Imagem inline */}
+                                  {att.blobUrl && att.type?.includes('image') && (
+                                    <img 
+                                      src={att.blobUrl} 
+                                      alt="Attachment" 
+                                      className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                      onClick={() => window.open(att.blobUrl, '_blank')}
+                                    />
+                                  )}
+                                  
+                                  {/* Vídeo inline */}
+                                  {att.blobUrl && att.type?.includes('video') && (
+                                    <video 
+                                      src={att.blobUrl} 
+                                      controls 
+                                      className="max-w-full rounded-lg"
+                                    />
+                                  )}
+                                  
+                                  {/* Áudio inline */}
+                                  {att.blobUrl && att.type?.includes('audio') && (
+                                    <audio 
+                                      src={att.blobUrl} 
+                                      controls 
+                                      className="w-full"
+                                    />
+                                  )}
+                                  
+                                  {/* Info do arquivo */}
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    {att.type} • {att.size ? `${(att.size / 1024).toFixed(2)} KB` : 'Tamanho desconhecido'}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Share content */}
+                          {message.share && (
+                            <div className="mt-2 p-3 bg-muted/50 rounded-lg border">
+                              {message.share.text && (
+                                <p className="text-sm mb-1">{message.share.text}</p>
+                              )}
+                              {message.share.url && (
+                                <a 
+                                  href={message.share.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-xs text-primary hover:underline break-all"
+                                >
+                                  {message.share.url}
+                                </a>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Fallback: Mídia antiga (se não tiver attachments) */}
+                          {!(message as any).attachments && message.mediaPath && (
                             <div className="mt-2">
                               {message.type === 'image' && (
                                 <MediaViewer 

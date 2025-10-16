@@ -215,6 +215,8 @@ export interface ProcessedInstagramData {
     totalFiles: number;
     htmlContent?: string;
     sectionsFound: string[];
+    warnings?: string[];
+    availableSections?: string[];
   };
 }
 
@@ -289,7 +291,9 @@ export class InstagramParserService {
           originalFilename: file.name,
           totalFiles: Object.keys(zipContent.files).length,
           htmlContent: htmlContent.substring(0, 1000),
-          sectionsFound: parsedData.sectionsFound || []
+          sectionsFound: parsedData.sectionsFound || [],
+          warnings: parsedData.warnings || [],
+          availableSections: parsedData.sectionsFound || []
         }
       };
       
@@ -419,6 +423,13 @@ export class InstagramParserService {
     // Usar o novo parser para Meta Business Records
     const metaResult = InstagramMetaBusinessParser.parseMetaBusinessRecord(doc, mediaFiles);
     
+    console.log('📊 [Parser] Resultado do Meta Business Parser:', {
+      conversations: metaResult.conversations.length,
+      photos: metaResult.photos.length,
+      hasRequestParams: !!metaResult.requestParameters,
+      hasProfilePicture: !!metaResult.profilePicture
+    });
+    
     // Converter para o formato esperado
     const conversations: InstagramConversation[] = metaResult.conversations.map(conv => ({
       id: conv.id,
@@ -436,13 +447,15 @@ export class InstagramParserService {
         type: msg.type,
         mediaType: msg.attachments[0]?.type,
         mediaSize: msg.attachments[0]?.size,
-        mediaUrl: msg.attachments[0]?.url,
+        mediaUrl: msg.attachments[0]?.blobUrl,
         photoId: msg.attachments[0]?.photoId,
         share: msg.share,
         callRecord: msg.callRecord,
         removedBySender: msg.removedBySender,
-        reactions: []
-      })),
+        reactions: [],
+        // Incluir attachments para acesso posterior
+        attachments: msg.attachments
+      } as any)),
       createdAt: conv.createdAt,
       lastActivity: conv.lastActivity,
       messageCount: conv.messageCount,
@@ -495,11 +508,33 @@ export class InstagramParserService {
       verificationStatus: 'unverified'
     } : undefined;
     
-    // Gerar dados mockados para entidades não presentes no HTML
-    const devices = this.generateMockDevices();
-    const logins = this.generateMockLogins(10);
-    const following = this.generateMockFollowing(50);
-    const followers = this.generateMockFollowers(42);
+    // ETAPA 4: Remover dados mockados - arrays vazios para seções não disponíveis
+    const devices: InstagramDevice[] = [];
+    const logins: InstagramLogin[] = [];
+    const following: InstagramFollowing[] = [];
+    const followers: InstagramFollowing[] = [];
+    
+    // Determinar seções disponíveis e avisos
+    const availableSections: string[] = [];
+    const warnings: string[] = [];
+    
+    if (metaResult.requestParameters) availableSections.push('Request Parameters');
+    if (metaResult.conversations.length > 0) availableSections.push('Unified Messages');
+    if (metaResult.profilePicture) availableSections.push('Profile Picture');
+    if (metaResult.photos.length > 0) availableSections.push(`Photos (${metaResult.photos.length})`);
+    
+    // Seções vazias/não encontradas
+    warnings.push('⚠️ Devices: seção não presente no HTML fornecido');
+    warnings.push('⚠️ Logins: seção não presente no HTML fornecido');
+    warnings.push('⚠️ Following: seção não presente no HTML fornecido');
+    warnings.push('⚠️ Followers: seção não presente no HTML fornecido');
+    
+    if (metaResult.ncmecReports.length === 0) warnings.push('ℹ️ NCMEC Reports: sem registros');
+    if (metaResult.threadsPosts.length === 0) warnings.push('ℹ️ Threads Posts: sem registros');
+    if (metaResult.disappearingMessages.length === 0) warnings.push('ℹ️ Disappearing Messages: sem registros');
+    
+    console.log('📋 [Parser] Seções disponíveis:', availableSections);
+    console.log('⚠️ [Parser] Avisos:', warnings);
     
     return {
       conversations,
@@ -513,7 +548,9 @@ export class InstagramParserService {
       ncmecReports: metaResult.ncmecReports,
       threadsPosts: metaResult.threadsPosts,
       disappearingMessages: metaResult.disappearingMessages,
-      sectionsFound: ['unified_messages', 'request_parameters', 'profile_picture', 'devices', 'logins', 'following', 'followers']
+      photos: metaResult.photos,
+      sectionsFound: availableSections,
+      warnings: warnings
     };
   }
   
@@ -1271,21 +1308,92 @@ export class InstagramParserService {
     return isNaN(parsed) ? new Date() : new Date(parsed);
   }
 
-  private organizeData(parsedData: any, mediaFiles: Map<string, Blob>): { users: InstagramUser[]; conversations: InstagramConversation[]; media: InstagramMedia[]; profile?: InstagramProfile; devices: InstagramDevice[]; logins: InstagramLogin[]; following: InstagramFollowing[]; followers: InstagramFollowing[]; threadsPosts: ThreadsPost[]; ncmecReports: NCMECReport[]; requestParameters: RequestParameter; disappearingMessages: any[]; caseMetadata?: CaseMetadata } {
+  private organizeData(parsedData: any, mediaFiles: Map<string, Blob>): { users: InstagramUser[]; conversations: InstagramConversation[]; media: InstagramMedia[]; profile?: InstagramProfile; devices: InstagramDevice[]; logins: InstagramLogin[]; following: InstagramFollowing[]; followers: InstagramFollowing[]; threadsPosts: ThreadsPost[]; ncmecReports: NCMECReport[]; requestParameters: RequestParameter | null; disappearingMessages: any[]; caseMetadata?: CaseMetadata } {
+    console.log('📦 [organizeData] ETAPA 3: Consolidando todas as mídias...');
+    
     const media: InstagramMedia[] = [];
     
-    // Process media files with proper typing
-    mediaFiles.forEach((blob, filename) => {
-      const type = this.getMediaType(filename);
+    // 1. Adicionar profile picture
+    if (parsedData.profile?.profilePictureBlob) {
       media.push({
         id: uuidv4(),
-        type,
-        filename,
-        path: filename,
-        blob,
-        fileSize: blob.size
+        type: 'image',
+        filename: 'profile_picture',
+        path: parsedData.profile.profilePicture || 'profile_picture',
+        blob: parsedData.profile.profilePictureBlob,
+        fileSize: parsedData.profile.profilePictureBlob.size,
+        associatedMessageId: undefined,
+        associatedConversationId: undefined
+      });
+      console.log(`  ✅ Profile picture adicionada`);
+    }
+    
+    // 2. Adicionar mídias de mensagens (attachments com blob)
+    let attachmentCount = 0;
+    parsedData.conversations?.forEach((conv: InstagramConversation) => {
+      conv.messages.forEach((msg: any) => {
+        if (msg.attachments && Array.isArray(msg.attachments)) {
+          msg.attachments.forEach((att: any) => {
+            if (att.blob) {
+              media.push({
+                id: att.photoId || uuidv4(),
+                type: att.type?.includes('image') ? 'image' : att.type?.includes('video') ? 'video' : 'audio',
+                filename: att.filename || 'unknown',
+                path: att.url || att.blobUrl || '',
+                blob: att.blob,
+                fileSize: att.size || att.blob.size,
+                associatedMessageId: msg.id,
+                associatedConversationId: conv.id
+              });
+              attachmentCount++;
+            }
+          });
+        }
       });
     });
+    console.log(`  ✅ ${attachmentCount} mídias de mensagens adicionadas`);
+    
+    // 3. Adicionar mídias da seção Photos
+    if (parsedData.photos && Array.isArray(parsedData.photos)) {
+      parsedData.photos.forEach((photo: any) => {
+        if (photo.blob) {
+          media.push({
+            id: photo.id,
+            type: 'image',
+            filename: photo.path.split('/').pop() || 'photo',
+            path: photo.path,
+            blob: photo.blob,
+            fileSize: photo.blob.size,
+            uploadDate: photo.timestamp,
+            associatedMessageId: undefined,
+            associatedConversationId: undefined
+          });
+        }
+      });
+      console.log(`  ✅ ${parsedData.photos.length} fotos da seção Photos adicionadas`);
+    }
+    
+    // 4. Adicionar mídias não associadas (fallback para arquivos soltos)
+    let orphanCount = 0;
+    mediaFiles.forEach((blob, filename) => {
+      // Verificar se essa mídia já foi adicionada
+      const alreadyAdded = media.some(m => m.filename === filename || m.path.includes(filename));
+      if (!alreadyAdded) {
+        const type = this.getMediaType(filename);
+        media.push({
+          id: uuidv4(),
+          type,
+          filename,
+          path: filename,
+          blob,
+          fileSize: blob.size
+        });
+        orphanCount++;
+      }
+    });
+    console.log(`  ✅ ${orphanCount} mídias órfãs adicionadas`);
+    
+    console.log(`📊 [organizeData] Total de mídias consolidadas: ${media.length}`);
     
     return {
       users: parsedData.users || [],
@@ -1298,17 +1406,18 @@ export class InstagramParserService {
       followers: parsedData.followers || [],
       threadsPosts: parsedData.threadsPosts || [],
       ncmecReports: parsedData.ncmecReports || [],
-      requestParameters: parsedData.requestParameters || {
-        service: '',
-        internalTicketNumber: '',
-        target: '',
-        accountIdentifier: '',
-        accountType: '',
-        generated: new Date(),
-        dateRange: { start: new Date(), end: new Date() }
-      },
+      requestParameters: parsedData.requestParameters || null,
       disappearingMessages: parsedData.disappearingMessages || [],
-      caseMetadata: parsedData.caseMetadata
+      caseMetadata: {
+        dateRange: parsedData.requestParameters?.dateRange || {
+          start: new Date(),
+          end: new Date()
+        },
+        generationDate: parsedData.requestParameters?.generated || new Date(),
+        ticketNumber: parsedData.requestParameters?.internalTicketNumber,
+        targetAccount: parsedData.requestParameters?.target,
+        reportType: 'Meta Business Record'
+      }
     };
   }
 

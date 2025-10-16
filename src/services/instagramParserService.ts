@@ -7,11 +7,14 @@ import { InstagramParserMethods } from './instagramParserMethods';
 export interface InstagramProfile {
   username: string;
   displayName?: string;
+  instagramId?: string;
+  profileUrl?: string;
   email: string[];
   phone: string[];
   registrationDate?: Date;
   registrationIP?: string;
   profilePicture?: string;
+  profilePictureBlob?: Blob;
   accountStatus: 'active' | 'disabled' | 'deactivated';
   verificationStatus: 'verified' | 'unverified';
   businessAccount?: boolean;
@@ -75,10 +78,16 @@ export interface NCMECReport {
 }
 
 export interface RequestParameter {
-  parameterName: string;
-  value: string;
-  category: string;
-  timestamp?: Date;
+  service: string;
+  internalTicketNumber: string;
+  target: string;
+  accountIdentifier: string;
+  accountType: string;
+  generated: Date;
+  dateRange: {
+    start: Date;
+    end: Date;
+  };
 }
 
 export interface InstagramUser {
@@ -96,25 +105,50 @@ export interface InstagramUser {
 export interface InstagramMessage {
   id: string;
   conversationId: string;
+  threadId: string;
   sender: string;
+  senderInstagramId?: string;
   content: string;
   timestamp: Date;
-  type: 'text' | 'image' | 'video' | 'audio' | 'link';
+  type: 'text' | 'image' | 'video' | 'audio' | 'link' | 'share' | 'call';
   mediaPath?: string;
   mediaId?: string;
+  mediaType?: string;
+  mediaSize?: number;
+  mediaUrl?: string;
+  photoId?: string;
+  share?: {
+    dateCreated?: Date;
+    text?: string;
+    url?: string;
+  };
+  callRecord?: {
+    type: string;
+    missed: boolean;
+    duration: number;
+  };
+  removedBySender: boolean;
   reactions?: any[];
   isDisappearing?: boolean;
 }
 
 export interface InstagramConversation {
   id: string;
+  threadId: string;
   participants: string[];
+  participantsWithIds: Array<{
+    username: string;
+    instagramId: string;
+  }>;
   title?: string;
   messages: InstagramMessage[];
   createdAt: Date;
   lastActivity: Date;
   messageCount: number;
   mediaCount: number;
+  attachmentsCount: number;
+  sharesCount: number;
+  callsCount: number;
 }
 
 export interface InstagramMedia {
@@ -144,6 +178,22 @@ export interface CaseMetadata {
   reportType: string;
 }
 
+export interface DisappearingMessage {
+  id: string;
+  participants: string[];
+  reporter: string;
+  timeReported: Date;
+  threadId: string;
+  sender: string;
+  sent: Date;
+  message: string;
+  attachments: Array<{
+    type: string;
+    url: string;
+    photoId?: string;
+  }>;
+}
+
 export interface ProcessedInstagramData {
   id: string;
   users: InstagramUser[];
@@ -156,7 +206,8 @@ export interface ProcessedInstagramData {
   followers: InstagramFollowing[];
   threadsPosts: ThreadsPost[];
   ncmecReports: NCMECReport[];
-  requestParameters: RequestParameter[];
+  requestParameters: RequestParameter | null;
+  disappearingMessages: DisappearingMessage[];
   caseMetadata?: CaseMetadata;
   metadata: {
     processedAt: Date;
@@ -231,6 +282,7 @@ export class InstagramParserService {
         threadsPosts: organizedData.threadsPosts,
         ncmecReports: organizedData.ncmecReports,
         requestParameters: organizedData.requestParameters,
+        disappearingMessages: organizedData.disappearingMessages || [],
         caseMetadata: organizedData.caseMetadata,
         metadata: {
           processedAt: new Date(),
@@ -357,13 +409,73 @@ export class InstagramParserService {
   }
 
   private async parseHtmlContentRobust(htmlContent: string, mediaFiles: Map<string, Blob>): Promise<any> {
-    console.log('🚀 Starting enhanced HTML parsing...');
+    console.log('🚀 Usando Meta Business Record Parser...');
     
-    // Import the enhanced parser
-    const { InstagramParserEnhanced } = await import('./instagramParserEnhanced');
+    // Import do novo parser especializado
+    const { InstagramMetaBusinessParser } = await import('./instagramMetaBusinessParser');
     
-    // Use the enhanced parser for better results
-    return InstagramParserEnhanced.parseHtmlContentRobust(htmlContent, mediaFiles);
+    const doc = new DOMParser().parseFromString(htmlContent, 'text/html');
+    
+    // Usar o novo parser para Meta Business Records
+    const metaResult = InstagramMetaBusinessParser.parseMetaBusinessRecord(doc, mediaFiles);
+    
+    // Converter para o formato esperado
+    const conversations: InstagramConversation[] = metaResult.conversations.map(conv => ({
+      id: conv.id,
+      threadId: conv.threadId,
+      participants: conv.participants.map(p => p.username),
+      participantsWithIds: conv.participants,
+      messages: conv.messages.map(msg => ({
+        id: msg.id,
+        conversationId: msg.conversationId,
+        threadId: msg.threadId,
+        sender: msg.author?.username || 'Unknown',
+        senderInstagramId: msg.author?.instagramId,
+        content: msg.body,
+        timestamp: msg.sent,
+        type: msg.type,
+        mediaType: msg.attachments[0]?.type,
+        mediaSize: msg.attachments[0]?.size,
+        mediaUrl: msg.attachments[0]?.url,
+        photoId: msg.attachments[0]?.photoId,
+        share: msg.share,
+        callRecord: msg.callRecord,
+        removedBySender: msg.removedBySender,
+        reactions: []
+      })),
+      createdAt: conv.createdAt,
+      lastActivity: conv.lastActivity,
+      messageCount: conv.messageCount,
+      mediaCount: conv.attachmentsCount,
+      attachmentsCount: conv.attachmentsCount,
+      sharesCount: conv.sharesCount,
+      callsCount: conv.callsCount
+    }));
+    
+    // Profile com foto
+    const profile: InstagramProfile | undefined = metaResult.profilePicture ? {
+      username: metaResult.requestParameters?.target || 'Unknown',
+      instagramId: metaResult.requestParameters?.target,
+      profileUrl: metaResult.requestParameters?.accountIdentifier,
+      displayName: metaResult.requestParameters?.accountIdentifier?.split('/').pop(),
+      email: [],
+      phone: [],
+      profilePicture: metaResult.profilePicture.blob ? URL.createObjectURL(metaResult.profilePicture.blob) : undefined,
+      profilePictureBlob: metaResult.profilePicture.blob || undefined,
+      accountStatus: 'active',
+      verificationStatus: 'unverified'
+    } : undefined;
+    
+    return {
+      conversations,
+      profile,
+      users: [],
+      requestParameters: metaResult.requestParameters,
+      ncmecReports: metaResult.ncmecReports,
+      threadsPosts: metaResult.threadsPosts,
+      disappearingMessages: metaResult.disappearingMessages,
+      sectionsFound: ['unified_messages', 'request_parameters', 'profile_picture']
+    };
   }
 
   private extractMetaConversations(doc: Document, mediaFiles: Map<string, Blob>): InstagramConversation[] {

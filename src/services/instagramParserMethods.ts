@@ -4,32 +4,13 @@ import { InstagramProfile, InstagramDevice, InstagramLogin, InstagramFollowing, 
 
 export class InstagramParserMethods {
   
-  static parseRequestParameters(doc: Document): RequestParameter[] {
-    const parameters: RequestParameter[] = [];
-    
+  static parseRequestParameters(doc: Document): RequestParameter | null {
     const section = this.findSectionByHeader(doc, ['Request Parameters', 'Parameters', 'Request Info']);
-    if (!section) return parameters;
+    if (!section) return null;
     
-    const tables = section.querySelectorAll('table');
-    tables.forEach(table => {
-      const rows = table.querySelectorAll('tr');
-      rows.forEach((row, index) => {
-        if (index === 0) return; // Skip header
-        
-        const cells = row.querySelectorAll('td, th');
-        if (cells.length >= 2) {
-          parameters.push({
-            parameterName: cells[0]?.textContent?.trim() || '',
-            value: cells[1]?.textContent?.trim() || '',
-            category: 'request',
-            timestamp: new Date()
-          });
-        }
-      });
-    });
-    
-    console.log(`Found ${parameters.length} request parameters`);
-    return parameters;
+    // Usar o Meta Business Parser para dados corretos
+    const { InstagramMetaBusinessParser } = require('./instagramMetaBusinessParser');
+    return InstagramMetaBusinessParser.parseRequestParameters(doc);
   }
 
   static parseNCMECReports(doc: Document): NCMECReport[] {

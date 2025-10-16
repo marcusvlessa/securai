@@ -84,6 +84,7 @@ export class InstagramParserEnhanced {
       threadsPosts: [],
       ncmecReports: [],
       requestParameters: [],
+      disappearingMessages: [],
       metadata: {
         processedAt: new Date(),
         originalFilename: 'instagram_data.html',

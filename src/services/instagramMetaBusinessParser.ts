@@ -235,18 +235,26 @@ export class InstagramMetaBusinessParser {
     
     const conversations: MetaConversation[] = [];
     
-    // Buscar todas as divs que contêm "Thread" seguido de número entre parênteses
+    // Buscar divs .t.i diretas que contêm "Thread" (não pegar todo textContent aninhado)
     const allDivs = Array.from(section.querySelectorAll('.t.i'));
     console.log(`🔍 Total de divs .t.i encontradas: ${allDivs.length}`);
     
     const threadDivs = allDivs.filter(div => {
-      const text = div.textContent?.trim() || '';
-      // Verificar se contém "Thread" E um número de 13+ dígitos entre parênteses
-      const hasThreadPattern = text.includes('Thread') && /\((\d{13,})\)/.test(text);
-      if (hasThreadPattern) {
-        console.log(`✅ Thread div encontrada: ${text.substring(0, 50)}...`);
+      // Pegar apenas o texto próprio da div (primeiro childNode se for texto)
+      const firstTextNode = Array.from(div.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
+      const ownText = firstTextNode?.textContent?.trim() || '';
+      
+      // Verificar se o texto próprio é exatamente "Thread"
+      if (ownText === 'Thread') {
+        // Verificar se tem o número no .m filho
+        const mDiv = div.querySelector('.m');
+        const mText = mDiv?.textContent?.trim() || '';
+        if (/\((\d{13,})\)/.test(mText)) {
+          console.log(`✅ Thread encontrado com ID: ${mText}`);
+          return true;
+        }
       }
-      return hasThreadPattern;
+      return false;
     });
     
     console.log(`📊 [UnifiedMessages] Encontrados ${threadDivs.length} threads no HTML`);

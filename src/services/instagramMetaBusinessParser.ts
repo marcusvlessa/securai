@@ -219,7 +219,7 @@ export class InstagramMetaBusinessParser {
   }
   
   /**
-   * Parse completo de Unified Messages com threading
+   * Parse completo de Unified Messages com threading - NOVA IMPLEMENTAÇÃO
    */
   static parseUnifiedMessagesComplete(
     doc: Document,
@@ -235,77 +235,87 @@ export class InstagramMetaBusinessParser {
     
     const conversations: MetaConversation[] = [];
     
-    // Buscar TODAS as divs (não apenas .t.i) para encontrar threads
+    // ETAPA 1: Encontrar divs que contêm APENAS "Thread" (sem o ID ainda)
     const allDivs = Array.from(section.querySelectorAll('div'));
-    console.log(`🔍 Total de divs encontradas: ${allDivs.length}`);
+    console.log(`🔍 [Thread Search] Total de divs: ${allDivs.length}`);
     
-    // Filtrar threads: procurar por divs que tenham um nó de texto "Thread" E uma div.m com ID
-    const threadDivs = allDivs.filter(div => {
-      // Verificar se tem classes t e i
+    const threadStarts = allDivs.filter(div => {
       const hasClasses = div.classList.contains('t') && div.classList.contains('i');
       if (!hasClasses) return false;
       
-      // Pegar todo o conteúdo de texto
-      const fullText = div.textContent?.trim() || '';
+      // Pegar apenas o texto direto (sem aninhados)
+      const ownText = Array.from(div.childNodes)
+        .filter(node => node.nodeType === Node.TEXT_NODE)
+        .map(node => node.textContent?.trim())
+        .join(' ');
       
-      // Deve começar com "Thread" e ter número entre parênteses
-      if (!fullText.startsWith('Thread')) return false;
-      
-      // Buscar div.m filha com o ID
-      const mDiv = div.querySelector('.m');
-      if (!mDiv) return false;
-      
-      const mText = mDiv.textContent?.trim() || '';
-      const hasThreadID = /\((\d{13,})\)/.test(mText);
-      
-      if (hasThreadID) {
-        console.log(`✅ Thread encontrado! Full text: "${fullText.substring(0, 50)}", ID: ${mText}`);
-      }
-      
-      return hasThreadID;
+      return ownText === 'Thread';
     });
     
-    console.log(`📊 [UnifiedMessages] Encontrados ${threadDivs.length} threads no HTML`);
+    console.log(`🔍 [Thread Search] Encontradas ${threadStarts.length} divs com "Thread"`);
     
-    for (const threadDiv of threadDivs) {
+    // ETAPA 2: Para cada "Thread", buscar o ID nos próximos elementos
+    for (const threadStart of threadStarts) {
       try {
-        // Extrair Thread ID da div .m interna (formato: "Thread (1234567890123)")
-        const mDiv = threadDiv.querySelector('.m');
-        const mText = mDiv?.textContent?.trim() || threadDiv.textContent || '';
-        console.log(`🔍 [Parser] Texto encontrado:`, mText.substring(0, 100));
+        // Pegar o container pai (.t.o)
+        const threadContainer = threadStart.closest('.t.o');
+        if (!threadContainer) continue;
         
-        const threadIdMatch = mText.match(/\((\d{13,})\)/);
-        if (!threadIdMatch) {
-          console.warn('⚠️ Thread sem ID encontrado');
+        // ETAPA 3: Buscar o ID do thread nos próximos elementos irmãos
+        let threadId: string | null = null;
+        let currentNode = threadContainer.nextElementSibling;
+        
+        console.log(`🔍 [Thread] Buscando ID nos próximos elementos...`);
+        
+        // Buscar nos próximos 10 elementos irmãos
+        for (let i = 0; i < 10 && currentNode; i++) {
+          const textContent = currentNode.textContent || '';
+          const match = textContent.match(/\((\d{13,})\)/);
+          
+          if (match) {
+            threadId = match[1];
+            console.log(`✅ [Thread ${threadId}] ID encontrado no elemento ${i + 1}!`);
+            break;
+          }
+          
+          currentNode = currentNode.nextElementSibling;
+        }
+        
+        if (!threadId) {
+          console.warn('⚠️ [Thread] ID não encontrado nos próximos elementos');
           continue;
         }
         
-        const threadId = threadIdMatch[1];
-        console.log(`🧵 [Thread ${threadId}] Processando...`);
+        // ETAPA 4: Coletar TODOS os elementos entre este thread e o próximo
+        const conversationElements: Element[] = [threadContainer];
+        let nextElement = threadContainer.nextElementSibling;
         
-        // Pegar o container pai mais próximo com classe .t.o
-        let threadContainer = threadDiv.closest('.t.o') as HTMLElement;
-        if (!threadContainer) {
-          console.warn(`⚠️ [Thread ${threadId}] Container não encontrado`);
-          continue;
+        // Adicionar elementos até encontrar o próximo "Thread" ou acabar a seção
+        while (nextElement) {
+          const isNextThread = Array.from(nextElement.querySelectorAll('.t.i')).some(div => {
+            const ownText = Array.from(div.childNodes)
+              .filter(node => node.nodeType === Node.TEXT_NODE)
+              .map(node => node.textContent?.trim())
+              .join(' ');
+            return ownText === 'Thread';
+          });
+          
+          if (isNextThread) break;
+          
+          conversationElements.push(nextElement);
+          nextElement = nextElement.nextElementSibling;
         }
         
-        // Subir mais um nível para pegar o container completo do thread
-        const parentContainer = threadContainer.parentElement?.closest('.t.o') as HTMLElement;
-        if (parentContainer) {
-          threadContainer = parentContainer;
-        }
+        console.log(`📦 [Thread ${threadId}] Container virtual: ${conversationElements.length} elementos`);
         
-        console.log(`📦 [Thread ${threadId}] Container encontrado`);
-        
-        // Extrair participantes
-        const participants = this.extractParticipantsFromContainer(threadContainer);
-        const participantsUpdatedAt = this.extractParticipantsTimestampContainer(threadContainer);
+        // ETAPA 5: Extrair participantes do container virtual
+        const participants = this.extractParticipantsFromElements(conversationElements);
+        const participantsUpdatedAt = this.extractParticipantsTimestampFromElements(conversationElements);
         
         console.log(`👥 [Thread ${threadId}] ${participants.length} participantes encontrados`);
         
-        // Extrair todas as mensagens
-        const messages = this.extractAllMessagesFromThreadContainer(threadContainer, threadId, mediaFiles);
+        // ETAPA 6: Extrair todas as mensagens do container virtual
+        const messages = this.extractMessagesFromElements(conversationElements, threadId, mediaFiles);
         
         console.log(`💬 [Thread ${threadId}] ${messages.length} mensagens extraídas`);
         
@@ -337,6 +347,132 @@ export class InstagramMetaBusinessParser {
     
     console.log(`✅ [UnifiedMessages] ${conversations.length} conversas processadas`);
     return conversations;
+  }
+  
+  /**
+   * NOVO: Extrai participantes de um array de elementos (container virtual)
+   */
+  private static extractParticipantsFromElements(elements: Element[]): MetaParticipant[] {
+    const participants: MetaParticipant[] = [];
+    
+    // Procurar "Current Participants" em todos os elementos
+    for (const element of elements) {
+      const participantsDivs = Array.from(element.querySelectorAll('.t.i'));
+      const participantsDiv = participantsDivs.find(div => 
+        div.textContent?.includes('Current Participants')
+      );
+      
+      if (participantsDiv) {
+        const mDiv = participantsDiv.querySelector('.m');
+        if (!mDiv) continue;
+        
+        const text = mDiv.textContent || '';
+        console.log(`👥 [Participants] Texto encontrado: ${text.substring(0, 150)}`);
+        
+        // Extrair linhas com formato: "username (Instagram: 123456789)"
+        const lines = text.split('\n').filter(line => line.includes('Instagram:'));
+        
+        lines.forEach(line => {
+          const match = line.match(/(\S+)\s+\(Instagram:\s+(\d+)\)/);
+          if (match) {
+            participants.push({
+              username: match[1],
+              instagramId: match[2]
+            });
+            console.log(`✅ [Participant] ${match[1]} (${match[2]})`);
+          }
+        });
+        
+        break; // Encontrou participantes, sair do loop
+      }
+    }
+    
+    return participants;
+  }
+  
+  /**
+   * NOVO: Extrai timestamp dos participantes de um array de elementos
+   */
+  private static extractParticipantsTimestampFromElements(elements: Element[]): Date {
+    for (const element of elements) {
+      const participantsDivs = Array.from(element.querySelectorAll('.t.i'));
+      const participantsDiv = participantsDivs.find(div => 
+        div.textContent?.includes('Current Participants')
+      );
+      
+      if (participantsDiv) {
+        const text = participantsDiv.textContent || '';
+        const lines = text.split('\n');
+        
+        for (const line of lines) {
+          if (line.includes('UTC')) {
+            const timestamp = this.parseTimestamp(line);
+            if (timestamp) return timestamp;
+          }
+        }
+      }
+    }
+    
+    return new Date();
+  }
+  
+  /**
+   * NOVO: Extrai TODAS as mensagens de um array de elementos (container virtual)
+   */
+  private static extractMessagesFromElements(
+    elements: Element[],
+    threadId: string,
+    mediaFiles: Map<string, Blob>
+  ): MetaMessage[] {
+    const messages: MetaMessage[] = [];
+    
+    // Buscar divs "Author" em todos os elementos
+    for (const element of elements) {
+      const authorDivs = Array.from(element.querySelectorAll('.t.i'))
+        .filter(div => div.textContent?.trim() === 'Author');
+      
+      console.log(`📝 [Thread ${threadId}] Encontrados ${authorDivs.length} blocos de Author no elemento`);
+      
+      for (const authorDiv of authorDivs) {
+        const messageBlock = authorDiv.closest('.t.o');
+        if (!messageBlock) continue;
+        
+        // Extrair componentes da mensagem
+        const author = this.extractAuthorFromContainer(messageBlock as HTMLElement);
+        const sent = this.extractSentFromContainer(messageBlock as HTMLElement);
+        const body = this.extractBodyFromContainer(messageBlock as HTMLElement);
+        const attachments = this.extractAttachmentsFromContainer(messageBlock as HTMLElement, mediaFiles);
+        const share = this.extractShareFromContainer(messageBlock as HTMLElement);
+        const callRecord = this.extractCallRecordFromContainer(messageBlock as HTMLElement);
+        const removedBySender = messageBlock.textContent?.includes('Removed by Sender') || false;
+        
+        if (author || body || attachments.length > 0) {
+          const type: 'text' | 'image' | 'video' | 'audio' | 'link' | 'share' | 'call' = 
+            callRecord ? 'call' 
+            : share && share.url ? 'share'
+            : attachments.length > 0 ? (attachments[0].type.includes('image') ? 'image' : attachments[0].type.includes('video') ? 'video' : 'audio')
+            : 'text';
+          
+          messages.push({
+            id: uuidv4(),
+            threadId,
+            conversationId: threadId,
+            author: author || { username: 'Unknown', instagramId: '0' },
+            sent: sent || new Date(),
+            body: body || '',
+            type,
+            removedBySender,
+            attachments,
+            share: share && Object.keys(share).length > 0 ? share : undefined,
+            callRecord
+          });
+          
+          console.log(`✅ [Message] ${author?.username || 'Unknown'}: ${body?.substring(0, 30) || '(sem texto)'}, ${attachments.length} attachments`);
+        }
+      }
+    }
+    
+    return messages;
   }
   
   /**

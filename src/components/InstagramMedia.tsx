@@ -198,16 +198,44 @@ export const InstagramMedia: React.FC<InstagramMediaProps> = ({ data }) => {
     }
   };
 
-  const handleBulkProcess = async () => {
-    const pendingItems = mediaItems.filter(item => item.processingStatus === 'pending');
+  const handleTranscribeAllAudios = async () => {
+    const audioItems = mediaItems.filter(item => item.type === 'audio' && !item.transcript);
     
-    for (const item of pendingItems) {
-      if (item.type === 'audio') {
-        await handleTranscribeAudio(item.id);
-      } else if (item.type === 'image') {
-        await handleClassifyImage(item.id);
-      }
+    toast({
+      title: "Iniciando transcrição em lote",
+      description: `Processando ${audioItems.length} áudios...`,
+    });
+    
+    for (const item of audioItems) {
+      await handleTranscribeAudio(item.id);
+      // Pequeno delay entre transcrições para evitar rate limit
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
+    
+    toast({
+      title: "Transcrição em lote concluída",
+      description: `${audioItems.length} áudios processados com sucesso`,
+    });
+  };
+
+  const handleClassifyAllImages = async () => {
+    const imageItems = mediaItems.filter(item => item.type === 'image' && !item.classification);
+    
+    toast({
+      title: "Iniciando classificação em lote",
+      description: `Processando ${imageItems.length} imagens...`,
+    });
+    
+    for (const item of imageItems) {
+      await handleClassifyImage(item.id);
+      // Pequeno delay entre classificações para evitar rate limit
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+    
+    toast({
+      title: "Classificação em lote concluída",
+      description: `${imageItems.length} imagens processadas com sucesso`,
+    });
   };
 
   const filteredItems = mediaItems.filter(item => {
@@ -235,7 +263,8 @@ export const InstagramMedia: React.FC<InstagramMediaProps> = ({ data }) => {
     }
   };
 
-  const pendingCount = mediaItems.filter(item => item.processingStatus === 'pending').length;
+  const pendingAudiosCount = mediaItems.filter(item => item.type === 'audio' && !item.transcript).length;
+  const pendingImagesCount = mediaItems.filter(item => item.type === 'image' && !item.classification).length;
 
   return (
     <div className="space-y-6">
@@ -296,32 +325,53 @@ export const InstagramMedia: React.FC<InstagramMediaProps> = ({ data }) => {
         </Card>
       </div>
 
-      {/* Processamento em Lote */}
-      {pendingCount > 0 && (
+      {/* Processamento Manual em Lote */}
+      {(pendingAudiosCount > 0 || pendingImagesCount > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Brain className="h-5 w-5" />
-              Processamento Automático
+              Processamento Manual com IA
             </CardTitle>
             <CardDescription>
-              {pendingCount} arquivo(s) aguardando processamento
+              Transcreva áudios e classifique imagens usando GROQ AI
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-3">
-              <Button 
-                onClick={handleBulkProcess}
-                disabled={processingItem !== null}
-                className="flex-1"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Processar Todos os Arquivos
-              </Button>
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Exportar Resultados
-              </Button>
+            <div className="grid gap-3 md:grid-cols-2">
+              {pendingAudiosCount > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    🎵 {pendingAudiosCount} áudio(s) para transcrever
+                  </p>
+                  <Button 
+                    onClick={handleTranscribeAllAudios}
+                    disabled={processingItem !== null}
+                    className="w-full"
+                    variant="default"
+                  >
+                    <Mic className="h-4 w-4 mr-2" />
+                    Transcrever Todos os Áudios
+                  </Button>
+                </div>
+              )}
+              
+              {pendingImagesCount > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    🖼️ {pendingImagesCount} imagem(s) para classificar
+                  </p>
+                  <Button 
+                    onClick={handleClassifyAllImages}
+                    disabled={processingItem !== null}
+                    className="w-full"
+                    variant="default"
+                  >
+                    <Brain className="h-4 w-4 mr-2" />
+                    Classificar Todas as Imagens
+                  </Button>
+                </div>
+              )}
             </div>
             
             {processingItem && (

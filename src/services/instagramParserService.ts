@@ -1457,169 +1457,27 @@ export class InstagramParserService {
       onProgress?.(step, progressPercent);
     };
 
-    // Process audio files with intelligent rate limiting
-    const AUDIO_BATCH_SIZE = 1; // More conservative for GROQ rate limits
-    const AUDIO_BATCH_DELAY = 4000; // 4 seconds between audio batches
+    // ⚠️ TRANSCRIÇÃO DESABILITADA - Agora é feita manualmente pelo usuário
+    // Os arquivos de áudio estão disponíveis em audioFiles mas não serão transcritos automaticamente
+    console.log(`ℹ️ ${audioFiles.length} arquivos de áudio disponíveis para transcrição manual`);
     
+    // Apenas atualizar progresso sem processar
     if (audioFiles.length > 0) {
-      console.log(`🎵 Iniciando transcrição de ${audioFiles.length} arquivos de áudio...`);
-      
-      for (let i = 0; i < audioFiles.length; i += AUDIO_BATCH_SIZE) {
-        const batch = audioFiles.slice(i, i + AUDIO_BATCH_SIZE);
-        
-        updateProgress(`Transcrevendo áudio ${i + 1}/${audioFiles.length}...`);
-        
-        await Promise.allSettled(batch.map(async (audio) => {
-          try {
-            // Safe base64 conversion with chunking to avoid stack overflow
-            const arrayBuffer = await audio.blob.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
-            
-            if (bytes.length > 10 * 1024 * 1024) { // Skip files > 10MB
-              console.warn(`⚠️ Arquivo de áudio muito grande, pulando: ${audio.filename} (${bytes.length} bytes)`);
-              return;
-            }
-            
-            let binary = '';
-            const chunkSize = 8192;
-            
-            for (let j = 0; j < bytes.length; j += chunkSize) {
-              binary += String.fromCharCode(...bytes.slice(j, j + chunkSize));
-            }
-            const base64Audio = btoa(binary);
-            
-            const { supabase } = await import('@/integrations/supabase/client');
-            
-            // Timeout management with abort controller
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-              controller.abort();
-              console.warn(`⏱️ Timeout processando áudio: ${audio.filename}`);
-            }, 60000); // 60s for audio
-            
-            try {
-              console.log(`🎵 Enviando para transcrição: ${audio.filename}`);
-              
-              const { data, error } = await supabase.functions.invoke('transcribe-audio', {
-                body: {
-                  audioData: base64Audio,
-                  groqApiKey: settings.groqApiKey
-                }
-              });
-              
-              clearTimeout(timeoutId);
-              
-              if (!error && data?.success && data.text) {
-                audio.transcript = data.text;
-                console.log(`✅ Áudio transcrito: ${audio.filename} - "${data.text.substring(0, 100)}..."`);
-              } else {
-                console.warn(`⚠️ Falha na transcrição ${audio.filename}:`, error?.message || data?.error || 'Unknown error');
-              }
-            } catch (error) {
-              clearTimeout(timeoutId);
-              if (error.name === 'AbortError') {
-                console.warn(`⏱️ Timeout na transcrição: ${audio.filename}`);
-              } else {
-                console.warn(`❌ Erro na transcrição ${audio.filename}:`, error.message);
-              }
-            }
-          } catch (error) {
-            console.warn(`❌ Erro processando áudio ${audio.filename}:`, error.message);
-          }
-          
-          processedCount++;
-        }));
-        
-        // Progressive delay between batches
-        if (i + AUDIO_BATCH_SIZE < audioFiles.length) {
-          console.log(`⏳ Aguardando ${AUDIO_BATCH_DELAY / 1000}s antes do próximo lote...`);
-          await new Promise(resolve => setTimeout(resolve, AUDIO_BATCH_DELAY));
-        }
-      }
+      processedCount += audioFiles.length;
+      onProgress?.(`${audioFiles.length} áudios prontos para transcrição manual`, 80);
     }
 
-    // Process images with intelligent rate limiting
-    const IMAGE_BATCH_SIZE = 2; // Conservative for GROQ
-    const IMAGE_BATCH_DELAY = 3000; // 3 seconds between image batches
+    // ⚠️ CLASSIFICAÇÃO DE IMAGENS DESABILITADA - Agora é feita manualmente pelo usuário
+    // As imagens estão disponíveis em imageFiles mas não serão classificadas automaticamente
+    console.log(`ℹ️ ${imageFiles.length} imagens disponíveis para classificação manual`);
     
+    // Apenas atualizar progresso sem processar
     if (imageFiles.length > 0) {
-      console.log(`🖼️ Iniciando classificação de ${imageFiles.length} imagens...`);
-      
-      for (let i = 0; i < imageFiles.length; i += IMAGE_BATCH_SIZE) {
-        const batch = imageFiles.slice(i, i + IMAGE_BATCH_SIZE);
-        
-        updateProgress(`Classificando imagem ${i + 1}/${imageFiles.length}...`);
-        
-        await Promise.allSettled(batch.map(async (image) => {
-          try {
-            // Safe base64 conversion
-            const arrayBuffer = await image.blob.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
-            
-            if (bytes.length > 5 * 1024 * 1024) { // Skip files > 5MB
-              console.warn(`⚠️ Imagem muito grande, pulando: ${image.filename} (${bytes.length} bytes)`);
-              return;
-            }
-            
-            let binary = '';
-            const chunkSize = 8192;
-            
-            for (let j = 0; j < bytes.length; j += chunkSize) {
-              binary += String.fromCharCode(...bytes.slice(j, j + chunkSize));
-            }
-            const base64Image = btoa(binary);
-            
-            const { supabase } = await import('@/integrations/supabase/client');
-            
-            // Timeout management
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-              controller.abort();
-              console.warn(`⏱️ Timeout processando imagem: ${image.filename}`);
-            }, 45000); // 45s for images
-            
-            try {
-              console.log(`🖼️ Enviando para classificação: ${image.filename}`);
-              
-              const { data, error } = await supabase.functions.invoke('classify-image', {
-                body: {
-                  imageBase64: base64Image,
-                  groqApiKey: settings.groqApiKey
-                }
-              });
-              
-              clearTimeout(timeoutId);
-              
-              if (!error && data?.success && data.classification) {
-                image.classification = data.classification;
-                console.log(`✅ Imagem classificada: ${image.filename} - "${data.classification.substring(0, 100)}..."`);
-              } else {
-                console.warn(`⚠️ Falha na classificação ${image.filename}:`, error?.message || data?.error || 'Unknown error');
-              }
-            } catch (error) {
-              clearTimeout(timeoutId);
-              if (error.name === 'AbortError') {
-                console.warn(`⏱️ Timeout na classificação: ${image.filename}`);
-              } else {
-                console.warn(`❌ Erro na classificação ${image.filename}:`, error.message);
-              }
-            }
-          } catch (error) {
-            console.warn(`❌ Erro processando imagem ${image.filename}:`, error.message);
-          }
-          
-          processedCount++;
-        }));
-        
-        // Progressive delay between batches
-        if (i + IMAGE_BATCH_SIZE < imageFiles.length) {
-          console.log(`⏳ Aguardando ${IMAGE_BATCH_DELAY / 1000}s antes do próximo lote...`);
-          await new Promise(resolve => setTimeout(resolve, IMAGE_BATCH_DELAY));
-        }
-      }
+      processedCount += imageFiles.length;
+      onProgress?.(`${imageFiles.length} imagens prontas para classificação manual`, 85);
     }
     
-    console.log(`✅ Processamento de mídia concluído: ${processedCount}/${totalFiles} arquivos processados`);
+    console.log(`✅ Processamento de mídia concluído (transcrições/classificações manuais): ${totalFiles} arquivos disponíveis`);
   }
 }
 

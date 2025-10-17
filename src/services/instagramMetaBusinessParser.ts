@@ -219,7 +219,7 @@ export class InstagramMetaBusinessParser {
   }
   
   /**
-   * Parse completo de Unified Messages com threading - CORREÇÃO DEFINITIVA
+   * Parse completo de Unified Messages - ESTRUTURA REAL DO HTML
    */
   static parseUnifiedMessagesComplete(
     doc: Document,
@@ -235,50 +235,59 @@ export class InstagramMetaBusinessParser {
     
     const conversations: MetaConversation[] = [];
     
-    // ETAPA 1: Buscar divs.t.i que COMEÇAM com "Thread" e contêm ID
-    const threadDivs = Array.from(section.querySelectorAll('div.t.i')).filter(div => {
-      const text = div.textContent?.trim() || '';
-      return text.startsWith('Thread') && /\(\d{13,}\)/.test(text);
+    // Estrutura real: <div class="t i">Thread<div class="m"><div> (ID)<div class="p"></div>
+    // Buscar todos os elementos div.t.i que contêm o texto "Thread"
+    const allTiDivs = Array.from(section.querySelectorAll('div.t.i'));
+    const threadDivs = allTiDivs.filter(div => {
+      // Verificar se o primeiro nó de texto é "Thread"
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Thread';
     });
     
-    console.log(`🔍 [UnifiedMessages] Encontrados ${threadDivs.length} threads no HTML`);
+    console.log(`🔍 [UnifiedMessages] Encontrados ${threadDivs.length} elementos "Thread"`);
     
-    // ETAPA 2: Para cada thread, processar completamente
     for (const threadDiv of threadDivs) {
       try {
-        // ETAPA 2.1: Extrair ID diretamente do texto interno (dentro de div.m > div)
-        const mDiv = threadDiv.querySelector('.m > div');
-        const threadText = mDiv?.textContent?.trim() || '';
-        const threadIdMatch = threadText.match(/\((\d{13,})\)/);
+        // Extrair ID de dentro de div.m > div
+        const mDiv = threadDiv.querySelector('div.m > div');
+        if (!mDiv) {
+          console.warn('⚠️ [Thread] div.m > div não encontrado');
+          continue;
+        }
+        
+        const mDivText = mDiv.textContent?.trim() || '';
+        const threadIdMatch = mDivText.match(/\((\d{13,})\)/);
         
         if (!threadIdMatch) {
-          console.warn(`⚠️ [Thread] ID não encontrado em: ${threadText.substring(0, 50)}`);
+          console.warn(`⚠️ [Thread] ID não encontrado em: "${mDivText}"`);
           continue;
         }
         
         const threadId = threadIdMatch[1];
-        console.log(`✅ [Thread ${threadId}] ID extraído com sucesso de: ${threadText.substring(0, 100)}`);
+        console.log(`✅ [Thread ${threadId}] Identificado!`);
         
-        // ETAPA 2.2: Pegar o container completo do thread (div.t.o pai)
-        const threadContainer = threadDiv.closest('.t.o');
+        // Pegar container pai do thread
+        const threadContainer = threadDiv.closest('div.t.o');
         if (!threadContainer) {
-          console.warn(`⚠️ [Thread ${threadId}] Container .t.o não encontrado`);
+          console.warn(`⚠️ [Thread ${threadId}] Container div.t.o não encontrado`);
           continue;
         }
         
-        // ETAPA 3: Coletar elementos da conversa até o próximo thread
+        // Coletar TODOS os elementos até o próximo Thread
         const conversationElements: Element[] = [threadContainer];
         let currentElement = threadContainer.nextElementSibling;
         
         while (currentElement) {
-          // Parar se encontrar outro div.t.i que começa com "Thread"
-          const isNextThread = Array.from(currentElement.querySelectorAll('div.t.i')).some(div => {
-            const text = div.textContent?.trim() || '';
-            return text.startsWith('Thread') && /\(\d{13,}\)/.test(text);
+          // Verificar se é um próximo thread
+          const hasThreadDiv = Array.from(currentElement.querySelectorAll('div.t.i')).some(div => {
+            const firstTextNode = Array.from(div.childNodes)
+              .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+            return firstTextNode?.textContent?.trim() === 'Thread';
           });
           
-          if (isNextThread) {
-            console.log(`🛑 [Thread ${threadId}] Próximo thread encontrado, parando coleta`);
+          if (hasThreadDiv) {
+            console.log(`🛑 [Thread ${threadId}] Próximo thread encontrado`);
             break;
           }
           
@@ -286,18 +295,22 @@ export class InstagramMetaBusinessParser {
           currentElement = currentElement.nextElementSibling;
         }
         
-        console.log(`📦 [Thread ${threadId}] Container com ${conversationElements.length} elementos coletados`);
+        console.log(`📦 [Thread ${threadId}] ${conversationElements.length} elementos coletados`);
         
-        // ETAPA 4: Extrair participantes
+        // Extrair participantes
         const participants = this.extractParticipantsFromElements(conversationElements);
         const participantsUpdatedAt = this.extractParticipantsTimestampFromElements(conversationElements);
         
-        console.log(`👥 [Thread ${threadId}] ${participants.length} participantes: ${participants.map(p => p.username).join(', ')}`);
+        if (participants.length > 0) {
+          console.log(`👥 [Thread ${threadId}] Participantes: ${participants.map(p => p.username).join(', ')}`);
+        }
         
-        // ETAPA 5: Extrair mensagens
+        // Extrair mensagens
         const messages = this.extractMessagesFromElements(conversationElements, threadId, mediaFiles);
         
-        console.log(`💬 [Thread ${threadId}] ${messages.length} mensagens extraídas`);
+        if (messages.length > 0) {
+          console.log(`💬 [Thread ${threadId}] ${messages.length} mensagens extraídas`);
+        }
         
         if (messages.length > 0 || participants.length > 0) {
           const attachmentsCount = messages.reduce((sum, m) => sum + m.attachments.length, 0);
@@ -318,16 +331,14 @@ export class InstagramMetaBusinessParser {
             lastActivity: messages.length > 0 ? messages[0].sent : new Date()
           });
           
-          console.log(`✅ [Thread ${threadId}] Processado com sucesso: ${messages.length} msgs, ${participants.length} participantes, ${attachmentsCount} attachments`);
-        } else {
-          console.warn(`⚠️ [Thread ${threadId}] Nenhuma mensagem ou participante encontrado`);
+          console.log(`✅ [Thread ${threadId}] ✓ ${messages.length} msgs, ✓ ${participants.length} participantes, ✓ ${attachmentsCount} anexos`);
         }
       } catch (error) {
-        console.error(`❌ [Thread] Erro ao processar:`, error);
+        console.error(`❌ [Thread] Erro:`, error);
       }
     }
     
-    console.log(`✅ [UnifiedMessages] ${conversations.length} conversas processadas com sucesso`);
+    console.log(`✅ [UnifiedMessages] TOTAL: ${conversations.length} conversas processadas`);
     return conversations;
   }
   

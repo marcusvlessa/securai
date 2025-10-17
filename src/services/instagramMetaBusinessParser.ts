@@ -235,26 +235,34 @@ export class InstagramMetaBusinessParser {
     
     const conversations: MetaConversation[] = [];
     
-    // Buscar divs .t.i diretas que contêm "Thread" (não pegar todo textContent aninhado)
-    const allDivs = Array.from(section.querySelectorAll('.t.i'));
-    console.log(`🔍 Total de divs .t.i encontradas: ${allDivs.length}`);
+    // Buscar TODAS as divs (não apenas .t.i) para encontrar threads
+    const allDivs = Array.from(section.querySelectorAll('div'));
+    console.log(`🔍 Total de divs encontradas: ${allDivs.length}`);
     
+    // Filtrar threads: procurar por divs que tenham um nó de texto "Thread" E uma div.m com ID
     const threadDivs = allDivs.filter(div => {
-      // Pegar apenas o texto próprio da div (primeiro childNode se for texto)
-      const firstTextNode = Array.from(div.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
-      const ownText = firstTextNode?.textContent?.trim() || '';
+      // Verificar se tem classes t e i
+      const hasClasses = div.classList.contains('t') && div.classList.contains('i');
+      if (!hasClasses) return false;
       
-      // Verificar se o texto próprio é exatamente "Thread"
-      if (ownText === 'Thread') {
-        // Verificar se tem o número no .m filho
-        const mDiv = div.querySelector('.m');
-        const mText = mDiv?.textContent?.trim() || '';
-        if (/\((\d{13,})\)/.test(mText)) {
-          console.log(`✅ Thread encontrado com ID: ${mText}`);
-          return true;
-        }
+      // Pegar todo o conteúdo de texto
+      const fullText = div.textContent?.trim() || '';
+      
+      // Deve começar com "Thread" e ter número entre parênteses
+      if (!fullText.startsWith('Thread')) return false;
+      
+      // Buscar div.m filha com o ID
+      const mDiv = div.querySelector('.m');
+      if (!mDiv) return false;
+      
+      const mText = mDiv.textContent?.trim() || '';
+      const hasThreadID = /\((\d{13,})\)/.test(mText);
+      
+      if (hasThreadID) {
+        console.log(`✅ Thread encontrado! Full text: "${fullText.substring(0, 50)}", ID: ${mText}`);
       }
-      return false;
+      
+      return hasThreadID;
     });
     
     console.log(`📊 [UnifiedMessages] Encontrados ${threadDivs.length} threads no HTML`);

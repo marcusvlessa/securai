@@ -235,11 +235,18 @@ export class InstagramMetaBusinessParser {
     
     const conversations: MetaConversation[] = [];
     
-    // Buscar todas as divs que contêm "Thread" no texto inicial
-    const allDivs = Array.from(section.querySelectorAll('.t.o > .t.i'));
+    // Buscar todas as divs que contêm "Thread" seguido de número entre parênteses
+    const allDivs = Array.from(section.querySelectorAll('.t.i'));
+    console.log(`🔍 Total de divs .t.i encontradas: ${allDivs.length}`);
+    
     const threadDivs = allDivs.filter(div => {
-      const firstTextNode = div.textContent?.trim();
-      return firstTextNode?.startsWith('Thread');
+      const text = div.textContent?.trim() || '';
+      // Verificar se começa com "Thread" e tem ID entre parênteses
+      const hasThreadPattern = /^Thread\s*\(\d+\)/.test(text);
+      if (hasThreadPattern) {
+        console.log(`✅ Thread div encontrada: ${text.substring(0, 50)}...`);
+      }
+      return hasThreadPattern;
     });
     
     console.log(`📊 [UnifiedMessages] Encontrados ${threadDivs.length} threads no HTML`);
@@ -257,16 +264,31 @@ export class InstagramMetaBusinessParser {
         const threadId = threadIdMatch[1];
         console.log(`🧵 [Thread ${threadId}] Processando...`);
         
-        // Pegar o container pai que contém todo o thread
-        const threadContainer = threadDiv.closest('.t.o') as HTMLElement;
-        if (!threadContainer) continue;
+        // Pegar o container pai mais próximo com classe .t.o
+        let threadContainer = threadDiv.closest('.t.o') as HTMLElement;
+        if (!threadContainer) {
+          console.warn(`⚠️ [Thread ${threadId}] Container não encontrado`);
+          continue;
+        }
+        
+        // Subir mais um nível para pegar o container completo do thread
+        const parentContainer = threadContainer.parentElement?.closest('.t.o') as HTMLElement;
+        if (parentContainer) {
+          threadContainer = parentContainer;
+        }
+        
+        console.log(`📦 [Thread ${threadId}] Container encontrado`);
         
         // Extrair participantes
         const participants = this.extractParticipantsFromContainer(threadContainer);
         const participantsUpdatedAt = this.extractParticipantsTimestampContainer(threadContainer);
         
+        console.log(`👥 [Thread ${threadId}] ${participants.length} participantes encontrados`);
+        
         // Extrair todas as mensagens
         const messages = this.extractAllMessagesFromThreadContainer(threadContainer, threadId, mediaFiles);
+        
+        console.log(`💬 [Thread ${threadId}] ${messages.length} mensagens extraídas`);
         
         if (messages.length > 0 || participants.length > 0) {
           const attachmentsCount = messages.reduce((sum, m) => sum + m.attachments.length, 0);
@@ -287,7 +309,7 @@ export class InstagramMetaBusinessParser {
             lastActivity: messages.length > 0 ? messages[0].sent : new Date()
           });
           
-          console.log(`✅ [Thread ${threadId}] ${messages.length} mensagens, ${participants.length} participantes, ${attachmentsCount} attachments`);
+          console.log(`✅ [Thread ${threadId}] Processado: ${messages.length} mensagens, ${participants.length} participantes, ${attachmentsCount} attachments`);
         }
       } catch (error) {
         console.error(`❌ [Thread] Erro ao processar:`, error);

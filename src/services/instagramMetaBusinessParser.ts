@@ -241,8 +241,8 @@ export class InstagramMetaBusinessParser {
     
     const threadDivs = allDivs.filter(div => {
       const text = div.textContent?.trim() || '';
-      // Verificar se começa com "Thread" e tem ID entre parênteses
-      const hasThreadPattern = /^Thread\s*\(\d+\)/.test(text);
+      // Verificar se contém "Thread" E um número de 13+ dígitos entre parênteses
+      const hasThreadPattern = text.includes('Thread') && /\((\d{13,})\)/.test(text);
       if (hasThreadPattern) {
         console.log(`✅ Thread div encontrada: ${text.substring(0, 50)}...`);
       }
@@ -253,9 +253,12 @@ export class InstagramMetaBusinessParser {
     
     for (const threadDiv of threadDivs) {
       try {
-        // Extrair Thread ID do texto (formato: "Thread (123456789)")
-        const threadText = threadDiv.textContent || '';
-        const threadIdMatch = threadText.match(/Thread[^\(]*\((\d+)\)/);
+        // Extrair Thread ID da div .m interna (formato: "Thread (1234567890123)")
+        const mDiv = threadDiv.querySelector('.m');
+        const mText = mDiv?.textContent?.trim() || threadDiv.textContent || '';
+        console.log(`🔍 [Parser] Texto encontrado:`, mText.substring(0, 100));
+        
+        const threadIdMatch = mText.match(/\((\d{13,})\)/);
         if (!threadIdMatch) {
           console.warn('⚠️ Thread sem ID encontrado');
           continue;
@@ -324,76 +327,59 @@ export class InstagramMetaBusinessParser {
    * Extrai TODAS as mensagens de um thread container
    */
   private static extractAllMessagesFromThreadContainer(
-    threadContainer: HTMLElement,
+    container: HTMLElement,
     threadId: string,
     mediaFiles: Map<string, Blob>
   ): MetaMessage[] {
     const messages: MetaMessage[] = [];
     
-    // Buscar todas as divs que contêm "Author" como label
-    const allDivs = Array.from(threadContainer.querySelectorAll('.t.o > .t.i'));
-    const authorDivs = allDivs.filter(div => {
-      const text = div.textContent?.trim();
-      return text?.startsWith('Author');
-    });
+    // Buscar todas as divs que contêm "Author" (indicam início de mensagem)
+    const allDivs = Array.from(container.querySelectorAll('.t.i'));
+    const authorDivs = allDivs.filter(div => 
+      div.textContent?.trim() === 'Author' || 
+      div.textContent?.includes('Author')
+    );
     
-    console.log(`  📨 [Thread ${threadId}] Encontradas ${authorDivs.length} mensagens`);
+    console.log(`📝 [Thread ${threadId}] ${authorDivs.length} blocos de Author encontrados`);
     
     for (let i = 0; i < authorDivs.length; i++) {
-      try {
-        const authorDiv = authorDivs[i];
-        const messageContainer = authorDiv.closest('.t.o') as HTMLElement;
-        if (!messageContainer) continue;
+      const authorDiv = authorDivs[i];
+      
+      // Pegar o container pai da mensagem (sobe até .t.o)
+      const messageBlock = authorDiv.closest('.t.o');
+      if (!messageBlock) continue;
+      
+      // Extrair dados da mensagem
+      const author = this.extractAuthorFromContainer(messageBlock as HTMLElement);
+      const sent = this.extractSentFromContainer(messageBlock as HTMLElement);
+      const body = this.extractBodyFromContainer(messageBlock as HTMLElement);
+      const attachments = this.extractAttachmentsFromContainer(messageBlock as HTMLElement, mediaFiles);
+      const share = this.extractShareFromContainer(messageBlock as HTMLElement);
+      const callRecord = this.extractCallRecordFromContainer(messageBlock as HTMLElement);
+      const removedBySender = messageBlock.textContent?.includes('Removed by Sender') || false;
+      
+      if (author || body || attachments.length > 0) {
+        const type: 'text' | 'image' | 'video' | 'audio' | 'link' | 'share' | 'call' = 
+          callRecord ? 'call' 
+          : share && share.url ? 'share'
+          : attachments.length > 0 ? (attachments[0].type.includes('image') ? 'image' : attachments[0].type.includes('video') ? 'video' : 'audio')
+          : 'text';
         
-        // Pegar o próximo elemento irmão até encontrar outro Author ou fim
-        let currentElement = messageContainer.nextElementSibling as HTMLElement | null;
-        const messageElements: HTMLElement[] = [messageContainer];
+        messages.push({
+          id: uuidv4(),
+          threadId,
+          conversationId: threadId,
+          author: author || { username: 'Unknown', instagramId: '0' },
+          sent: sent || new Date(),
+          body: body || '',
+          type,
+          removedBySender,
+          attachments,
+          share: share && Object.keys(share).length > 0 ? share : undefined,
+          callRecord
+        });
         
-        while (currentElement) {
-          const isNextAuthor = currentElement.querySelector('.t.i')?.textContent?.trim().startsWith('Author');
-          const isNextThread = currentElement.querySelector('.t.i')?.textContent?.trim().startsWith('Thread');
-          
-          if (isNextAuthor || isNextThread) break;
-          
-          messageElements.push(currentElement);
-          currentElement = currentElement.nextElementSibling as HTMLElement | null;
-        }
-        
-        // Criar container temporário com todos os elementos da mensagem
-        const tempContainer = document.createElement('div');
-        messageElements.forEach(el => tempContainer.appendChild(el.cloneNode(true)));
-        
-        const author = this.extractAuthorFromContainer(tempContainer);
-        const sent = this.extractSentFromContainer(tempContainer);
-        const body = this.extractBodyFromContainer(tempContainer);
-        const removedBySender = tempContainer.textContent?.includes('Removed by Sender') || false;
-        const attachments = this.extractAttachmentsFromContainer(tempContainer, mediaFiles);
-        const share = this.extractShareFromContainer(tempContainer);
-        const callRecord = this.extractCallRecordFromContainer(tempContainer);
-        
-        if (sent) {
-          const type: 'text' | 'image' | 'video' | 'audio' | 'link' | 'share' | 'call' = 
-            callRecord ? 'call' 
-            : share && share.url ? 'share'
-            : attachments.length > 0 ? (attachments[0].type.includes('image') ? 'image' : attachments[0].type.includes('video') ? 'video' : 'audio')
-            : 'text';
-          
-          messages.push({
-            id: uuidv4(),
-            threadId,
-            conversationId: threadId,
-            author,
-            sent,
-            body: body || '',
-            type,
-            removedBySender,
-            attachments,
-            share: share && Object.keys(share).length > 0 ? share : undefined,
-            callRecord
-          });
-        }
-      } catch (error) {
-        console.error('❌ Erro ao extrair mensagem:', error);
+        console.log(`✅ [Message] ${author?.username || 'Unknown'}: ${body?.substring(0, 30) || '(sem texto)'}, ${attachments.length} attachments`);
       }
     }
     
@@ -415,26 +401,42 @@ export class InstagramMetaBusinessParser {
   private static extractParticipantsFromContainer(container: HTMLElement): MetaParticipant[] {
     const participants: MetaParticipant[] = [];
     
-    // Buscar a div com "Current Participants"
-    const allDivs = Array.from(container.querySelectorAll('.t.o > .t.i'));
-    const participantsDiv = allDivs.find(div => 
-      div.textContent?.trim().startsWith('Current Participants')
+    // Buscar a div que contém "Current Participants"
+    const participantsDivs = Array.from(container.querySelectorAll('.t.i'));
+    const participantsDiv = participantsDivs.find(div => 
+      div.textContent?.includes('Current Participants')
     );
     
-    if (!participantsDiv) return participants;
+    if (!participantsDiv) {
+      console.log('⚠️ [Participants] Div "Current Participants" não encontrada');
+      return participants;
+    }
     
-    const text = participantsDiv.textContent || '';
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    // Pegar o container .m seguinte que tem os participantes
+    const participantsData = participantsDiv.querySelector('.m');
+    if (!participantsData) {
+      console.log('⚠️ [Participants] Container .m não encontrado');
+      return participants;
+    }
     
-    for (const line of lines) {
-      const match = line.match(/^(.+?)\s*\(Instagram:\s*(\d+)\)/);
+    const text = participantsData.textContent || '';
+    console.log(`👥 [Participants] Texto encontrado:`, text.substring(0, 200));
+    
+    // Extrair linhas com formato: "username (Instagram: 123456789)"
+    const participantLines = text.split('\n').filter(line => 
+      line.includes('Instagram:')
+    );
+    
+    participantLines.forEach(line => {
+      const match = line.match(/(\S+)\s+\(Instagram:\s+(\d+)\)/);
       if (match) {
         participants.push({
-          username: match[1].trim(),
-          instagramId: match[2].trim()
+          username: match[1],
+          instagramId: match[2]
         });
+        console.log(`✅ [Participant] ${match[1]} (${match[2]})`);
       }
-    }
+    });
     
     return participants;
   }
@@ -768,62 +770,58 @@ export class InstagramMetaBusinessParser {
    */
   
   private static extractAuthorFromContainer(container: HTMLElement): MetaParticipant | null {
-    const allDivs = Array.from(container.querySelectorAll('.t.o > .t.i'));
-    const authorDiv = allDivs.find(div => div.textContent?.trim().startsWith('Author'));
+    // Buscar div que contém "Author"
+    const authorDivs = Array.from(container.querySelectorAll('.t.i'));
+    const authorDiv = authorDivs.find(div => div.textContent?.trim() === 'Author');
     
     if (!authorDiv) return null;
     
-    const text = authorDiv.textContent || '';
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    // Pegar o container .m seguinte
+    const mDiv = authorDiv.querySelector('.m');
+    if (!mDiv) return null;
     
-    for (const line of lines) {
-      const match = line.match(/^(.+?)\s*\(Instagram:\s*(\d+)\)/);
-      if (match) {
-        return {
-          username: match[1].trim(),
-          instagramId: match[2].trim()
-        };
-      }
+    const text = mDiv.textContent?.trim() || '';
+    
+    // Extrair username (formato: "username (Instagram: 123456789)")
+    const match = text.match(/(\S+)\s+\(Instagram:\s*(\d+)\)/);
+    if (match) {
+      return {
+        username: match[1],
+        instagramId: match[2]
+      };
     }
     
     return null;
   }
   
   private static extractSentFromContainer(container: HTMLElement): Date | null {
-    const allDivs = Array.from(container.querySelectorAll('.t.o > .t.i'));
-    const sentDiv = allDivs.find(div => div.textContent?.trim().startsWith('Sent'));
+    // Buscar div que contém "Sent"
+    const sentDivs = Array.from(container.querySelectorAll('.t.i'));
+    const sentDiv = sentDivs.find(div => div.textContent?.trim() === 'Sent');
     
     if (!sentDiv) return null;
     
-    const text = sentDiv.textContent || '';
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    const mDiv = sentDiv.querySelector('.m');
+    const dateText = mDiv?.textContent?.trim();
     
-    for (const line of lines) {
-      if (line.includes('UTC')) {
-        return this.parseTimestamp(line);
-      }
+    if (!dateText) return null;
+    
+    try {
+      return this.parseTimestamp(dateText);
+    } catch {
+      return null;
     }
-    
-    return null;
   }
   
   private static extractBodyFromContainer(container: HTMLElement): string | null {
-    const allDivs = Array.from(container.querySelectorAll('.t.o > .t.i'));
-    const bodyDiv = allDivs.find(div => div.textContent?.trim().startsWith('Body'));
+    // Buscar div que contém "Body"
+    const bodyDivs = Array.from(container.querySelectorAll('.t.i'));
+    const bodyDiv = bodyDivs.find(div => div.textContent?.trim() === 'Body');
     
     if (!bodyDiv) return null;
     
-    const text = bodyDiv.textContent || '';
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-    
-    // O body vem depois do label "Body"
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i] === 'Body' && i + 1 < lines.length) {
-        return lines[i + 1];
-      }
-    }
-    
-    return null;
+    const mDiv = bodyDiv.querySelector('.m');
+    return mDiv?.textContent?.trim() || null;
   }
   
   private static extractAttachmentsFromContainer(
@@ -832,70 +830,70 @@ export class InstagramMetaBusinessParser {
   ): MetaAttachment[] {
     const attachments: MetaAttachment[] = [];
     
-    // ETAPA 1: Buscar elementos de mídia no DOM (imagens, vídeos, áudios)
-    const mediaElements = container.querySelectorAll('img[src*="linked_media"], video[src*="linked_media"], audio[src*="linked_media"]');
+    // Buscar div que contém "Attachments"
+    const attachmentsDivs = Array.from(container.querySelectorAll('.t.i'));
+    const attachmentsDiv = attachmentsDivs.find(div => 
+      div.textContent?.includes('Attachments')
+    );
+    
+    if (!attachmentsDiv) return attachments;
+    
+    // Pegar o container pai dos attachments
+    const attachmentsContainer = attachmentsDiv.closest('.t.o');
+    if (!attachmentsContainer) return attachments;
+    
+    // Buscar tags <img>, <video>, <audio> dentro do container
+    const mediaElements = attachmentsContainer.querySelectorAll('img[src*="linked_media"], video[src*="linked_media"], audio[src*="linked_media"]');
+    
+    console.log(`📎 [Attachments] Elementos de mídia encontrados:`, mediaElements.length);
     
     mediaElements.forEach((el) => {
       const src = el.getAttribute('src') || '';
       const filename = src.split('/').pop() || '';
       
-      // Buscar blob com múltiplas variações
+      // Buscar blob usando múltiplas variações
       const blob = mediaFiles.get(src) || 
                    mediaFiles.get(`linked_media/${filename}`) || 
                    mediaFiles.get(filename);
       
       if (blob) {
         const blobUrl = URL.createObjectURL(blob);
-        const mediaType = this.getMediaTypeFromElement(el) || this.getMediaTypeFromFilename(filename);
-        
         attachments.push({
-          type: mediaType,
+          type: this.getMediaTypeFromFilename(filename),
           size: blob.size,
           url: blobUrl,
-          photoId: this.extractPhotoIdFromFilename(filename),
+          photoId: filename.match(/\d{13,}/)?.[0] || uuidv4(),
           filename,
           blob,
           blobUrl
         });
+        console.log(`✅ [Attachment] ${filename} (${blob.size} bytes)`);
+      } else {
+        console.warn(`⚠️ [Attachment] Blob não encontrado: ${filename}`);
       }
     });
     
-    // ETAPA 2: Se não encontrou mídia no DOM, tentar extrair via texto (fallback)
+    // Se não encontrou via DOM, buscar dados textuais (fallback)
     if (attachments.length === 0) {
-      const allDivs = Array.from(container.querySelectorAll('.t.o > .t.i'));
-      const attachmentsDiv = allDivs.find(div => div.textContent?.trim().startsWith('Attachments'));
+      // Extrair Type, Size, URL de divs .t.i
+      const typeDivs = Array.from(attachmentsContainer.querySelectorAll('.t.i'));
+      const typeDiv = typeDivs.find(div => div.textContent?.trim() === 'Type');
+      const sizeDiv = typeDivs.find(div => div.textContent?.trim() === 'Size');
       
-      if (attachmentsDiv) {
-        const text = attachmentsDiv.textContent || '';
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+      if (typeDiv && sizeDiv) {
+        const type = typeDiv.querySelector('.m')?.textContent?.trim() || '';
+        const size = parseInt(sizeDiv.querySelector('.m')?.textContent?.trim() || '0');
         
-        let currentAttachment: any = {};
-        
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          
-          if (line.startsWith('Type')) {
-            currentAttachment.type = lines[i + 1] || '';
-          } else if (line.startsWith('Size')) {
-            currentAttachment.size = parseInt(lines[i + 1] || '0');
-          } else if (line.startsWith('URL')) {
-            currentAttachment.url = lines[i + 1] || '';
-          } else if (line.match(/image-\d+/)) {
-            const match = line.match(/\((\d+)\)/);
-            currentAttachment.photoId = match ? match[1] : undefined;
-          }
-          
-          // Se completou um attachment
-          if (currentAttachment.type && currentAttachment.size !== undefined) {
-            attachments.push({
-              type: currentAttachment.type,
-              size: currentAttachment.size,
-              url: currentAttachment.url || '',
-              photoId: currentAttachment.photoId
-            });
-            currentAttachment = {};
-          }
-        }
+        attachments.push({
+          type,
+          size,
+          url: '',
+          photoId: undefined,
+          filename: undefined,
+          blob: undefined,
+          blobUrl: undefined
+        });
+        console.log(`ℹ️ [Attachment] Dados textuais: ${type} (${size} bytes)`);
       }
     }
     

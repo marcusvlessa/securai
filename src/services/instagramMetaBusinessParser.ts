@@ -267,35 +267,17 @@ export class InstagramMetaBusinessParser {
         const threadId = threadIdMatch[1];
         console.log(`✅ [Thread ${threadId}] Identificado!`);
         
-        // Pegar container pai do thread
-        const threadContainer = threadDiv.closest('div.t.o');
-        if (!threadContainer) {
-          console.warn(`⚠️ [Thread ${threadId}] Container div.t.o não encontrado`);
+        // CORREÇÃO: Todos os elementos estão DENTRO de div.m > div
+        // Não são irmãos, mas sim filhos aninhados
+        if (!mDiv) {
+          console.warn(`⚠️ [Thread ${threadId}] div.m > div não encontrado`);
           continue;
         }
         
-        // Coletar TODOS os elementos até o próximo Thread
-        const conversationElements: Element[] = [threadContainer];
-        let currentElement = threadContainer.nextElementSibling;
+        // Os elementos da conversa estão todos dentro do mDiv
+        const conversationElements: Element[] = [mDiv];
         
-        while (currentElement) {
-          // Verificar se é um próximo thread
-          const hasThreadDiv = Array.from(currentElement.querySelectorAll('div.t.i')).some(div => {
-            const firstTextNode = Array.from(div.childNodes)
-              .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
-            return firstTextNode?.textContent?.trim() === 'Thread';
-          });
-          
-          if (hasThreadDiv) {
-            console.log(`🛑 [Thread ${threadId}] Próximo thread encontrado`);
-            break;
-          }
-          
-          conversationElements.push(currentElement);
-          currentElement = currentElement.nextElementSibling;
-        }
-        
-        console.log(`📦 [Thread ${threadId}] ${conversationElements.length} elementos coletados`);
+        console.log(`📦 [Thread ${threadId}] Elementos encontrados dentro de div.m > div`);
         
         // Extrair participantes
         const participants = this.extractParticipantsFromElements(conversationElements);
@@ -348,33 +330,36 @@ export class InstagramMetaBusinessParser {
   private static extractParticipantsFromElements(elements: Element[]): MetaParticipant[] {
     const participants: MetaParticipant[] = [];
     
-    // Procurar "Current Participants" em todos os elementos
+    // Procurar "Current Participants" DENTRO do mDiv (elements[0])
     for (const element of elements) {
       const participantsDivs = Array.from(element.querySelectorAll('.t.i'));
-      const participantsDiv = participantsDivs.find(div => 
-        div.textContent?.includes('Current Participants')
-      );
+      const participantsDiv = participantsDivs.find(div => {
+        const firstTextNode = Array.from(div.childNodes)
+          .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+        return firstTextNode?.textContent?.trim() === 'Current Participants';
+      });
       
       if (participantsDiv) {
-        const mDiv = participantsDiv.querySelector('.m');
-        if (!mDiv) continue;
+        const mDiv = participantsDiv.querySelector('.m > div');
+        if (!mDiv) {
+          console.warn('⚠️ [Participants] div.m > div não encontrado');
+          continue;
+        }
         
         const text = mDiv.textContent || '';
-        console.log(`👥 [Participants] Texto encontrado: ${text.substring(0, 150)}`);
+        console.log(`👥 [Participants] Texto encontrado: ${text.substring(0, 200)}`);
         
-        // Extrair linhas com formato: "username (Instagram: 123456789)"
-        const lines = text.split('\n').filter(line => line.includes('Instagram:'));
+        // Usar matchAll para extrair todos os participantes de texto corrido
+        const regex = /(\S+)\s+\(Instagram:\s*(\d+)\)/g;
+        const matches = text.matchAll(regex);
         
-        lines.forEach(line => {
-          const match = line.match(/(\S+)\s+\(Instagram:\s+(\d+)\)/);
-          if (match) {
-            participants.push({
-              username: match[1],
-              instagramId: match[2]
-            });
-            console.log(`✅ [Participant] ${match[1]} (${match[2]})`);
-          }
-        });
+        for (const match of matches) {
+          participants.push({
+            username: match[1],
+            instagramId: match[2]
+          });
+          console.log(`✅ [Participant] ${match[1]} (${match[2]})`);
+        }
         
         break; // Encontrou participantes, sair do loop
       }
@@ -419,28 +404,66 @@ export class InstagramMetaBusinessParser {
   ): MetaMessage[] {
     const messages: MetaMessage[] = [];
     
-    // Buscar blocos div.t.o que contêm div.t.i com "Author"
+    // CORREÇÃO: Buscar TODOS os div.t.o DENTRO do elemento (que é o div.m > div)
     for (const element of elements) {
-      const messageBlocks = Array.from(element.querySelectorAll('.t.o')).filter(block => {
-        const authorDiv = block.querySelector('.t.i');
-        return authorDiv?.textContent?.trim() === 'Author';
+      // Buscar todos os containers div.t.o dentro do elemento
+      const allContainers = Array.from(element.querySelectorAll('div.t.o'));
+      
+      console.log(`🔍 [Thread ${threadId}] Encontrados ${allContainers.length} containers div.t.o`);
+      
+      // Filtrar apenas os que têm "Author" como primeiro texto de uma div.t.i
+      const messageContainers = allContainers.filter(container => {
+        const tiDivs = Array.from(container.querySelectorAll('div.t.i'));
+        return tiDivs.some(div => {
+          const firstTextNode = Array.from(div.childNodes)
+            .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+          return firstTextNode?.textContent?.trim() === 'Author';
+        });
       });
       
-      if (messageBlocks.length > 0) {
-        console.log(`📝 [Thread ${threadId}] Encontrados ${messageBlocks.length} blocos de mensagem neste elemento`);
-      }
+      console.log(`📝 [Thread ${threadId}] ${messageContainers.length} blocos com "Author" identificados`);
       
-      for (const messageBlock of messageBlocks) {
-        // Extrair componentes da mensagem
-        const author = this.extractAuthorFromContainer(messageBlock as HTMLElement);
-        const sent = this.extractSentFromContainer(messageBlock as HTMLElement);
-        const body = this.extractBodyFromContainer(messageBlock as HTMLElement);
-        const attachments = this.extractAttachmentsFromContainer(messageBlock as HTMLElement, mediaFiles);
-        const share = this.extractShareFromContainer(messageBlock as HTMLElement);
-        const callRecord = this.extractCallRecordFromContainer(messageBlock as HTMLElement);
-        const removedBySender = messageBlock.textContent?.includes('Removed by Sender') || false;
+      // Para cada container de mensagem, agrupar Author + Sent + Body + Attachments + Share
+      for (let i = 0; i < messageContainers.length; i++) {
+        const messageContainer = messageContainers[i];
         
-        if (author || body || attachments.length > 0 || share || callRecord) {
+        // Extrair todos os componentes da mensagem deste container e seus irmãos
+        const author = this.extractAuthorFromContainer(messageContainer as HTMLElement);
+        
+        // Buscar Sent, Body, Attachments nos próximos irmãos até encontrar outro Author
+        let sent: Date | null = null;
+        let body: string | null = null;
+        const attachments: MetaAttachment[] = [];
+        let share: any = {};
+        let callRecord: any = undefined;
+        let removedBySender = false;
+        
+        // Processar o container atual
+        sent = this.extractSentFromContainer(messageContainer as HTMLElement);
+        body = this.extractBodyFromContainer(messageContainer as HTMLElement);
+        attachments.push(...this.extractAttachmentsFromContainer(messageContainer as HTMLElement, mediaFiles));
+        share = this.extractShareFromContainer(messageContainer as HTMLElement);
+        callRecord = this.extractCallRecordFromContainer(messageContainer as HTMLElement);
+        removedBySender = messageContainer.textContent?.includes('Removed by Sender') || false;
+        
+        // Verificar irmãos seguintes até encontrar outro "Author"
+        let currentSibling = messageContainer.nextElementSibling;
+        while (currentSibling && currentSibling !== messageContainers[i + 1]) {
+          if (!sent) sent = this.extractSentFromContainer(currentSibling as HTMLElement);
+          if (!body) body = this.extractBodyFromContainer(currentSibling as HTMLElement);
+          
+          const siblingAttachments = this.extractAttachmentsFromContainer(currentSibling as HTMLElement, mediaFiles);
+          if (siblingAttachments.length > 0) attachments.push(...siblingAttachments);
+          
+          const siblingShare = this.extractShareFromContainer(currentSibling as HTMLElement);
+          if (siblingShare && Object.keys(siblingShare).length > 0) share = siblingShare;
+          
+          if (!callRecord) callRecord = this.extractCallRecordFromContainer(currentSibling as HTMLElement);
+          
+          currentSibling = currentSibling.nextElementSibling;
+        }
+        
+        if (author || body || attachments.length > 0 || (share && Object.keys(share).length > 0) || callRecord) {
           const type: 'text' | 'image' | 'video' | 'audio' | 'link' | 'share' | 'call' = 
             callRecord ? 'call' 
             : share && share.url ? 'share'
@@ -461,12 +484,12 @@ export class InstagramMetaBusinessParser {
             callRecord
           });
           
-          console.log(`✅ [Message] De: ${author?.username || 'Unknown'}, Texto: "${body?.substring(0, 40) || '(vazio)'}", Attachments: ${attachments.length}`);
+          console.log(`✅ [Message] ${author?.username || 'Unknown'}: "${body?.substring(0, 40) || '(sem texto)'}", ${attachments.length} attachments, Sent: ${sent?.toLocaleString() || 'N/A'}`);
         }
       }
     }
     
-    console.log(`📊 [Thread ${threadId}] Total de ${messages.length} mensagens extraídas de ${elements.length} elementos`);
+    console.log(`📊 [Thread ${threadId}] Total: ${messages.length} mensagens extraídas`);
     return messages;
   }
   

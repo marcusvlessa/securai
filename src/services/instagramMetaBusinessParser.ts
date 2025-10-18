@@ -917,58 +917,83 @@ export class InstagramMetaBusinessParser {
    */
   
   private static extractAuthorFromContainer(container: HTMLElement): MetaParticipant | null {
-    // Buscar div que contém "Author"
     const authorDivs = Array.from(container.querySelectorAll('.t.i'));
-    const authorDiv = authorDivs.find(div => div.textContent?.trim() === 'Author');
     
-    if (!authorDiv) return null;
+    const authorDiv = authorDivs.find(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Author';
+    });
     
-    // Pegar o container .m seguinte
-    const mDiv = authorDiv.querySelector('.m');
-    if (!mDiv) return null;
+    if (!authorDiv) {
+      console.log('⚠️ [Author] Nenhuma div .t.i com "Author" encontrada');
+      return null;
+    }
+
+    const innerDiv = authorDiv.querySelector('.m > div');
+    const text = innerDiv?.textContent?.trim() || '';
     
-    const text = mDiv.textContent?.trim() || '';
+    console.log(`🔍 [Author] Texto extraído: "${text}"`);
     
-    // Extrair username (formato: "username (Instagram: 123456789)")
     const match = text.match(/(\S+)\s+\(Instagram:\s*(\d+)\)/);
+    
     if (match) {
+      console.log(`✅ [Author] Encontrado: ${match[1]} (${match[2]})`);
       return {
         username: match[1],
         instagramId: match[2]
       };
     }
-    
+
+    console.log('⚠️ [Author] Não foi possível extrair username/instagramId do texto');
     return null;
   }
   
   private static extractSentFromContainer(container: HTMLElement): Date | null {
-    // Buscar div que contém "Sent"
     const sentDivs = Array.from(container.querySelectorAll('.t.i'));
-    const sentDiv = sentDivs.find(div => div.textContent?.trim() === 'Sent');
     
-    if (!sentDiv) return null;
+    const sentDiv = sentDivs.find(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Sent';
+    });
     
-    const mDiv = sentDiv.querySelector('.m');
-    const dateText = mDiv?.textContent?.trim();
-    
-    if (!dateText) return null;
-    
-    try {
-      return this.parseTimestamp(dateText);
-    } catch {
+    if (!sentDiv) {
+      console.log('⚠️ [Sent] Nenhuma div .t.i com "Sent" encontrada');
       return null;
     }
+
+    const innerDiv = sentDiv.querySelector('.m > div');
+    const dateText = innerDiv?.textContent?.trim();
+    
+    if (!dateText) {
+      console.log('⚠️ [Sent] Nenhum texto de data encontrado');
+      return null;
+    }
+
+    console.log(`🔍 [Sent] Data extraída: "${dateText}"`);
+    return this.parseTimestamp(dateText);
   }
   
   private static extractBodyFromContainer(container: HTMLElement): string | null {
-    // Buscar div que contém "Body"
     const bodyDivs = Array.from(container.querySelectorAll('.t.i'));
-    const bodyDiv = bodyDivs.find(div => div.textContent?.trim() === 'Body');
     
-    if (!bodyDiv) return null;
+    const bodyDiv = bodyDivs.find(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Body';
+    });
     
-    const mDiv = bodyDiv.querySelector('.m');
-    return mDiv?.textContent?.trim() || null;
+    if (!bodyDiv) {
+      console.log('⚠️ [Body] Nenhuma div .t.i com "Body" encontrada');
+      return null;
+    }
+
+    const innerDiv = bodyDiv.querySelector('.m > div');
+    const bodyText = innerDiv?.textContent?.trim() || null;
+    
+    console.log(`🔍 [Body] Texto extraído: "${bodyText}"`);
+    return bodyText;
   }
   
   private static extractAttachmentsFromContainer(
@@ -1048,57 +1073,55 @@ export class InstagramMetaBusinessParser {
   }
   
   private static extractShareFromContainer(container: HTMLElement): MetaShare | undefined {
-    const allDivs = Array.from(container.querySelectorAll('.t.o > .t.i'));
-    const shareDiv = allDivs.find(div => div.textContent?.trim().startsWith('Share'));
+    const shareDivs = Array.from(container.querySelectorAll('.t.i'));
+    
+    const shareDiv = shareDivs.find(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Share';
+    });
     
     if (!shareDiv) return undefined;
-    
-    const text = shareDiv.textContent || '';
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-    
-    const share: Partial<MetaShare> = {};
-    
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i] === 'Date Created' && i + 1 < lines.length && lines[i + 1] !== 'Unknown') {
-        share.dateCreated = this.parseTimestamp(lines[i + 1]) || undefined;
-      } else if (lines[i] === 'Text' && i + 1 < lines.length) {
-        share.text = lines[i + 1];
-      } else if (lines[i] === 'Url' && i + 1 < lines.length && lines[i + 1].startsWith('http')) {
-        share.url = lines[i + 1];
-      }
-    }
-    
-    return Object.keys(share).length > 0 ? share as MetaShare : undefined;
+
+    const innerDiv = shareDiv.querySelector('.m > div');
+    if (!innerDiv) return undefined;
+
+    const link = innerDiv.querySelector('a');
+    if (!link) return undefined;
+
+    console.log(`🔍 [Share] URL encontrada: ${link.href}`);
+    return {
+      url: link.href,
+      text: link.textContent?.trim() || ''
+    };
   }
   
   private static extractCallRecordFromContainer(container: HTMLElement): MetaCallRecord | undefined {
-    const allDivs = Array.from(container.querySelectorAll('.t.o > .t.i'));
-    const callDiv = allDivs.find(div => div.textContent?.includes('Call Record'));
+    const callDivs = Array.from(container.querySelectorAll('.t.i'));
+    
+    const callDiv = callDivs.find(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Call Record';
+    });
     
     if (!callDiv) return undefined;
+
+    const innerDiv = callDiv.querySelector('.m > div');
+    if (!innerDiv) return undefined;
+
+    const text = innerDiv.textContent?.trim() || '';
+    const durationMatch = text.match(/Duration:\s*(\d+)/);
+    const typeMatch = text.match(/Type:\s*(\w+)/);
+    const missedMatch = text.match(/Missed:\s*(true|false)/);
+
+    console.log(`🔍 [Call Record] Extraído: Duration=${durationMatch?.[1]}, Type=${typeMatch?.[1]}, Missed=${missedMatch?.[1]}`);
     
-    const text = callDiv.textContent || '';
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-    
-    const callRecord: Partial<MetaCallRecord> = {};
-    
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i] === 'Type' && i + 1 < lines.length) {
-        const type = lines[i + 1];
-        if (type === 'audio' || type === 'video') {
-          callRecord.type = type;
-        }
-      } else if (lines[i] === 'Missed' && i + 1 < lines.length) {
-        callRecord.missed = lines[i + 1] === 'true';
-      } else if (lines[i] === 'Duration' && i + 1 < lines.length) {
-        const duration = parseInt(lines[i + 1]);
-        if (!isNaN(duration)) {
-          callRecord.duration = duration;
-        }
-      }
-    }
-    
-    return Object.keys(callRecord).length > 0 ? callRecord as MetaCallRecord : undefined;
+    return {
+      duration: durationMatch ? parseInt(durationMatch[1]) : 0,
+      type: typeMatch ? typeMatch[1] : 'unknown',
+      missed: missedMatch ? missedMatch[1] === 'true' : false
+    };
   }
   
   /**

@@ -268,12 +268,6 @@ export class InstagramMetaBusinessParser {
         console.log(`✅ [Thread ${threadId}] Identificado!`);
         
         // CORREÇÃO: Todos os elementos estão DENTRO de div.m > div
-        // Não são irmãos, mas sim filhos aninhados
-        if (!mDiv) {
-          console.warn(`⚠️ [Thread ${threadId}] div.m > div não encontrado`);
-          continue;
-        }
-        
         // Os elementos da conversa estão todos dentro do mDiv
         const conversationElements: Element[] = [mDiv];
         
@@ -404,93 +398,146 @@ export class InstagramMetaBusinessParser {
   ): MetaMessage[] {
     const messages: MetaMessage[] = [];
     
-    // CORREÇÃO: Buscar TODOS os div.t.o DENTRO do elemento (que é o div.m > div)
-    for (const element of elements) {
-      // Buscar todos os containers div.t.o dentro do elemento
-      const allContainers = Array.from(element.querySelectorAll('div.t.o'));
+    if (elements.length === 0) return messages;
+    
+    // O primeiro elemento é o div.m > div que contém TUDO
+    const container = elements[0];
+    
+    // Buscar TODOS os div.t.o DENTRO do container (filhos diretos)
+    const allBlocks = Array.from(container.querySelectorAll(':scope > div.t.o'));
+    
+    console.log(`🔍 [Messages] Encontrados ${allBlocks.length} blocos div.t.o`);
+    
+    // Filtrar blocos que têm Author
+    const authorBlocks = allBlocks.filter(block => {
+      const tiDivs = Array.from(block.querySelectorAll('div.t.i'));
+      return tiDivs.some(div => {
+        const firstTextNode = Array.from(div.childNodes)
+          .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+        return firstTextNode?.textContent?.trim() === 'Author';
+      });
+    });
+    
+    console.log(`👤 [Messages] ${authorBlocks.length} blocos com Author`);
+    
+    // Para cada Author, buscar os próximos irmãos até o próximo Author
+    for (let i = 0; i < authorBlocks.length; i++) {
+      const authorBlock = authorBlocks[i];
+      const author = this.extractAuthorFromContainer(authorBlock as HTMLElement);
       
-      console.log(`🔍 [Thread ${threadId}] Encontrados ${allContainers.length} containers div.t.o`);
+      if (!author) {
+        console.warn('⚠️ [Message] Author não extraído');
+        continue;
+      }
       
-      // Filtrar apenas os que têm "Author" como primeiro texto de uma div.t.i
-      const messageContainers = allContainers.filter(container => {
-        const tiDivs = Array.from(container.querySelectorAll('div.t.i'));
-        return tiDivs.some(div => {
-          const firstTextNode = Array.from(div.childNodes)
-            .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
-          return firstTextNode?.textContent?.trim() === 'Author';
-        });
+      // Coletar irmãos até o próximo Author
+      const messageBlocks: HTMLElement[] = [authorBlock as HTMLElement];
+      let nextSibling = authorBlock.nextElementSibling;
+      
+      while (nextSibling && nextSibling !== authorBlocks[i + 1]) {
+        messageBlocks.push(nextSibling as HTMLElement);
+        nextSibling = nextSibling.nextElementSibling;
+      }
+      
+      // Extrair dados
+      let sent: Date | null = null;
+      let body: string | null = null;
+      const attachments: MetaAttachment[] = [];
+      let share: any = {};
+      let callRecord: any = null;
+      let removedBySender = false;
+      
+      for (const block of messageBlocks) {
+        if (this.hasSent(block)) sent = this.extractSentFromContainer(block);
+        if (this.hasBody(block)) body = this.extractBodyFromContainer(block);
+        if (this.hasAttachments(block)) attachments.push(...this.extractAttachmentsFromContainer(block, mediaFiles));
+        if (this.hasShare(block)) share = this.extractShareFromContainer(block);
+        if (this.hasCallRecord(block)) callRecord = this.extractCallRecordFromContainer(block);
+        if (this.hasRemovedBySender(block)) removedBySender = true;
+      }
+      
+      const type: 'text' | 'image' | 'video' | 'audio' | 'link' | 'share' | 'call' = 
+        callRecord ? 'call' 
+        : share && share.url ? 'share'
+        : attachments.length > 0 ? (attachments[0].type.includes('image') ? 'image' : attachments[0].type.includes('video') ? 'video' : 'audio')
+        : 'text';
+      
+      messages.push({
+        id: uuidv4(),
+        threadId,
+        conversationId: threadId,
+        author,
+        sent: sent || new Date(),
+        body: body || '',
+        type,
+        removedBySender,
+        attachments,
+        share: share && Object.keys(share).length > 0 ? share : undefined,
+        callRecord
       });
       
-      console.log(`📝 [Thread ${threadId}] ${messageContainers.length} blocos com "Author" identificados`);
-      
-      // Para cada container de mensagem, agrupar Author + Sent + Body + Attachments + Share
-      for (let i = 0; i < messageContainers.length; i++) {
-        const messageContainer = messageContainers[i];
-        
-        // Extrair todos os componentes da mensagem deste container e seus irmãos
-        const author = this.extractAuthorFromContainer(messageContainer as HTMLElement);
-        
-        // Buscar Sent, Body, Attachments nos próximos irmãos até encontrar outro Author
-        let sent: Date | null = null;
-        let body: string | null = null;
-        const attachments: MetaAttachment[] = [];
-        let share: any = {};
-        let callRecord: any = undefined;
-        let removedBySender = false;
-        
-        // Processar o container atual
-        sent = this.extractSentFromContainer(messageContainer as HTMLElement);
-        body = this.extractBodyFromContainer(messageContainer as HTMLElement);
-        attachments.push(...this.extractAttachmentsFromContainer(messageContainer as HTMLElement, mediaFiles));
-        share = this.extractShareFromContainer(messageContainer as HTMLElement);
-        callRecord = this.extractCallRecordFromContainer(messageContainer as HTMLElement);
-        removedBySender = messageContainer.textContent?.includes('Removed by Sender') || false;
-        
-        // Verificar irmãos seguintes até encontrar outro "Author"
-        let currentSibling = messageContainer.nextElementSibling;
-        while (currentSibling && currentSibling !== messageContainers[i + 1]) {
-          if (!sent) sent = this.extractSentFromContainer(currentSibling as HTMLElement);
-          if (!body) body = this.extractBodyFromContainer(currentSibling as HTMLElement);
-          
-          const siblingAttachments = this.extractAttachmentsFromContainer(currentSibling as HTMLElement, mediaFiles);
-          if (siblingAttachments.length > 0) attachments.push(...siblingAttachments);
-          
-          const siblingShare = this.extractShareFromContainer(currentSibling as HTMLElement);
-          if (siblingShare && Object.keys(siblingShare).length > 0) share = siblingShare;
-          
-          if (!callRecord) callRecord = this.extractCallRecordFromContainer(currentSibling as HTMLElement);
-          
-          currentSibling = currentSibling.nextElementSibling;
-        }
-        
-        if (author || body || attachments.length > 0 || (share && Object.keys(share).length > 0) || callRecord) {
-          const type: 'text' | 'image' | 'video' | 'audio' | 'link' | 'share' | 'call' = 
-            callRecord ? 'call' 
-            : share && share.url ? 'share'
-            : attachments.length > 0 ? (attachments[0].type.includes('image') ? 'image' : attachments[0].type.includes('video') ? 'video' : 'audio')
-            : 'text';
-          
-          messages.push({
-            id: uuidv4(),
-            threadId,
-            conversationId: threadId,
-            author: author || { username: 'Unknown', instagramId: '0' },
-            sent: sent || new Date(),
-            body: body || '',
-            type,
-            removedBySender,
-            attachments,
-            share: share && Object.keys(share).length > 0 ? share : undefined,
-            callRecord
-          });
-          
-          console.log(`✅ [Message] ${author?.username || 'Unknown'}: "${body?.substring(0, 40) || '(sem texto)'}", ${attachments.length} attachments, Sent: ${sent?.toLocaleString() || 'N/A'}`);
-        }
-      }
+      console.log(`✅ [Message] ${author.username}: "${body?.substring(0, 40) || '(sem texto)'}", ${attachments.length} attachments`);
     }
     
-    console.log(`📊 [Thread ${threadId}] Total: ${messages.length} mensagens extraídas`);
     return messages;
+  }
+  
+  /**
+   * Métodos auxiliares para verificar presença de componentes
+   */
+  private static hasSent(element: HTMLElement): boolean {
+    const tiDivs = Array.from(element.querySelectorAll('div.t.i'));
+    return tiDivs.some(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Sent';
+    });
+  }
+
+  private static hasBody(element: HTMLElement): boolean {
+    const tiDivs = Array.from(element.querySelectorAll('div.t.i'));
+    return tiDivs.some(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Body';
+    });
+  }
+
+  private static hasAttachments(element: HTMLElement): boolean {
+    const tiDivs = Array.from(element.querySelectorAll('div.t.i'));
+    return tiDivs.some(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      const text = firstTextNode?.textContent?.trim();
+      return text === 'Attachment' || text === 'Attachments';
+    });
+  }
+
+  private static hasShare(element: HTMLElement): boolean {
+    const tiDivs = Array.from(element.querySelectorAll('div.t.i'));
+    return tiDivs.some(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Share';
+    });
+  }
+
+  private static hasCallRecord(element: HTMLElement): boolean {
+    const tiDivs = Array.from(element.querySelectorAll('div.t.i'));
+    return tiDivs.some(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Call Record';
+    });
+  }
+
+  private static hasRemovedBySender(element: HTMLElement): boolean {
+    const tiDivs = Array.from(element.querySelectorAll('div.t.i'));
+    return tiDivs.some(div => {
+      const firstTextNode = Array.from(div.childNodes)
+        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return firstTextNode?.textContent?.trim() === 'Removed by Sender';
+    });
   }
   
   /**

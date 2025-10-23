@@ -219,13 +219,13 @@ export class InstagramMetaBusinessParser {
   }
   
   /**
-   * Parse completo de Unified Messages - ESTRUTURA REAL DO HTML
+   * Parse completo de Unified Messages - PARSING SEQUENCIAL
    */
   static parseUnifiedMessagesComplete(
     doc: Document,
     mediaFiles: Map<string, Blob>
   ): MetaConversation[] {
-    console.log('🔍 [UnifiedMessages] Parsing mensagens unificadas...');
+    console.log('🔍 [UnifiedMessages] Parsing Sequencial Iniciado');
     
     const section = doc.querySelector('#property-unified_messages');
     if (!section) {
@@ -233,92 +233,196 @@ export class InstagramMetaBusinessParser {
       return [];
     }
     
+    // Buscar TODOS os blocos div.t.o em ordem sequencial
+    const allBlocks = Array.from(section.querySelectorAll('div.t.o'));
+    console.log(`📦 Total de blocos div.t.o: ${allBlocks.length}`);
+    
     const conversations: MetaConversation[] = [];
+    let currentThread: {
+      id: string;
+      participants: MetaParticipant[];
+      participantsUpdatedAt: Date;
+      messages: MetaMessage[];
+    } | null = null;
     
-    // Estrutura real: <div class="t i">Thread<div class="m"><div> (ID)<div class="p"></div>
-    // Buscar todos os elementos div.t.i que contêm o texto "Thread"
-    const allTiDivs = Array.from(section.querySelectorAll('div.t.i'));
-    const threadDivs = allTiDivs.filter(div => {
-      // Verificar se o primeiro nó de texto é "Thread"
-      const firstTextNode = Array.from(div.childNodes)
-        .find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
-      return firstTextNode?.textContent?.trim() === 'Thread';
-    });
+    let currentMessage: Partial<MetaMessage> = {};
+    let currentAttachment: Partial<MetaAttachment> = {};
+    let currentShare: Partial<MetaShare> = {};
     
-    console.log(`🔍 [UnifiedMessages] Encontrados ${threadDivs.length} elementos "Thread"`);
-    
-    for (const threadDiv of threadDivs) {
-      try {
-        // Extrair ID de dentro de div.m > div
-        const mDiv = threadDiv.querySelector('div.m > div');
-        if (!mDiv) {
-          console.warn('⚠️ [Thread] div.m > div não encontrado');
-          continue;
+    for (let i = 0; i < allBlocks.length; i++) {
+      const block = allBlocks[i];
+      const titleEl = block.querySelector('div.t.i');
+      const contentEl = block.querySelector('div.m > div');
+      
+      if (!titleEl || !contentEl) continue;
+      
+      const title = titleEl.textContent?.trim() || '';
+      const content = contentEl.textContent?.trim() || '';
+      
+      // NOVO THREAD
+      if (title === 'Thread') {
+        // Salvar thread anterior
+        if (currentThread) {
+          this.finalizeThread(currentThread, conversations);
         }
         
-        const mDivText = mDiv.textContent?.trim() || '';
-        const threadIdMatch = mDivText.match(/\((\d{13,})\)/);
-        
-        if (!threadIdMatch) {
-          console.warn(`⚠️ [Thread] ID não encontrado em: "${mDivText}"`);
-          continue;
+        const threadIdMatch = content.match(/(\d{13,})/);
+        if (threadIdMatch) {
+          currentThread = {
+            id: threadIdMatch[1],
+            participants: [],
+            participantsUpdatedAt: new Date(),
+            messages: []
+          };
+          console.log(`✅ Thread ${currentThread.id} iniciado`);
         }
-        
-        const threadId = threadIdMatch[1];
-        console.log(`✅ [Thread ${threadId}] Identificado!`);
-        
-        // Buscar o div.m > div DENTRO do Thread (mais um nível abaixo)
-        const threadContentDiv = mDiv.querySelector('div.m > div');
-        if (!threadContentDiv) {
-          console.warn(`⚠️ [Thread ${threadId}] Conteúdo do thread não encontrado`);
-          continue;
-        }
-        const conversationElements: Element[] = [threadContentDiv];
-        console.log(`📦 [Thread ${threadId}] Container de conteúdo encontrado`);
-        
-        // Extrair participantes
-        const participants = this.extractParticipantsFromElements(conversationElements);
-        const participantsUpdatedAt = this.extractParticipantsTimestampFromElements(conversationElements);
-        
-        if (participants.length > 0) {
-          console.log(`👥 [Thread ${threadId}] Participantes: ${participants.map(p => p.username).join(', ')}`);
-        }
-        
-        // Extrair mensagens
-        const messages = this.extractMessagesFromElements(conversationElements, threadId, mediaFiles);
-        
-        if (messages.length > 0) {
-          console.log(`💬 [Thread ${threadId}] ${messages.length} mensagens extraídas`);
-        }
-        
-        if (messages.length > 0 || participants.length > 0) {
-          const attachmentsCount = messages.reduce((sum, m) => sum + m.attachments.length, 0);
-          const sharesCount = messages.filter(m => m.share && Object.keys(m.share).length > 0).length;
-          const callsCount = messages.filter(m => m.callRecord).length;
-          
-          conversations.push({
-            id: uuidv4(),
-            threadId,
-            participants,
-            participantsUpdatedAt,
-            messages,
-            messageCount: messages.length,
-            attachmentsCount,
-            sharesCount,
-            callsCount,
-            createdAt: messages.length > 0 ? messages[messages.length - 1].sent : new Date(),
-            lastActivity: messages.length > 0 ? messages[0].sent : new Date()
-          });
-          
-          console.log(`✅ [Thread ${threadId}] ✓ ${messages.length} msgs, ✓ ${participants.length} participantes, ✓ ${attachmentsCount} anexos`);
-        }
-      } catch (error) {
-        console.error(`❌ [Thread] Erro:`, error);
       }
+      // PARTICIPANTES
+      else if (title === 'Current Participants' && currentThread) {
+        const regex = /(\S+)\s+\(Instagram:\s*(\d+)\)/g;
+        const matches = content.matchAll(regex);
+        for (const match of matches) {
+          currentThread.participants.push({
+            username: match[1],
+            instagramId: match[2]
+          });
+        }
+        console.log(`👥 ${currentThread.participants.length} participantes adicionados`);
+      }
+      // AUTOR (nova mensagem)
+      else if (title === 'Author' && currentThread) {
+        // Salvar mensagem anterior se existir
+        if (currentMessage.author) {
+          this.finalizeMessage(currentMessage, currentThread, currentAttachment, currentShare);
+          currentMessage = {};
+          currentAttachment = {};
+          currentShare = {};
+        }
+        
+        const match = content.match(/(\S+)\s+\(Instagram:\s*(\d+)\)/);
+        if (match) {
+          currentMessage.author = {
+            username: match[1],
+            instagramId: match[2]
+          };
+        }
+      }
+      // CAMPOS DA MENSAGEM
+      else if (currentThread && currentMessage.author) {
+        if (title === 'Sent') {
+          currentMessage.sent = this.parseTimestamp(content) || new Date();
+        }
+        else if (title === 'Body') {
+          currentMessage.body = content;
+        }
+        else if (title === 'Attachments') {
+          currentAttachment.filename = content;
+        }
+        else if (title === 'Type') {
+          currentAttachment.type = content;
+        }
+        else if (title === 'URL') {
+          currentAttachment.url = content;
+          
+          // Buscar blob da mídia
+          const mediaPath = content.replace(/^linked_media\//, '');
+          const blob = mediaFiles.get(mediaPath);
+          if (blob) {
+            currentAttachment.blob = blob;
+            currentAttachment.blobUrl = URL.createObjectURL(blob);
+          }
+          
+          // Attachment completo, adicionar à mensagem
+          if (!currentMessage.attachments) currentMessage.attachments = [];
+          currentMessage.attachments.push(currentAttachment as MetaAttachment);
+          currentAttachment = {};
+        }
+        else if (title === 'Share Date Created') {
+          currentShare.dateCreated = this.parseTimestamp(content) || undefined;
+        }
+        else if (title === 'Share Text') {
+          currentShare.text = content;
+        }
+        else if (title === 'Share URL') {
+          currentShare.url = content;
+        }
+        else if (title === 'Removed by Sender') {
+          currentMessage.removedBySender = true;
+        }
+      }
+    }
+    
+    // Finalizar última mensagem e thread
+    if (currentMessage.author && currentThread) {
+      this.finalizeMessage(currentMessage, currentThread, currentAttachment, currentShare);
+    }
+    if (currentThread) {
+      this.finalizeThread(currentThread, conversations);
     }
     
     console.log(`✅ [UnifiedMessages] TOTAL: ${conversations.length} conversas processadas`);
     return conversations;
+  }
+  
+  private static finalizeMessage(
+    currentMessage: Partial<MetaMessage>,
+    currentThread: any,
+    currentAttachment: Partial<MetaAttachment>,
+    currentShare: Partial<MetaShare>
+  ): void {
+    if (!currentMessage.author) return;
+    
+    const attachments = currentMessage.attachments || [];
+    const share = Object.keys(currentShare).length > 0 ? currentShare as MetaShare : undefined;
+    const type: MetaMessage['type'] = 
+      attachments.some(a => a.type?.includes('image')) ? 'image'
+      : attachments.some(a => a.type?.includes('video')) ? 'video'
+      : attachments.some(a => a.type?.includes('audio')) ? 'audio'
+      : share ? 'share'
+      : 'text';
+    
+    const message: MetaMessage = {
+      id: uuidv4(),
+      threadId: currentThread.id,
+      conversationId: currentThread.id,
+      author: currentMessage.author!,
+      sent: currentMessage.sent || new Date(),
+      body: currentMessage.body || '',
+      type,
+      removedBySender: currentMessage.removedBySender || false,
+      attachments,
+      share,
+      callRecord: undefined
+    };
+    
+    currentThread.messages.push(message);
+  }
+  
+  private static finalizeThread(thread: any, conversations: MetaConversation[]): void {
+    if (thread.messages.length === 0 && thread.participants.length === 0) {
+      console.warn(`⚠️ Thread ${thread.id} vazio, não salvo`);
+      return;
+    }
+    
+    const attachmentsCount = thread.messages.reduce((sum: number, m: MetaMessage) => sum + m.attachments.length, 0);
+    const sharesCount = thread.messages.filter((m: MetaMessage) => m.share).length;
+    const callsCount = thread.messages.filter((m: MetaMessage) => m.callRecord).length;
+    
+    conversations.push({
+      id: uuidv4(),
+      threadId: thread.id,
+      participants: thread.participants,
+      participantsUpdatedAt: thread.participantsUpdatedAt,
+      messages: thread.messages,
+      messageCount: thread.messages.length,
+      attachmentsCount,
+      sharesCount,
+      callsCount,
+      createdAt: thread.messages.length > 0 ? thread.messages[thread.messages.length - 1].sent : new Date(),
+      lastActivity: thread.messages.length > 0 ? thread.messages[0].sent : new Date()
+    });
+    
+    console.log(`✅ Thread ${thread.id} salvo: ${thread.messages.length} msgs, ${thread.participants.length} participantes`);
   }
   
   /**

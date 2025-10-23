@@ -267,11 +267,14 @@ export class InstagramMetaBusinessParser {
         const threadId = threadIdMatch[1];
         console.log(`✅ [Thread ${threadId}] Identificado!`);
         
-        // CORREÇÃO: Todos os elementos estão DENTRO de div.m > div
-        // Os elementos da conversa estão todos dentro do mDiv
-        const conversationElements: Element[] = [mDiv];
-        
-        console.log(`📦 [Thread ${threadId}] Elementos encontrados dentro de div.m > div`);
+        // Buscar o div.m > div DENTRO do Thread (mais um nível abaixo)
+        const threadContentDiv = mDiv.querySelector('div.m > div');
+        if (!threadContentDiv) {
+          console.warn(`⚠️ [Thread ${threadId}] Conteúdo do thread não encontrado`);
+          continue;
+        }
+        const conversationElements: Element[] = [threadContentDiv];
+        console.log(`📦 [Thread ${threadId}] Container de conteúdo encontrado`);
         
         // Extrair participantes
         const participants = this.extractParticipantsFromElements(conversationElements);
@@ -403,8 +406,8 @@ export class InstagramMetaBusinessParser {
     // O primeiro elemento é o div.m > div que contém TUDO
     const container = elements[0];
     
-    // Buscar TODOS os div.t.o DENTRO do container (filhos diretos)
-    const allBlocks = Array.from(container.querySelectorAll(':scope > div.t.o'));
+    // Buscar TODOS os div.t.o DENTRO do container (remover :scope > para buscar em todos os níveis)
+    const allBlocks = Array.from(container.querySelectorAll('div.t.o'));
     
     console.log(`🔍 [Messages] Encontrados ${allBlocks.length} blocos div.t.o`);
     

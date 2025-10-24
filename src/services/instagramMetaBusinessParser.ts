@@ -259,6 +259,11 @@ export class InstagramMetaBusinessParser {
       const title = titleEl.textContent?.trim() || '';
       const content = contentEl.textContent?.trim() || '';
       
+      // LOG DETALHADO para debugging
+      if (title === 'Thread' || title === 'Current Participants' || title === 'Author') {
+        console.log(`🔍 [Block ${i}] ${title}: ${content.substring(0, 100)}`);
+      }
+      
       // NOVO THREAD
       if (title === 'Thread') {
         // Salvar thread anterior
@@ -266,28 +271,52 @@ export class InstagramMetaBusinessParser {
           this.finalizeThread(currentThread, conversations);
         }
         
-        const threadIdMatch = content.match(/(\d{13,})/);
-        if (threadIdMatch) {
+        // Buscar Thread ID - pode estar no content atual OU no próximo bloco
+        let threadId = '';
+        const currentMatch = content.match(/(\d{13,})/);
+        
+        if (currentMatch) {
+          threadId = currentMatch[1];
+        } else {
+          // Thread ID pode estar no próximo bloco (estrutura aninhada)
+          const nextBlock = allBlocks[i + 1];
+          if (nextBlock) {
+            const nextContent = nextBlock.textContent || '';
+            const nextMatch = nextContent.match(/(\d{13,})/);
+            if (nextMatch) {
+              threadId = nextMatch[1];
+              i++; // Pular o próximo bloco já processado
+            }
+          }
+        }
+        
+        if (threadId) {
           currentThread = {
-            id: threadIdMatch[1],
+            id: threadId,
             participants: [],
             participantsUpdatedAt: new Date(),
             messages: []
           };
-          console.log(`✅ Thread ${currentThread.id} iniciado`);
+          console.log(`✅ Thread ${threadId} iniciado`);
+        } else {
+          console.warn('⚠️ Thread ID não encontrado');
         }
       }
       // PARTICIPANTES
       else if (title === 'Current Participants' && currentThread) {
+        console.log(`🔍 [Participants] Content: ${content.substring(0, 200)}`);
+        
         const regex = /(\S+)\s+\(Instagram:\s*(\d+)\)/g;
-        const matches = content.matchAll(regex);
+        const matches = Array.from(content.matchAll(regex));
+        
         for (const match of matches) {
           currentThread.participants.push({
             username: match[1],
             instagramId: match[2]
           });
         }
-        console.log(`👥 ${currentThread.participants.length} participantes adicionados`);
+        
+        console.log(`👥 ${currentThread.participants.length} participantes adicionados ao thread ${currentThread.id}`);
       }
       // AUTOR (nova mensagem)
       else if (title === 'Author' && currentThread) {

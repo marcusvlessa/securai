@@ -233,22 +233,38 @@ export class InstagramMetaBusinessParser {
       return [];
     }
     
-    // Buscar o container principal "Unified Messages"
+    // Buscar o container principal "Unified Messages" ou "Unified Messages Definition"
     const unifiedMessagesContainer = Array.from(section.querySelectorAll('div.t.o'))
       .find(el => {
         const titleEl = el.querySelector(':scope > div.t.i');
-        return titleEl?.textContent?.trim() === 'Unified Messages';
+        const title = titleEl?.textContent?.trim() || '';
+        // Aceitar "Unified Messages" OU "Unified Messages Definition"
+        return title === 'Unified Messages' || title === 'Unified Messages Definition';
       });
 
     if (!unifiedMessagesContainer) {
-      console.warn('⚠️ Container "Unified Messages" não encontrado');
+      console.warn('⚠️ Container "Unified Messages" ou "Unified Messages Definition" não encontrado');
+      
+      // LOG: Listar todos os títulos encontrados para debug
+      const availableTitles = Array.from(section.querySelectorAll('div.t.o > div.t.i'))
+        .map(el => el.textContent?.trim())
+        .filter(t => t);
+      console.log('📋 Títulos disponíveis:', availableTitles.slice(0, 10));
+      
       return [];
     }
 
     // Buscar o div interno que contém os threads
-    const innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m > div');
+    let innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m > div');
+    
+    // FALLBACK: Se não encontrar, tentar buscar direto os blocos no container
     if (!innerContainer) {
-      console.warn('⚠️ Container interno de threads não encontrado');
+      console.warn('⚠️ Container interno não encontrado, tentando buscar threads diretamente...');
+      innerContainer = unifiedMessagesContainer;
+    }
+    
+    if (!innerContainer) {
+      console.warn('⚠️ Não foi possível localizar threads');
       return [];
     }
 

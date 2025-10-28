@@ -233,9 +233,28 @@ export class InstagramMetaBusinessParser {
       return [];
     }
     
-    // Buscar TODOS os blocos div.t.o em ordem sequencial
-    const allBlocks = Array.from(section.querySelectorAll('div.t.o'));
-    console.log(`📦 Total de blocos div.t.o: ${allBlocks.length}`);
+    // Buscar o container principal "Unified Messages"
+    const unifiedMessagesContainer = Array.from(section.querySelectorAll('div.t.o'))
+      .find(el => {
+        const titleEl = el.querySelector(':scope > div.t.i');
+        return titleEl?.textContent?.trim() === 'Unified Messages';
+      });
+
+    if (!unifiedMessagesContainer) {
+      console.warn('⚠️ Container "Unified Messages" não encontrado');
+      return [];
+    }
+
+    // Buscar o div interno que contém os threads
+    const innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m > div');
+    if (!innerContainer) {
+      console.warn('⚠️ Container interno de threads não encontrado');
+      return [];
+    }
+
+    // AGORA sim buscar todos os blocos THREAD (filhos diretos do container interno)
+    const allBlocks = Array.from(innerContainer.querySelectorAll(':scope > div.t.o'));
+    console.log(`📦 Total de blocos encontrados: ${allBlocks.length}`);
     
     const conversations: MetaConversation[] = [];
     let currentThread: {
@@ -251,13 +270,23 @@ export class InstagramMetaBusinessParser {
     
     for (let i = 0; i < allBlocks.length; i++) {
       const block = allBlocks[i];
-      const titleEl = block.querySelector('div.t.i');
-      const contentEl = block.querySelector('div.m > div');
+      const titleEl = block.querySelector(':scope > div.t.i');
       
-      if (!titleEl || !contentEl) continue;
+      if (!titleEl) continue;
       
       const title = titleEl.textContent?.trim() || '';
-      const content = contentEl.textContent?.trim() || '';
+      
+      // Para o Thread, buscar dentro do div.t.i > div.m > div
+      let content = '';
+      if (title === 'Thread') {
+        // Thread ID está em div.t.i > div.m > div
+        const threadIdEl = block.querySelector(':scope > div.t.i > div.m > div');
+        content = threadIdEl?.textContent?.trim() || '';
+      } else {
+        // Para outros campos, buscar normalmente
+        const contentEl = block.querySelector('div.m > div');
+        content = contentEl?.textContent?.trim() || '';
+      }
       
       // LOG DETALHADO para debugging
       if (title === 'Thread' || title === 'Current Participants' || title === 'Author') {
@@ -273,7 +302,9 @@ export class InstagramMetaBusinessParser {
         
         // Buscar Thread ID - pode estar no content atual OU no próximo bloco
         let threadId = '';
-        const currentMatch = content.match(/(\d{13,})/);
+        // Remover parênteses e espaços, depois buscar ID
+        const cleanContent = content.replace(/[()]/g, '').trim();
+        const currentMatch = cleanContent.match(/(\d{13,})/);
         
         if (currentMatch) {
           threadId = currentMatch[1];
@@ -282,7 +313,8 @@ export class InstagramMetaBusinessParser {
           const nextBlock = allBlocks[i + 1];
           if (nextBlock) {
             const nextContent = nextBlock.textContent || '';
-            const nextMatch = nextContent.match(/(\d{13,})/);
+            const cleanNextContent = nextContent.replace(/[()]/g, '').trim();
+            const nextMatch = cleanNextContent.match(/(\d{13,})/);
             if (nextMatch) {
               threadId = nextMatch[1];
               i++; // Pular o próximo bloco já processado

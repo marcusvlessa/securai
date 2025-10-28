@@ -245,10 +245,18 @@ export class InstagramParserService {
       
       onProgress?.('Procurando arquivos principais...', 10);
       
-      // Procurar pelo arquivo HTML principal
+      // Procurar pelo arquivo HTML principal (busca recursiva)
       const htmlFile = this.findMainHtmlFile(zipContent);
       if (!htmlFile) {
-        throw new Error('Arquivo records.html não encontrado no ZIP');
+        const availableFiles = Object.keys(zipContent.files).filter(f => !f.endsWith('/')).slice(0, 10);
+        throw new Error(
+          `❌ Arquivo records.html não encontrado no ZIP.\n\n` +
+          `📁 Estrutura esperada:\n` +
+          `  ├─ records.html (obrigatório)\n` +
+          `  └─ linked_media/ (opcional)\n\n` +
+          `📋 Arquivos encontrados: ${availableFiles.join(', ')}...\n\n` +
+          `💡 Certifique-se de que o ZIP foi exportado corretamente do Instagram.`
+        );
       }
       
       onProgress?.('Extraindo HTML principal...', 20);
@@ -312,37 +320,51 @@ export class InstagramParserService {
   }
 
   private findMainHtmlFile(zipContent: JSZip): JSZip.JSZipObject | null {
-    // Priorizar records.html (Meta Business Record padrão)
-    const priorityNames = ['records.html'];
-    const fallbackNames = ['index.html', 'instagram_data.html'];
+    console.log('🔍 Procurando arquivo HTML principal no ZIP...');
     
-    // Primeiro tentar nomes prioritários
-    for (const name of priorityNames) {
-      const file = zipContent.file(name);
-      if (file) {
-        console.log(`Found priority HTML file: ${name}`);
-        return file;
-      }
-    }
+    // Listar todos os arquivos para debug
+    const allFiles = Object.keys(zipContent.files);
+    console.log(`📁 Estrutura do ZIP (${allFiles.length} arquivos):`, allFiles.slice(0, 20));
     
-    // Depois tentar fallbacks
-    for (const name of fallbackNames) {
-      const file = zipContent.file(name);
-      if (file) {
-        console.log(`Found fallback HTML file: ${name}`);
-        return file;
-      }
-    }
+    // Priorizar records.html (Meta Business Record padrão) em QUALQUER pasta
+    const priorityNames = ['records.html', 'records-7.html', 'records-14.html', 'records-13.html'];
     
-    // Por último, procurar por qualquer arquivo HTML na raiz
+    // Buscar records.html em QUALQUER nível de pasta
     for (const [filename, file] of Object.entries(zipContent.files)) {
-      if (filename.endsWith('.html') && !filename.includes('/')) {
-        console.log(`Found generic HTML file: ${filename}`);
+      if (file.dir) continue; // Ignorar diretórios
+      
+      const basename = filename.split('/').pop() || '';
+      
+      // Verificar se é um arquivo records.html (qualquer variação)
+      if (priorityNames.some(name => basename === name) || basename.match(/^records(-\d+)?\.html$/)) {
+        console.log(`✅ Arquivo HTML prioritário encontrado: ${filename}`);
         return file;
       }
     }
     
-    console.error('No HTML file found in ZIP');
+    // Fallback: procurar outros arquivos HTML
+    const fallbackNames = ['index.html', 'instagram_data.html'];
+    for (const [filename, file] of Object.entries(zipContent.files)) {
+      if (file.dir) continue;
+      
+      const basename = filename.split('/').pop() || '';
+      if (fallbackNames.includes(basename)) {
+        console.log(`⚠️ Arquivo HTML fallback encontrado: ${filename}`);
+        return file;
+      }
+    }
+    
+    // Última tentativa: QUALQUER arquivo .html
+    for (const [filename, file] of Object.entries(zipContent.files)) {
+      if (file.dir) continue;
+      if (filename.toLowerCase().endsWith('.html')) {
+        console.log(`⚠️ Arquivo HTML genérico encontrado: ${filename}`);
+        return file;
+      }
+    }
+    
+    console.error('❌ Nenhum arquivo HTML encontrado no ZIP');
+    console.error('📋 Arquivos disponíveis:', allFiles.filter(f => !f.endsWith('/')));
     return null;
   }
 
@@ -356,6 +378,11 @@ export class InstagramParserService {
     
     console.log(`📁 Encontrados ${mediaFileEntries.length} arquivos de mídia de ${allFiles.length} arquivos totais`);
     
+    // Detectar pasta linked_media em qualquer nível
+    const linkedMediaFolder = allFiles.find(([path]) => path.includes('linked_media/'));
+    const linkedMediaPath = linkedMediaFolder ? linkedMediaFolder[0].split('linked_media/')[0] + 'linked_media/' : 'linked_media/';
+    console.log(`📂 Pasta de mídias detectada: ${linkedMediaPath}`);
+    
     let processed = 0;
     for (const [filename, file] of mediaFileEntries) {
       try {
@@ -365,16 +392,20 @@ export class InstagramParserService {
         const basename = filename.replace(/^.*\//, ''); // Nome sem caminho
         const fullPath = filename; // Caminho completo
         
-        // Indexação principal por basename
+        // Indexação principal por basename (SEMPRE)
         mediaFiles.set(basename, blob);
         
         // Indexação por caminho completo
         mediaFiles.set(fullPath, blob);
         
-        // Para arquivos em linked_media/, indexar sem prefixo
-        if (filename.startsWith('linked_media/')) {
-          const withoutPrefix = filename.replace('linked_media/', '');
-          mediaFiles.set(withoutPrefix, blob);
+        // Para arquivos em linked_media/ (em qualquer nível), indexar sem prefixo
+        if (filename.includes('linked_media/')) {
+          const parts = filename.split('linked_media/');
+          if (parts.length > 1) {
+            const withoutPrefix = parts[1]; // arquivo depois de linked_media/
+            mediaFiles.set(withoutPrefix, blob);
+            console.log(`🔗 Indexado: ${basename} → linked_media/${withoutPrefix}`);
+          }
         }
         
         // Para unified_message files, criar índice adicional
@@ -383,6 +414,11 @@ export class InstagramParserService {
           if (unifiedMatch) {
             mediaFiles.set(unifiedMatch[0], blob);
           }
+        }
+        
+        // Indexar também por número de foto (ex: 101010.jpg)
+        if (basename.match(/^\d+\.(jpg|jpeg|png|gif|mp4|mov)$/i)) {
+          mediaFiles.set(basename, blob);
         }
         
         processed++;
@@ -396,8 +432,8 @@ export class InstagramParserService {
       }
     }
     
-    const uniqueFiles = mediaFiles.size / 4; // Cada arquivo é indexado ~4 vezes
-    console.log(`✅ ${uniqueFiles} arquivos de mídia indexados com sucesso`);
+    console.log(`✅ ${mediaFiles.size} entradas de mídia indexadas (incluindo múltiplas referências)`);
+    console.log(`📊 Amostras indexadas:`, Array.from(mediaFiles.keys()).slice(0, 10));
     return mediaFiles;
   }
 

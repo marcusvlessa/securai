@@ -247,14 +247,14 @@ export class InstagramMetaBusinessParser {
       console.log(`  [${idx}] Título: "${title}"`);
     });
     
-    // BUSCA 1: Procurar por div com texto exato "Unified Messages"
+    // BUSCA 1: Procurar por título exato "Unified Messages" ou "Unified Messages Definition"
     let unifiedMessagesContainer = allDivs.find(el => {
       const titleEl = el.querySelector(':scope > div.t.i');
       const title = titleEl?.textContent?.trim() || '';
-      return title === 'Unified Messages';
+      return title === 'Unified Messages' || title === 'Unified Messages Definition';
     });
     
-    // BUSCA 2: Se não encontrou, procurar por div que CONTENHA "Unified Messages"
+    // BUSCA 2: Se não encontrou, procurar por título que CONTENHA "Unified Messages"
     if (!unifiedMessagesContainer) {
       console.warn('⚠️ Tentativa 1 falhou, tentando busca flexível...');
       unifiedMessagesContainer = allDivs.find(el => {
@@ -264,9 +264,26 @@ export class InstagramMetaBusinessParser {
       });
     }
     
-    // BUSCA 3: Se ainda não encontrou, buscar diretamente todos os elementos que contenham o texto
+    // BUSCA 3: Buscar diretamente o container que tem filhos "Thread"
     if (!unifiedMessagesContainer) {
-      console.warn('⚠️ Tentativa 2 falhou, buscando por texto direto...');
+      console.warn('⚠️ Tentativa 2 falhou, buscando container com threads...');
+      for (const div of allDivs) {
+        const childThreads = Array.from(div.querySelectorAll('div.t.o')).filter(child => {
+          const titleEl = child.querySelector(':scope > div.t.i');
+          return titleEl?.textContent?.trim() === 'Thread';
+        });
+        
+        if (childThreads.length > 0) {
+          console.log(`✅ Container encontrado com ${childThreads.length} threads`);
+          unifiedMessagesContainer = div;
+          break;
+        }
+      }
+    }
+    
+    // BUSCA 4: Último recurso - buscar por texto direto
+    if (!unifiedMessagesContainer) {
+      console.warn('⚠️ Tentativa 3 falhou, buscando por texto direto...');
       const allElements = Array.from(section.querySelectorAll('*'));
       const elementsWithText = allElements.filter(el => 
         el.textContent?.includes('Unified Messages') && 
@@ -275,7 +292,6 @@ export class InstagramMetaBusinessParser {
       console.log(`🔍 Elementos contendo "Unified Messages": ${elementsWithText.length}`);
       
       if (elementsWithText.length > 0) {
-        // Pegar o elemento mais externo (menor depth)
         unifiedMessagesContainer = elementsWithText[0].closest('div.t.o');
       }
     }
@@ -290,38 +306,49 @@ export class InstagramMetaBusinessParser {
     
     console.log('✅ Container "Unified Messages" localizado!');
 
-    // Buscar o div interno que contém os threads
-    let innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m > div');
-    
-    if (!innerContainer) {
-      console.warn('⚠️ Tentando path alternativo para innerContainer...');
-      // Tentar sem o nível "div"
-      innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m');
-      
-      if (!innerContainer) {
-        // Última tentativa: buscar qualquer div.m dentro
-        innerContainer = unifiedMessagesContainer.querySelector('div.m');
-      }
-    }
-    
-    if (!innerContainer) {
-      console.error('❌ Container interno não encontrado em NENHUM path');
-      return [];
-    }
-    
-    console.log('✅ Container interno localizado!');
-
-    // BUSCAR TODOS OS BLOCOS RECURSIVAMENTE (sem :scope > para pegar níveis aninhados)
-    const allBlocks = Array.from(innerContainer.querySelectorAll('div.t.o'));
-    console.log(`📦 Total de blocos encontrados: ${allBlocks.length}`);
-    
-    // Filtrar apenas blocos que são THREADS
-    const threadBlocks = allBlocks.filter(block => {
+    // Tentar buscar threads DIRETAMENTE no container, sem innerContainer intermediário
+    let threadBlocks = Array.from(unifiedMessagesContainer.querySelectorAll('div.t.o')).filter(block => {
       const titleEl = block.querySelector(':scope > div.t.i');
       return titleEl?.textContent?.trim() === 'Thread';
     });
     
-    console.log(`🧵 Total de THREADS encontrados: ${threadBlocks.length}`);
+    console.log(`🧵 BUSCA DIRETA: ${threadBlocks.length} threads encontrados`);
+    
+    // Se não encontrou threads diretamente, tentar via innerContainer
+    if (threadBlocks.length === 0) {
+      console.warn('⚠️ Nenhum thread na busca direta, tentando via innerContainer...');
+      
+      let innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m > div');
+      
+      if (!innerContainer) {
+        console.warn('⚠️ Tentando path alternativo para innerContainer...');
+        innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m');
+        
+        if (!innerContainer) {
+          innerContainer = unifiedMessagesContainer.querySelector('div.m');
+        }
+      }
+      
+      if (innerContainer) {
+        console.log('✅ Container interno localizado!');
+        const allBlocks = Array.from(innerContainer.querySelectorAll('div.t.o'));
+        console.log(`📦 Total de blocos no innerContainer: ${allBlocks.length}`);
+        
+        threadBlocks = allBlocks.filter(block => {
+          const titleEl = block.querySelector(':scope > div.t.i');
+          return titleEl?.textContent?.trim() === 'Thread';
+        });
+        console.log(`🧵 ${threadBlocks.length} threads filtrados`);
+      }
+    }
+    
+    if (threadBlocks.length === 0) {
+      console.error('❌ NENHUM THREAD encontrado após todas as tentativas');
+      console.log('📋 Estrutura do container:', unifiedMessagesContainer.innerHTML.substring(0, 1000));
+      return [];
+    }
+    
+    console.log(`✅ Total de THREADS para processar: ${threadBlocks.length}`);
     
     const conversations: MetaConversation[] = [];
     

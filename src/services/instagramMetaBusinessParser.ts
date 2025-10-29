@@ -229,40 +229,87 @@ export class InstagramMetaBusinessParser {
     
     const section = doc.querySelector('#property-unified_messages');
     if (!section) {
-      console.warn('⚠️ [UnifiedMessages] Seção não encontrada');
+      console.warn('⚠️ [UnifiedMessages] Seção #property-unified_messages não encontrada no documento');
       return [];
     }
     
-    // Buscar o container principal "Unified Messages"
-    const unifiedMessagesContainer = Array.from(section.querySelectorAll('div.t.o'))
-      .find(el => {
+    console.log(`✅ Seção #property-unified_messages encontrada`);
+    console.log(`📊 Estrutura da seção:`, section.innerHTML.substring(0, 500));
+    
+    // Buscar TODOS os divs com classe "t o" dentro da seção
+    const allDivs = Array.from(section.querySelectorAll('div.t.o'));
+    console.log(`🔍 Total de div.t.o encontrados: ${allDivs.length}`);
+    
+    // Logar os primeiros 5 títulos para debug
+    allDivs.slice(0, 5).forEach((div, idx) => {
+      const titleEl = div.querySelector('div.t.i');
+      const title = titleEl?.textContent?.trim() || 'SEM TÍTULO';
+      console.log(`  [${idx}] Título: "${title}"`);
+    });
+    
+    // BUSCA 1: Procurar por div com texto exato "Unified Messages"
+    let unifiedMessagesContainer = allDivs.find(el => {
+      const titleEl = el.querySelector(':scope > div.t.i');
+      const title = titleEl?.textContent?.trim() || '';
+      return title === 'Unified Messages';
+    });
+    
+    // BUSCA 2: Se não encontrou, procurar por div que CONTENHA "Unified Messages"
+    if (!unifiedMessagesContainer) {
+      console.warn('⚠️ Tentativa 1 falhou, tentando busca flexível...');
+      unifiedMessagesContainer = allDivs.find(el => {
         const titleEl = el.querySelector(':scope > div.t.i');
         const title = titleEl?.textContent?.trim() || '';
-        return title === 'Unified Messages';
+        return title.includes('Unified Messages');
       });
+    }
+    
+    // BUSCA 3: Se ainda não encontrou, buscar diretamente todos os elementos que contenham o texto
+    if (!unifiedMessagesContainer) {
+      console.warn('⚠️ Tentativa 2 falhou, buscando por texto direto...');
+      const allElements = Array.from(section.querySelectorAll('*'));
+      const elementsWithText = allElements.filter(el => 
+        el.textContent?.includes('Unified Messages') && 
+        el.className?.includes('t')
+      );
+      console.log(`🔍 Elementos contendo "Unified Messages": ${elementsWithText.length}`);
+      
+      if (elementsWithText.length > 0) {
+        // Pegar o elemento mais externo (menor depth)
+        unifiedMessagesContainer = elementsWithText[0].closest('div.t.o');
+      }
+    }
 
     if (!unifiedMessagesContainer) {
-      console.warn('⚠️ Container "Unified Messages" não encontrado');
-      
-      const availableTitles = Array.from(section.querySelectorAll('div.t.o > div.t.i'))
-        .map(el => el.textContent?.trim())
-        .filter(t => t);
-      console.log('📋 Títulos disponíveis:', availableTitles.slice(0, 10));
-      
+      console.error('❌ FALHA CRÍTICA: Container "Unified Messages" não encontrado em NENHUMA tentativa');
+      console.log('📋 Todos os títulos encontrados:', 
+        allDivs.slice(0, 20).map(d => d.querySelector('div.t.i')?.textContent?.trim())
+      );
       return [];
     }
     
-    console.log('✅ Container "Unified Messages" localizado');
+    console.log('✅ Container "Unified Messages" localizado!');
 
     // Buscar o div interno que contém os threads
     let innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m > div');
     
     if (!innerContainer) {
-      console.warn('⚠️ Container interno não encontrado');
+      console.warn('⚠️ Tentando path alternativo para innerContainer...');
+      // Tentar sem o nível "div"
+      innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m');
+      
+      if (!innerContainer) {
+        // Última tentativa: buscar qualquer div.m dentro
+        innerContainer = unifiedMessagesContainer.querySelector('div.m');
+      }
+    }
+    
+    if (!innerContainer) {
+      console.error('❌ Container interno não encontrado em NENHUM path');
       return [];
     }
     
-    console.log('✅ Container interno localizado');
+    console.log('✅ Container interno localizado!');
 
     // BUSCAR TODOS OS BLOCOS RECURSIVAMENTE (sem :scope > para pegar níveis aninhados)
     const allBlocks = Array.from(innerContainer.querySelectorAll('div.t.o'));

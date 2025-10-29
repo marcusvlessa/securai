@@ -233,19 +233,17 @@ export class InstagramMetaBusinessParser {
       return [];
     }
     
-    // Buscar o container principal "Unified Messages" ou "Unified Messages Definition"
+    // Buscar o container principal "Unified Messages"
     const unifiedMessagesContainer = Array.from(section.querySelectorAll('div.t.o'))
       .find(el => {
         const titleEl = el.querySelector(':scope > div.t.i');
         const title = titleEl?.textContent?.trim() || '';
-        // Aceitar "Unified Messages" OU "Unified Messages Definition"
-        return title === 'Unified Messages' || title === 'Unified Messages Definition';
+        return title === 'Unified Messages';
       });
 
     if (!unifiedMessagesContainer) {
-      console.warn('⚠️ Container "Unified Messages" ou "Unified Messages Definition" não encontrado');
+      console.warn('⚠️ Container "Unified Messages" não encontrado');
       
-      // LOG: Listar todos os títulos encontrados para debug
       const availableTitles = Array.from(section.querySelectorAll('div.t.o > div.t.i'))
         .map(el => el.textContent?.trim())
         .filter(t => t);
@@ -253,152 +251,134 @@ export class InstagramMetaBusinessParser {
       
       return [];
     }
+    
+    console.log('✅ Container "Unified Messages" localizado');
 
     // Buscar o div interno que contém os threads
     let innerContainer = unifiedMessagesContainer.querySelector(':scope > div.t.i > div.m > div');
     
-    // FALLBACK: Se não encontrar, tentar buscar direto os blocos no container
     if (!innerContainer) {
-      console.warn('⚠️ Container interno não encontrado, tentando buscar threads diretamente...');
-      innerContainer = unifiedMessagesContainer;
-    }
-    
-    if (!innerContainer) {
-      console.warn('⚠️ Não foi possível localizar threads');
+      console.warn('⚠️ Container interno não encontrado');
       return [];
     }
+    
+    console.log('✅ Container interno localizado');
 
-    // AGORA sim buscar todos os blocos THREAD (filhos diretos do container interno)
-    const allBlocks = Array.from(innerContainer.querySelectorAll(':scope > div.t.o'));
+    // BUSCAR TODOS OS BLOCOS RECURSIVAMENTE (sem :scope > para pegar níveis aninhados)
+    const allBlocks = Array.from(innerContainer.querySelectorAll('div.t.o'));
     console.log(`📦 Total de blocos encontrados: ${allBlocks.length}`);
     
-    const conversations: MetaConversation[] = [];
-    let currentThread: {
-      id: string;
-      participants: MetaParticipant[];
-      participantsUpdatedAt: Date;
-      messages: MetaMessage[];
-    } | null = null;
-    
-    let currentMessage: Partial<MetaMessage> = {};
-    let currentAttachment: Partial<MetaAttachment> = {};
-    let currentShare: Partial<MetaShare> = {};
-    
-    for (let i = 0; i < allBlocks.length; i++) {
-      const block = allBlocks[i];
+    // Filtrar apenas blocos que são THREADS
+    const threadBlocks = allBlocks.filter(block => {
       const titleEl = block.querySelector(':scope > div.t.i');
+      return titleEl?.textContent?.trim() === 'Thread';
+    });
+    
+    console.log(`🧵 Total de THREADS encontrados: ${threadBlocks.length}`);
+    
+    const conversations: MetaConversation[] = [];
+    
+    // Processar cada THREAD individualmente
+    for (let threadIndex = 0; threadIndex < threadBlocks.length; threadIndex++) {
+      const threadBlock = threadBlocks[threadIndex];
       
-      if (!titleEl) continue;
+      // Extrair Thread ID
+      const threadIdEl = threadBlock.querySelector(':scope > div.t.i > div.m > div');
+      const threadIdText = threadIdEl?.textContent?.trim() || '';
+      const cleanContent = threadIdText.replace(/[()]/g, '').trim();
+      const threadMatch = cleanContent.match(/(\d{13,})/);
       
-      const title = titleEl.textContent?.trim() || '';
-      
-      // Para o Thread, buscar dentro do div.t.i > div.m > div
-      let content = '';
-      if (title === 'Thread') {
-        // Thread ID está em div.t.i > div.m > div
-        const threadIdEl = block.querySelector(':scope > div.t.i > div.m > div');
-        content = threadIdEl?.textContent?.trim() || '';
-      } else {
-        // Para outros campos, buscar normalmente
-        const contentEl = block.querySelector('div.m > div');
-        content = contentEl?.textContent?.trim() || '';
+      if (!threadMatch) {
+        console.warn(`⚠️ Thread ID não encontrado no bloco ${threadIndex}`);
+        continue;
       }
       
-      // LOG DETALHADO para debugging
-      if (title === 'Thread' || title === 'Current Participants' || title === 'Author') {
-        console.log(`🔍 [Block ${i}] ${title}: ${content.substring(0, 100)}`);
-      }
+      const threadId = threadMatch[1];
+      console.log(`\n🧵 Processando Thread ${threadIndex + 1}/${threadBlocks.length}: ${threadId}`);
       
-      // NOVO THREAD
-      if (title === 'Thread') {
-        // Salvar thread anterior
-        if (currentThread) {
-          this.finalizeThread(currentThread, conversations);
+      // Criar novo thread
+      const currentThread: {
+        id: string;
+        participants: MetaParticipant[];
+        participantsUpdatedAt: Date;
+        messages: MetaMessage[];
+      } = {
+        id: threadId,
+        participants: [],
+        participantsUpdatedAt: new Date(),
+        messages: []
+      };
+      
+      // Buscar TODOS os blocos filhos deste thread específico
+      const threadChildBlocks = Array.from(threadBlock.querySelectorAll(':scope > div.t.o'));
+      console.log(`📦 Thread ${threadId}: ${threadChildBlocks.length} blocos filhos`);
+      
+      let currentMessage: Partial<MetaMessage> = {};
+      let currentAttachment: Partial<MetaAttachment> = {};
+      let currentShare: Partial<MetaShare> = {};
+      
+      for (const childBlock of threadChildBlocks) {
+        const titleEl = childBlock.querySelector(':scope > div.t.i');
+        const title = titleEl?.textContent?.trim() || '';
+        const contentEl = childBlock.querySelector('div.m > div');
+        const content = contentEl?.textContent?.trim() || '';
+        
+        // Processar "Current Participants"
+        if (title === 'Current Participants') {
+          const regex = /(\S+)\s+\(Instagram:\s*(\d+)\)/g;
+          const matches = Array.from(content.matchAll(regex));
+          
+          for (const match of matches) {
+            currentThread.participants.push({
+              username: match[1],
+              instagramId: match[2]
+            });
+          }
+          
+          console.log(`👥 Thread ${threadId}: ${currentThread.participants.length} participantes`);
         }
         
-        // Buscar Thread ID - pode estar no content atual OU no próximo bloco
-        let threadId = '';
-        // Remover parênteses e espaços, depois buscar ID
-        const cleanContent = content.replace(/[()]/g, '').trim();
-        const currentMatch = cleanContent.match(/(\d{13,})/);
-        
-        if (currentMatch) {
-          threadId = currentMatch[1];
-        } else {
-          // Thread ID pode estar no próximo bloco (estrutura aninhada)
-          const nextBlock = allBlocks[i + 1];
-          if (nextBlock) {
-            const nextContent = nextBlock.textContent || '';
-            const cleanNextContent = nextContent.replace(/[()]/g, '').trim();
-            const nextMatch = cleanNextContent.match(/(\d{13,})/);
-            if (nextMatch) {
-              threadId = nextMatch[1];
-              i++; // Pular o próximo bloco já processado
-            }
+        // Processar "Author" (início de nova mensagem)
+        else if (title === 'Author') {
+          // Salvar mensagem anterior se existir
+          if (currentMessage.author) {
+            this.finalizeMessage(currentMessage, currentThread, currentAttachment, currentShare);
+            currentMessage = {};
+            currentAttachment = {};
+            currentShare = {};
+          }
+          
+          const match = content.match(/(\S+)\s+\(Instagram:\s*(\d+)\)/);
+          if (match) {
+            currentMessage.author = {
+              username: match[1],
+              instagramId: match[2]
+            };
           }
         }
         
-        if (threadId) {
-          currentThread = {
-            id: threadId,
-            participants: [],
-            participantsUpdatedAt: new Date(),
-            messages: []
-          };
-          console.log(`✅ Thread ${threadId} iniciado`);
-        } else {
-          console.warn('⚠️ Thread ID não encontrado');
-        }
-      }
-      // PARTICIPANTES
-      else if (title === 'Current Participants' && currentThread) {
-        console.log(`🔍 [Participants] Content: ${content.substring(0, 200)}`);
-        
-        const regex = /(\S+)\s+\(Instagram:\s*(\d+)\)/g;
-        const matches = Array.from(content.matchAll(regex));
-        
-        for (const match of matches) {
-          currentThread.participants.push({
-            username: match[1],
-            instagramId: match[2]
-          });
-        }
-        
-        console.log(`👥 ${currentThread.participants.length} participantes adicionados ao thread ${currentThread.id}`);
-      }
-      // AUTOR (nova mensagem)
-      else if (title === 'Author' && currentThread) {
-        // Salvar mensagem anterior se existir
-        if (currentMessage.author) {
-          this.finalizeMessage(currentMessage, currentThread, currentAttachment, currentShare);
-          currentMessage = {};
-          currentAttachment = {};
-          currentShare = {};
-        }
-        
-        const match = content.match(/(\S+)\s+\(Instagram:\s*(\d+)\)/);
-        if (match) {
-          currentMessage.author = {
-            username: match[1],
-            instagramId: match[2]
-          };
-        }
-      }
-      // CAMPOS DA MENSAGEM
-      else if (currentThread && currentMessage.author) {
-        if (title === 'Sent') {
+        // Processar "Sent"
+        else if (title === 'Sent' && currentMessage.author) {
           currentMessage.sent = this.parseTimestamp(content) || new Date();
         }
-        else if (title === 'Body') {
+        
+        // Processar "Body"
+        else if (title === 'Body' && currentMessage.author) {
           currentMessage.body = content;
         }
-        else if (title === 'Attachments') {
+        
+        // Processar "Attachments"
+        else if (title === 'Attachments' && currentMessage.author) {
           currentAttachment.filename = content;
         }
-        else if (title === 'Type') {
+        
+        // Processar "Type"
+        else if (title === 'Type' && currentMessage.author) {
           currentAttachment.type = content;
         }
-        else if (title === 'URL') {
+        
+        // Processar "URL"
+        else if (title === 'URL' && currentMessage.author) {
           currentAttachment.url = content;
           
           // Buscar blob da mídia
@@ -414,27 +394,36 @@ export class InstagramMetaBusinessParser {
           currentMessage.attachments.push(currentAttachment as MetaAttachment);
           currentAttachment = {};
         }
-        else if (title === 'Share Date Created') {
+        
+        // Processar "Share Date Created"
+        else if (title === 'Share Date Created' && currentMessage.author) {
           currentShare.dateCreated = this.parseTimestamp(content) || undefined;
         }
-        else if (title === 'Share Text') {
+        
+        // Processar "Share Text"
+        else if (title === 'Share Text' && currentMessage.author) {
           currentShare.text = content;
         }
-        else if (title === 'Share URL') {
+        
+        // Processar "Share URL"
+        else if (title === 'Share URL' && currentMessage.author) {
           currentShare.url = content;
         }
-        else if (title === 'Removed by Sender') {
+        
+        // Processar "Removed by Sender"
+        else if (title === 'Removed by Sender' && currentMessage.author) {
           currentMessage.removedBySender = true;
         }
       }
-    }
-    
-    // Finalizar última mensagem e thread
-    if (currentMessage.author && currentThread) {
-      this.finalizeMessage(currentMessage, currentThread, currentAttachment, currentShare);
-    }
-    if (currentThread) {
+      
+      // Salvar última mensagem do thread
+      if (currentMessage.author) {
+        this.finalizeMessage(currentMessage, currentThread, currentAttachment, currentShare);
+      }
+      
+      // Finalizar thread
       this.finalizeThread(currentThread, conversations);
+      console.log(`✅ Thread ${threadId} finalizado: ${currentThread.messages.length} mensagens`);
     }
     
     console.log(`✅ [UnifiedMessages] TOTAL: ${conversations.length} conversas processadas`);
